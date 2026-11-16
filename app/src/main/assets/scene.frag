@@ -8,6 +8,7 @@ uniform float u_clock;
 uniform float u_rain;
 uniform float u_moisture;
 uniform float u_hearth;
+uniform float u_shelterStage;
 uniform float u_fire;
 uniform float u_quality;
 
@@ -52,6 +53,46 @@ vec2 geo(vec3 p){
   float wood=sdSegment(p,vec3(-1.6,h+.15,-2.),vec3(-.8,h+.20,-1.5),.085);
   if(wood<d){d=wood;mat=5.;}
  }
+ // A készültségi fázisokat nem egy készre kapcsolt objektum, hanem szerkezeti részek rajzolják.
+ // 0: üres; 1: két cölöp + kőlábazat; 2: gerenda és szarufák; 3: átlapolt növényi tető.
+ if(u_shelterStage>0.5 && p.x>0.5 && p.x<5.7 && p.z>-3.4 && p.z<2.3 && p.y<3.5){
+  float zFront=-1.55;
+  float h=terrain(vec2(3.1,zFront));
+  for(int k=0;k<2;k++){
+   float x=2.03+float(k)*2.12;
+   float fy=terrain(vec2(x,zFront));
+   float pole=sdSegment(p,vec3(x,fy+.07,zFront),vec3(x,h+2.34,zFront),.105);
+   pole+=.014*(n3(p*14.)-.5);
+   if(pole<d){d=pole;mat=5.;}
+   // A cölöpök tövében két ténylegesen felhasznált rögzítőkő.
+   float footing=sdOcta((p-vec3(x,fy+.13,zFront)) *vec3(1.,1.2,1.),.34);
+   if(footing<d){d=footing;mat=4.;}
+  }
+  if(u_shelterStage>1.5){
+   float beam=sdSegment(p,vec3(1.98,h+2.30,zFront),vec3(4.20,h+2.30,zFront),.13);
+   if(beam<d){d=beam;mat=5.;}
+   // A harmadik, negyedik és ötödik cölöp gerenda és két ferde tetőtartó.
+   for(int k=0;k<2;k++){
+    float x=2.04+2.10*float(k);
+    vec3 a=vec3(x,h+2.32,zFront);
+    vec3 b=vec3(x,terrain(vec2(x,.95))+.42,.95);
+    float rafter=sdSegment(p,a,b,.10);
+    if(rafter<d){d=rafter;mat=5.;}
+   }
+  }
+  if(u_shelterStage>2.5){
+   // Hat, egymásra fektetett levélköteg: megmarad a tető ferde rétegszerkezete.
+   for(int k=0;k<6;k++){
+    float zz=-1.33+float(k)*.37;
+    float yy=h+2.26-(zz-zFront)*.69;
+    vec3 v=p-vec3(3.09,yy,zz);
+    v.y+=v.z*.69;
+    float leafSheet=sdBox(v,vec3(1.12,.038,.31));
+    leafSheet+=.008*(n3(p*18.)-.5);
+    if(leafSheet<d){d=leafSheet;mat=6.;}
+   }
+  }
+ }
  return vec2(d,mat);
 }
 vec3 normalAt(vec3 p){vec2 e=vec2(.007,0.);return normalize(vec3(geo(p+e.xyy).x-geo(p-e.xyy).x,geo(p+e.yxy).x-geo(p-e.yxy).x,geo(p+e.yyx).x-geo(p-e.yyx).x));}
@@ -71,7 +112,8 @@ vec3 material(vec3 p,vec3 norm,float id){
  if(id<1.5)return dirt*(1.-wet*.55);
  if(id<3.5)return rock*(1.-wet*.35);
  if(id<4.5)return vec3(.37,.31,.25)*(1.-wet*.45);
- return vec3(.29,.18,.09)*(1.-wet*.2);
+ if(id<5.5)return mix(vec3(.19,.105,.052),vec3(.38,.24,.13),fb(p*vec3(3.,7.,3.)))*(1.-wet*.22);
+ return mix(vec3(.22,.27,.10),vec3(.46,.40,.15),fb(p*4.5))*(1.-wet*.3);
 }
 vec3 sky(vec3 d,vec3 sun){float h=clamp(d.y*.6+.45,0.,1.);vec3 c=mix(vec3(.81,.76,.65),vec3(.29,.50,.67),h);float solar=pow(max(dot(d,sun),0.),330.);c+=vec3(1.,.70,.35)*solar*1.9;float haze=pow(1.-max(d.y,0.),6.);c+=vec3(.22,.16,.09)*haze;return c;}
 void main(){
