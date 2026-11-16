@@ -42,6 +42,14 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeDo(JN
     std::lock_guard<std::mutex> guard(worldLock);
     return toJava(env,world.act(act));
 }
+extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeMove(JNIEnv* env,jobject,jfloat dx,jfloat dz){
+    std::lock_guard<std::mutex> guard(worldLock);
+    return toJava(env,world.move(static_cast<double>(dx),static_cast<double>(dz)));
+}
+extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeNearby(JNIEnv* env,jobject){
+    std::lock_guard<std::mutex> guard(worldLock);
+    return toJava(env,world.nearby());
+}
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeAdvance(JNIEnv*,jobject){
     std::lock_guard<std::mutex> guard(worldLock);world.step(1.0);
 }
@@ -114,6 +122,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         return;
     }
     float angle,dist,hours,rain,wet,hearth,fire,shelterStage;
+    float px,pz,walkPhase,nodes[4*taks::World::resourceCount];
     {
         std::lock_guard<std::mutex> guard(worldLock);
         angle=orbit;dist=zoom;
@@ -121,6 +130,15 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         wet=(float)world.groundMoisture;hearth=world.hearthBuilt?1.f:0.f;
         fire=world.fireLit?1.f:0.f;
         shelterStage=static_cast<float>(world.shelterStage);
+        px=static_cast<float>(world.playerX);
+        pz=static_cast<float>(world.playerZ);
+        walkPhase=static_cast<float>(world.walkPhase);
+        for(int i=0;i<taks::World::resourceCount;++i){
+            nodes[4*i]=static_cast<float>(world.nodes[i].x);
+            nodes[4*i+1]=static_cast<float>(world.nodes[i].z);
+            nodes[4*i+2]=static_cast<float>(world.nodes[i].type);
+            nodes[4*i+3]=static_cast<float>(world.nodes[i].amount);
+        }
     }
     GLint vp[4]={0,0,1,1};
     glGetIntegerv(GL_VIEWPORT,vp);
@@ -136,6 +154,11 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
     u1("u_hearth",hearth);
     u1("u_fire",fire);
     u1("u_shelterStage",shelterStage);
+    const GLint playerLoc=glGetUniformLocation(program,"u_player");
+    if(playerLoc>=0)glUniform2f(playerLoc,px,pz);
+    u1("u_walkPhase",walkPhase);
+    const GLint nodeLoc=glGetUniformLocation(program,"u_nodes[0]");
+    if(nodeLoc>=0)glUniform4fv(nodeLoc,taks::World::resourceCount,nodes);
     u1("u_quality",1.f);
     glDrawArrays(GL_TRIANGLES,0,3);
     glBindVertexArray(0);
