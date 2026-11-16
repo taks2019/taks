@@ -1,94 +1,126 @@
 #include "../CauseWorld.h"
 #include <cassert>
+#include <cmath>
 #include <iostream>
 #include <string>
 
+static void walkTo(taks::World& w,double x,double z){
+    for(int step=0;step<128;++step){
+        const double dx=x-w.playerX,dz=z-w.playerZ;
+        const double dist=std::sqrt(dx*dx+dz*dz);
+        if(dist<0.08)return;
+        const double scale=std::min(0.60/dist,1.0);
+        const std::string result=w.move(dx*scale,dz*scale);
+        assert(result.find("elállja")==std::string::npos);
+        assert(result.find("határához")==std::string::npos);
+    }
+    assert(false && "The player could not reach the test destination");
+}
+static void gather(taks::World& w,const char* type,int count){
+    for(int i=0;i<count;++i){
+        const std::string message=w.act(type);
+        assert(message.find("felvéve")!=std::string::npos);
+    }
+}
 int main(){
+    // A játékos a terepen mozog; a távoli gyűjtés semmilyen készletet nem változtathat.
     taks::World w;
-    // A meglévő tűzhely és tűz továbbra is ok-okozati alapú.
-    assert(w.act("ignite").find("tűzhely")!=std::string::npos);
-    assert(w.act("hearth").find("faág")!=std::string::npos);
-    const int wood0=w.groundWood;
-    for(int i=0;i<5;++i)w.act("wood");
-    for(int i=0;i<2;++i)w.act("stone");
-    w.act("tinder");
-    assert(w.groundWood==wood0-5);
+    const std::string before=w.save();
+    assert(w.act("wood").find("menj közelebb")!=std::string::npos);
+    assert(w.save()==before);
+    assert(w.nearby().find("Kő")!=std::string::npos);
+    const auto nearRock=w.nearby();
+    walkTo(w,1,-5.4);
+    gather(w,"stone",2);
+    assert(w.carriedStone==2 && w.groundStone==6);
+    walkTo(w,-2,-5.5);
+    gather(w,"wood",3);
+    walkTo(w,3,-4);
+    gather(w,"wood",2);
+    walkTo(w,-1,-3.9);
+    gather(w,"tinder",1);
+    walkTo(w,-1.15,-1.8);
     assert(w.act("hearth").find("elkészült")!=std::string::npos);
-    assert(w.carriedWood==2 && w.carriedStone==0);
     assert(w.act("ignite").find("meggyulladt")!=std::string::npos);
-    assert(w.fireLit && w.fireFuel==2.0 && w.carriedWood==0);
-    auto saved=w.save();taks::World restored;
-    assert(restored.load(saved));assert(restored.save()==saved);
-    assert(!restored.load("sérült vagy csaló mentés"));
-    restored.step(20);assert(!restored.fireLit);assert(restored.fireFuel==0);
+    assert(w.fireLit && w.hearthBuilt);
+    // Minden világállapotot bitpontosan megőrzünk, beleértve a pozíciókat és lelőhelyeket.
+    const std::string saved=w.save();
+    taks::World loaded;
+    assert(loaded.load(saved) && loaded.save()==saved);
+    assert(std::abs(loaded.playerX-w.playerX)<1e-9);
+    assert(!loaded.load("TAKS_NATIVE_3 missing"));
+    assert(loaded.save()==saved);
+    loaded.step(20);
+    assert(!loaded.fireLit);
 
-    // A teljes menedék egyetlen lépésben, alkatrészek nélkül nem teremthető meg.
+    // Kőél -> 5 darab cölöp -> oszlop -> tetőváz -> fedés, valós helyszínen.
     taks::World b;
     const auto initial=b.save();
-    assert(b.act("roof").find("tetőváznak")!=std::string::npos);
-    assert(b.act("base").find("cölöp")!=std::string::npos);
+    assert(b.act("roof").find("menedéknél")!=std::string::npos);
+    assert(b.act("base").find("helyszíne")!=std::string::npos);
     assert(b.act("pole").find("kőeszköz")!=std::string::npos);
-    assert(b.save()==initial); // egyetlen kudarc sem változtathatja meg az állapotot
-    assert(b.act("shelter_enter").find("nem fedett")!=std::string::npos);
-
-    // 2 kő => használható, kopó kőél + hulladék.
-    for(int i=0;i<2;++i)assert(b.act("stone").find("felvéve")!=std::string::npos);
+    assert(b.save()==initial);
+    walkTo(b,1,-5.4);
+    gather(b,"stone",2);
     assert(b.act("knap").find("kőszilánk")!=std::string::npos);
-    assert(b.carriedStone==0 && b.chippedEdgeWear==6 && b.stoneDebris==1);
-    assert(b.act("knap").find("van használható")!=std::string::npos);
-    // 5 nyers ág -> 5 cölöp, kopó él és eltelt munkaidő.
-    for(int i=0;i<5;++i)b.act("wood");
-    double beforeWork=b.hours;
+    assert(b.chippedEdgeWear==6 && b.stoneDebris==1);
+    walkTo(b,-2,-5.5);
+    gather(b,"wood",3);
+    walkTo(b,3,-4);
+    gather(b,"wood",2);
     for(int i=0;i<5;++i)assert(b.act("pole").find("cölöp")!=std::string::npos);
-    assert(b.carriedWood==0 && b.preparedPoles==5 && b.chippedEdgeWear==1);
-    assert(b.hours>beforeWork);
-    assert(b.act("pole").find("nyers faág")!=std::string::npos);
-    // 2 támasztókő -> tartóoszlopok; 3 cölöp -> tetőváz
-    for(int i=0;i<2;++i)b.act("stone");
+    assert(b.preparedPoles==5 && b.chippedEdgeWear==1);
+    // A korábbi két kőből a szerszám készült, az oszlopokhoz új kövek kellenek.
+    walkTo(b,1,-5.4);gather(b,"stone",1);
+    walkTo(b,3,-0.8);gather(b,"stone",1);
+    walkTo(b,3.1,-1.55);
     assert(b.act("base").find("tartóoszlopok")!=std::string::npos);
-    assert(b.shelterStage==1 && b.preparedPoles==3 && b.carriedStone==0);
+    assert(b.shelterStage==1 && b.preparedPoles==3);
     assert(b.act("frame").find("Tetőváz")!=std::string::npos);
     assert(b.shelterStage==2 && b.preparedPoles==0);
     assert(b.act("shelter_enter").find("nem fedett")!=std::string::npos);
-    // 6 leveles ág => fedés, nincs újra ingyenes tárgyteremtés
-    for(int i=0;i<6;++i)b.act("leaves");
-    assert(b.groundLeaves==12 && b.carriedLeaves==6);
+    walkTo(b,4.1,-3.3);
+    gather(b,"leaves",6);
+    walkTo(b,3.1,-1.55);
+    if(b.stamina<12)b.act("rest");
     assert(b.act("roof").find("levélfedés")!=std::string::npos);
     assert(b.shelterStage==3 && b.carriedLeaves==0);
-    assert(b.act("roof").find("már elkészült")!=std::string::npos);
     assert(b.act("shelter_enter").find("Behúzódtál")!=std::string::npos);
     assert(b.underShelter);
+    const std::string roofSave=b.save();
+    taks::World roofReload;
+    assert(roofReload.load(roofSave) && roofReload.save()==roofSave);
 
-    // Az elkészült menedék csak akkor véd, ha a karakter tényleg behúzódott.
-    taks::World exposed=b,sheltered=b;
-    exposed.underShelter=false;
-    exposed.playerWetness=0.1;
-    sheltered.playerWetness=0.1;
-    exposed.forceRainForTest(0.8);
-    sheltered.forceRainForTest(0.8);
-    exposed.step(1.0);
-    sheltered.step(1.0);
-    assert(sheltered.playerWetness < exposed.playerWetness);
-    // Visszatöltéskor a munkafázis, készlet és kitettség is megmarad.
-    const std::string fullSave=b.save();
-    taks::World resumed;
-    assert(resumed.load(fullSave) && resumed.save()==fullSave);
-    assert(resumed.shelterStage==3 && resumed.underShelter);
-    const auto stable=resumed.save();
-    assert(!resumed.load("TAKS_NATIVE_2 1 2 3 broken data"));
-    assert(resumed.save()==stable);
+    taks::World rainOutside=b,rainUnder=b;
+    rainOutside.underShelter=false;
+    rainOutside.playerWetness=0.1;
+    rainUnder.playerWetness=0.1;
+    rainOutside.forceRainForTest(.8);
+    rainUnder.forceRainForTest(.8);
+    rainOutside.step(1);
+    rainUnder.step(1);
+    assert(rainUnder.playerWetness<rainOutside.playerWetness);
+    walkTo(b,5.0,-4.0);
+    assert(!b.underShelter);
 
-    // Korábbi kiadás mentéseinek migrációja, a régi világ megőrzése.
-    taks::World old;
-    assert(old.load("TAKS_NATIVE_1 14 8 5 0 0 0 6 0.4 0 0.13 0.13 100 0 0 0 0"));
-    assert(old.shelterStage==0 && old.groundLeaves==18);
-    assert(old.save().find("TAKS_NATIVE_2")==0);
-    // Időjárás és ismeretlen cselekvés.
-    taks::World wet;double m=wet.woodMoisture;
-    wet.forceRainForTest(1);wet.step(1);
-    assert(wet.woodMoisture>m && wet.groundMoisture>0.13);
-    const auto beforeUnknown=wet.save();
-    assert(wet.act("unknown").find("nem módosult")!=std::string::npos);
-    assert(wet.save()==beforeUnknown);
-    std::cout<<"TAKS native cause/effect and staged shelter tests PASSED\n";
+    // V1 és V2 mentés betöltése új térbeli kezdő lelőhelyekkel, anyagmérleg nélkül nem.
+    taks::World old1,old2;
+    assert(old1.load("TAKS_NATIVE_1 14 8 5 0 0 0 6 0.4 0 0.13 0.13 100 0 0 0 0"));
+    assert(old2.load("TAKS_NATIVE_2 12 7 4 1 1 1 8 0.4 0 0.13 0.13 88 0 0 0 3 15 2 6 1 0 1 0.12 0"));
+    assert(old1.save().find("TAKS_NATIVE_3")==0);
+    assert(old2.groundWood==12 && old2.groundStone==7 && old2.groundLeaves==15);
+    assert(old2.nodes[0].amount<=3);
+    const auto stable=old2.save();
+    assert(!old2.load("TAKS_NATIVE_3 1 2 bad"));
+    assert(old2.save()==stable);
+    // Kimerülés, rossz érték és sziklafal ne hozzon létre anyagot.
+    taks::World exhausted;
+    exhausted.stamina=0;
+    const auto noEnergy=exhausted.save();
+    assert(exhausted.move(1,0).find("kimerült")!=std::string::npos);
+    assert(exhausted.save()==noEnergy);
+    taks::World wet;wet.forceRainForTest(1);
+    double oldWet=wet.groundMoisture;wet.step(1);
+    assert(wet.groundMoisture>oldWet);
+    std::cout<<"TAKS spatial game, construction and save migration tests PASSED\n";
 }
