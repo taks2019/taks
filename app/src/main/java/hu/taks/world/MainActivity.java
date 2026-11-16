@@ -175,8 +175,12 @@ public final class MainActivity extends Activity {
         saves=getSharedPreferences("taks_native_save_v1",MODE_PRIVATE);
         String previous=saves.getString("state",null);
         if(previous!=null&&!nativeLoad(previous))nativeReset();
-        try(InputStream in=getAssets().open("scene.frag")){
-            shaderSource=new String(in.readAllBytes(),StandardCharsets.UTF_8);
+        // Java 9 readAllBytes helyett Android 26-tól kompatibilis betöltés.
+        try(InputStream in=getAssets().open("scene.frag");
+            java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream()){
+            byte[] block=new byte[8192];int n;
+            while((n=in.read(block))!=-1)bytes.write(block,0,n);
+            shaderSource=new String(bytes.toByteArray(),StandardCharsets.UTF_8);
         }catch(Exception error){shaderSource="";}
 
         root=new FrameLayout(this);
