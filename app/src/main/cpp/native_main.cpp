@@ -48,6 +48,9 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeAdvance(
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeState(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);return toJava(env,world.summary());
 }
+extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeBuildState(JNIEnv* env,jobject){
+    std::lock_guard<std::mutex> guard(worldLock);return toJava(env,world.shelterStatus());
+}
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeSave(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);return toJava(env,world.save());
 }
@@ -110,13 +113,14 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         glClearColor(.065f,.1f,.12f,1.f);glClear(GL_COLOR_BUFFER_BIT);
         return;
     }
-    float angle,dist,hours,rain,wet,hearth,fire;
+    float angle,dist,hours,rain,wet,hearth,fire,shelterStage;
     {
         std::lock_guard<std::mutex> guard(worldLock);
         angle=orbit;dist=zoom;
         hours=(float)world.hours;rain=(float)world.rainIntensity;
         wet=(float)world.groundMoisture;hearth=world.hearthBuilt?1.f:0.f;
         fire=world.fireLit?1.f:0.f;
+        shelterStage=static_cast<float>(world.shelterStage);
     }
     GLint vp[4]={0,0,1,1};
     glGetIntegerv(GL_VIEWPORT,vp);
@@ -131,6 +135,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
     u1("u_moisture",wet);
     u1("u_hearth",hearth);
     u1("u_fire",fire);
+    u1("u_shelterStage",shelterStage);
     u1("u_quality",1.f);
     glDrawArrays(GL_TRIANGLES,0,3);
     glBindVertexArray(0);
