@@ -21,6 +21,10 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+      - name: Install headless EGL / Mesa renderer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libegl1 libgl1 libgl1-mesa-dri libgles2
       - name: Headless OpenGL ES 3 render test with actual shader
         env:
           EGL_PLATFORM: surfaceless
