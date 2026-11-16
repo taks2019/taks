@@ -95,7 +95,7 @@ public final class MainActivity extends Activity {
     }
     private void refreshScene(){if(surface!=null)surface.requestRender();}
     private void say(String msg){notice.setText(msg);notice.setVisibility(View.VISIBLE);}
-    private void act(String cmd){say(nativeDo(cmd));refreshScene();if(activePanel!=0)showPanel(activePanel);}
+    private void act(String cmd){say(nativeDo(cmd));if(proximity!=null)proximity.setText(nativeNearby());refreshScene();if(activePanel!=0)showPanel(activePanel);}
     private void save(){saves.edit().putString("state",nativeSave()).apply();say("Világállapot mentve az eszközön.");}
     private int bottomBarPx(){
         int h=getResources().getDisplayMetrics().heightPixels;
