@@ -14,6 +14,7 @@ import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.ScrollView;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
@@ -22,6 +23,7 @@ public final class MainActivity extends Activity {
     private native String nativeDo(String action);
     private native void nativeAdvance();
     private native String nativeState();
+    private native String nativeBuildState();
     private native String nativeSave();
     private native boolean nativeLoad(String saved);
     private native void nativeReset();
@@ -66,39 +68,79 @@ public final class MainActivity extends Activity {
     private void say(String msg){notice.setText(msg);notice.setVisibility(View.VISIBLE);}
     private void act(String cmd){say(nativeDo(cmd));refreshScene();if(activePanel!=0)showPanel(activePanel);}
     private void save(){saves.edit().putString("state",nativeSave()).apply();say("Világállapot mentve az eszközön.");}
+    private int bottomBarPx(){
+        int h=getResources().getDisplayMetrics().heightPixels;
+        return Math.min(dp(65),Math.max(62,h/5));
+    }
     private void addVertical(LinearLayout box,String text,Runnable a){
         Button b=button(text,a,false);
-        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(43));p.bottomMargin=dp(7);
+        int h=getResources().getDisplayMetrics().heightPixels;
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,Math.min(dp(42),Math.max(44,h/8)));
+        p.bottomMargin=4;
         box.addView(b,p);
     }
     private void closePanel(){if(sheet!=null){root.removeView(sheet);sheet=null;}activePanel=0;}
     private void showPanel(int which){
         closePanel();activePanel=which;
         sheet=new LinearLayout(this);sheet.setOrientation(LinearLayout.VERTICAL);
-        sheet.setPadding(dp(16),dp(12),dp(16),dp(11));
-        sheet.setBackground(panelBackground(0xED101B19,18));
-        TextView title=caption(which==1?"ANYAGOK ÉS ÉPÍTÉS":"VILÁGÁLLAPOT",16,0xFFE4D6B6);
-        title.setPadding(0,0,0,dp(8));sheet.addView(title);
+        sheet.setPadding(dp(12),dp(9),dp(12),dp(7));
+        sheet.setBackground(panelBackground(0xF1101B19,16));
+        TextView title=caption(which==1?"ÉPÍTÉS ÉS ANYAGOK":"KÖRNYEZET ÉS ÁLLAPOT",15,0xFFE4D6B6);
+        title.setPadding(0,0,0,4);sheet.addView(title);
+        ScrollView scroll=new ScrollView(this);
+        scroll.setVerticalScrollBarEnabled(false);
+        LinearLayout content=new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(0,0,0,6);
         if(which==1){
-            TextView information=caption("A tárgy csak szükséges anyagból, munkával készül. A 3D terepen látszik az eredmény.",12,0xFFB9C3B6);
-            sheet.addView(information);
-            addVertical(sheet,"Faág gyűjtése",()->act("wood"));
-            addVertical(sheet,"Kő gyűjtése",()->act("stone"));
-            addVertical(sheet,"Gyújtós gyűjtése",()->act("tinder"));
-            addVertical(sheet,"Tűzhely megépítése · 3 faág + 2 kő",()->act("hearth"));
-            addVertical(sheet,"Tűzgyújtás · 2 faág + 1 gyújtós",()->act("ignite"));
+            TextView status=caption(nativeBuildState(),12,0xFFE2D9BD);
+            status.setPadding(0,2,0,8);content.addView(status);
+            TextView materialTitle=caption("1 · ANYAGOK BEGYŰJTÉSE",12,0xFF9EC9B9);
+            content.addView(materialTitle);
+            addVertical(content,"Faág gyűjtése",()->act("wood"));
+            addVertical(content,"Kő gyűjtése",()->act("stone"));
+            addVertical(content,"Leveles ág gyűjtése",()->act("leaves"));
+            addVertical(content,"Gyújtós gyűjtése",()->act("tinder"));
+            content.addView(caption("2 · MEGMUNKÁLÁS",12,0xFF9EC9B9));
+            addVertical(content,"Kőél készítése · 2 kő",()->act("knap"));
+            addVertical(content,"Cölöp megmunkálása · 1 faág + kopó kőél",()->act("pole"));
+            content.addView(caption("3 · AKTUÁLIS ÉPÍTÉSI MUNKA",12,0xFF9EC9B9));
+            String stage=nativeBuildState();
+            if(stage.contains("Nincs alap.")){
+                addVertical(content,"Oszlopok állítása · 2 cölöp + 2 kő",()->act("base"));
+            }else if(stage.contains("Oszlopok állnak.")){
+                addVertical(content,"Tetőváz építése · 3 cölöp",()->act("frame"));
+            }else if(stage.contains("tetőváznak nincs fedése.")||stage.contains("A tetőváznak nincs fedése.")){
+                addVertical(content,"Tetőfedés · 6 leveles ág",()->act("roof"));
+            }else{
+                content.addView(caption("A menedék elkészült. Használni is kell, hogy védjen.",12,0xFFDDCDAF));
+            }
+            content.addView(caption("4 · TŰZ ÉS MELEG",12,0xFF9EC9B9));
+            addVertical(content,"Tűzhely építése · 3 faág + 2 kő",()->act("hearth"));
+            addVertical(content,"Tűzgyújtás · 2 faág + gyújtós",()->act("ignite"));
         }else{
-            TextView summary=caption(nativeState(),13,0xFFEBE7DC);
-            summary.setLineSpacing(dp(3),1f);
-            sheet.addView(summary);
-            addVertical(sheet,"1 játékóra előreléptetése",()->{nativeAdvance();say("Egy óra eltelt: nedvesség és tüzelőanyag változott.");});
-            addVertical(sheet,"Pihenés",()->act("rest"));
-            addVertical(sheet,"Mentés",this::save);
-            addVertical(sheet,"Új tesztvilág – nem írja felül a mentést",()->{nativeReset();say("Új tesztvilág indult. A korábbi mentés megmaradt.");});
+            TextView status=caption(nativeState(),12,0xFFEEE7DB);
+            status.setLineSpacing(4,1f);content.addView(status);
+            addVertical(content,"Behúzódás a menedék alá",()->act("shelter_enter"));
+            addVertical(content,"Menedék elhagyása",()->act("shelter_exit"));
+            addVertical(content,"Pihenés · 1 játékóra",()->act("rest"));
+            addVertical(content,"1 játékóra előreléptetése",()->{
+                nativeAdvance();say("Egy játékóra eltelt: nedvesség és tűzállapot újraszámítva.");
+                if(activePanel!=0)showPanel(activePanel);
+            });
+            addVertical(content,"Mentés",this::save);
+            addVertical(content,"Új tesztvilág · régi mentés megtartva",()->{
+                nativeReset();say("Új tesztvilág: a korábbi mentés változatlanul megmaradt.");
+                if(activePanel!=0)showPanel(activePanel);
+            });
         }
+        scroll.addView(content);
+        int screenHeight=getResources().getDisplayMetrics().heightPixels;
+        int maxScroll=Math.max(95,Math.min(screenHeight/2,dp(250)));
+        sheet.addView(scroll,new LinearLayout.LayoutParams(-1,maxScroll));
         addVertical(sheet,"Bezárás",this::closePanel);
         FrameLayout.LayoutParams ps=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
-        ps.setMargins(dp(12),dp(10),dp(12),dp(75));
+        ps.setMargins(dp(8),0,dp(8),bottomBarPx()+5);
         root.addView(sheet,ps);
     }
     private void togglePanel(int which){if(activePanel==which)closePanel();else showPanel(which);}
@@ -182,23 +224,23 @@ public final class MainActivity extends Activity {
         notice.setPadding(dp(12),dp(9),dp(12),dp(9));
         notice.setBackground(panelBackground(0xE0192420,12));
         FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
-        np.setMargins(dp(12),0,dp(12),dp(78));root.addView(notice,np);
+        np.setMargins(dp(12),0,dp(12),bottomBarPx()+7);root.addView(notice,np);
         notice.postDelayed(()->{
             if(notice.getText().toString().startsWith("3D próbaszektor")) notice.setVisibility(View.GONE);
         },9000);
 
         LinearLayout bottom=new LinearLayout(this);bottom.setGravity(Gravity.CENTER);
-        bottom.setPadding(dp(8),dp(7),dp(8),dp(7));
+        bottom.setPadding(4,2,4,2);
         bottom.setBackground(panelBackground(0xC7101B19,15));
         Button build=button("ÉPÍTÉS",()->togglePanel(1),true);
         Button info=button("ÁLLAPOT",()->togglePanel(2),false);
         Button time=button("IDŐ +1 óra",()->{nativeAdvance();say("Egy játékóra eltelt: ellenőrizd a talaj és a tűz állapotát.");},false);
         Button save=button("MENTÉS",this::save,false);
         for(Button b:new Button[]{build,info,time,save}){
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(47),1);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,Math.max(45,bottomBarPx()-10),1);
             lp.setMargins(dp(3),0,dp(3),0);bottom.addView(b,lp);
         }
-        FrameLayout.LayoutParams bp=new FrameLayout.LayoutParams(-1,dp(65),Gravity.BOTTOM);
+        FrameLayout.LayoutParams bp=new FrameLayout.LayoutParams(-1,bottomBarPx(),Gravity.BOTTOM);
         bp.setMargins(dp(6),0,dp(6),dp(6));root.addView(bottom,bp);
         setContentView(root);
     }
