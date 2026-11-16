@@ -29,6 +29,7 @@ public final class MainActivity extends Activity {
     private native String nativeBuildState();
     private native String nativeMove(float dx,float dz);
     private native String nativeNearby();
+    private native String nativeGoal();
     private native String nativeSave();
     private native boolean nativeLoad(String saved);
     private native void nativeReset();
@@ -121,6 +122,7 @@ public final class MainActivity extends Activity {
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(0,0,0,6);
         if(which==1){
+            content.addView(caption(nativeGoal(),12,0xFFF4D59B));
             TextView status=caption(nativeBuildState(),12,0xFFE2D9BD);
             status.setPadding(0,2,0,8);content.addView(status);
             TextView materialTitle=caption("1 · A KÖRNYEZETBEN TALÁLHATÓ NYERSANYAG",12,0xFF9EC9B9);
@@ -145,6 +147,7 @@ public final class MainActivity extends Activity {
             addVertical(content,"Tűzhely építése · 3 faág + 2 kő",()->act("hearth"));
             addVertical(content,"Tűzgyújtás · 2 faág + gyújtós",()->act("ignite"));
         }else{
+            content.addView(caption(nativeGoal(),12,0xFFF4D59B));
             TextView status=caption(nativeState(),12,0xFFEEE7DB);
             status.setLineSpacing(4,1f);content.addView(status);
             addVertical(content,"Behúzódás a menedék alá",()->act("shelter_enter"));
@@ -228,26 +231,30 @@ public final class MainActivity extends Activity {
     }
     private void openGameMenu(){
         closePanel();
-        String[] commands={"Folytatás","Mentés","Új világ","Kamera alaphelyzet","Készítők","Kilépés"};
+        String[] commands={"Folytatás","Mi a következő cél?","Mentés","Új világ","Kamera alaphelyzet","Készítők","Kilépés"};
         new AlertDialog.Builder(this).setTitle("TAKS WORLD · FŐMENÜ")
             .setItems(commands,(dialog,index)->{
                 switch(index){
                     case 0: break;
-                    case 1: save(); break;
-                    case 2: new AlertDialog.Builder(this)
+                    case 1: new AlertDialog.Builder(this)
+                            .setTitle("JÁTÉKCÉL")
+                            .setMessage(nativeGoal()+"\n\n"+nativeNearby()+"\n\nMozgás: bal oldalon húzd az ujjad; kamera: jobb oldalon húzd; kétujjas zoom. Ha az anyag közel van, válaszd a FELVESZ gombot.")
+                            .setPositiveButton("Rendben",null).show();break;
+                    case 2: save(); break;
+                    case 3: new AlertDialog.Builder(this)
                          .setTitle("Új világ indítása")
                          .setMessage("Biztosan új világot szeretnél? A régi mentés megmarad, amíg nem mentesz ismét.")
                          .setPositiveButton("Új világ",(d,w)->{
                              nativeReset();refreshScene();
                              if(proximity!=null)proximity.setText(nativeNearby());
-                             say("Új világ indult. A régi mentés még nincs felülírva.");
+                             say(nativeGoal());
                          })
                          .setNegativeButton("Mégse",null).show();break;
-                    case 3: orbit=0f;zoom=14f;nativeSetView(orbit,zoom);refreshScene();break;
-                    case 4: new AlertDialog.Builder(this).setTitle("Készítők")
+                    case 4: orbit=0f;zoom=14f;nativeSetView(orbit,zoom);refreshScene();break;
+                    case 5: new AlertDialog.Builder(this).setTitle("Készítők")
                               .setMessage("TAKS WORLD – saját fejlesztésű natív játékmotor. A grafika és az oksági szimuláció fejlesztés alatt.")
                               .setPositiveButton("OK",null).show();break;
-                    case 5: save();finish();break;
+                    case 6: save();finish();break;
                 }
             }).setNegativeButton("Vissza a játékba",null).show();
     }
@@ -271,7 +278,7 @@ public final class MainActivity extends Activity {
         surface.setEGLContextClientVersion(3);
         // Kijelzőmérethez illeszkedő, kisebb GPU framebuffer; nincs nyújtás.
         android.util.DisplayMetrics metrics=getResources().getDisplayMetrics();
-        float renderScale=Math.min(1.0f,960.0f/Math.max(metrics.widthPixels,metrics.heightPixels));
+        float renderScale=Math.min(1.0f,720.0f/Math.max(metrics.widthPixels,metrics.heightPixels));
         int bufferWidth=Math.max(320,Math.round(metrics.widthPixels*renderScale));
         int bufferHeight=Math.max(180,Math.round(metrics.heightPixels*renderScale));
         surface.getHolder().setFixedSize(bufferWidth,bufferHeight);
@@ -296,7 +303,7 @@ public final class MainActivity extends Activity {
         header.setPadding(dp(15),dp(10),dp(10),dp(10));
         header.setBackground(panelBackground(0xB8101A1A,13));
         header.addView(caption("TAKS WORLD",22,0xFFE6D6B5));
-        header.addView(caption("NATÍV 3D MOTOR · SZIKLÁS TESZTTERÜLET",10,0xFFC3D1C5));
+        header.addView(caption("JÁTSZHATÓ OK-OKOZATI ALAP · 0.3",10,0xFFC3D1C5));
         FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
         hp.setMargins(dp(12),dp(12),0,0);root.addView(header,hp);
 
@@ -307,13 +314,13 @@ public final class MainActivity extends Activity {
         hintParams.topMargin=dp(16);root.addView(hint,hintParams);
         hint.postDelayed(()->hint.setVisibility(View.GONE),6500);
 
-        notice=caption("3D próbaszektor · A barlang még nem hiteles Wonderwerk-rekonstrukció.",13,0xFFF1E3C9);
+        notice=caption(nativeGoal(),12,0xFFF1E3C9);
         notice.setPadding(dp(12),dp(9),dp(12),dp(9));
         notice.setBackground(panelBackground(0xE0192420,12));
         FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
         np.setMargins(dp(12),0,dp(12),bottomBarPx()+7);root.addView(notice,np);
         notice.postDelayed(()->{
-            if(notice.getText().toString().startsWith("3D próbaszektor")) notice.setVisibility(View.GONE);
+            if(notice.getText().toString().startsWith("CÉL:")) notice.setVisibility(View.GONE);
         },9000);
 
         proximity=caption(nativeNearby(),12,0xFFE8E0CC);
