@@ -1,12 +1,15 @@
 package hu.taks.world;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.opengl.GLES30;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -24,6 +27,8 @@ public final class MainActivity extends Activity {
     private native void nativeAdvance();
     private native String nativeState();
     private native String nativeBuildState();
+    private native String nativeMove(float dx,float dz);
+    private native String nativeNearby();
     private native String nativeSave();
     private native boolean nativeLoad(String saved);
     private native void nativeReset();
@@ -41,6 +46,29 @@ public final class MainActivity extends Activity {
     private String shaderSource;
     private float orbit=0f,zoom=14f,lastX=0,lastY=0,lastSpan=0;
     private int activePanel=0;
+    private TextView proximity;
+    private boolean moving=false,moveIntent=false;
+    private float anchorX,anchorY,axisX=0,axisY=0;
+    private int movementTicks=0;
+    private final Handler movementHandler=new Handler(Looper.getMainLooper());
+    private final Runnable movementLoop=new Runnable(){
+        @Override public void run(){
+            if(!moving)return;
+            if(Math.abs(axisX)+Math.abs(axisY)>.12f){
+                float wx=(float)(-Math.cos(orbit)*axisX+Math.sin(orbit)*axisY);
+                float wz=(float)(-Math.sin(orbit)*axisX+Math.cos(orbit)*axisY);
+                String result=nativeMove(wx*.17f,wz*.17f);
+                if(result.contains("kimerült")||result.contains("elállja")||result.contains("határához")){
+                    if(movementTicks%6==0)say(result);
+                }
+                refreshScene();
+                if(proximity!=null && movementTicks%2==0)proximity.setText(nativeNearby());
+                movementTicks++;
+            }
+            movementHandler.postDelayed(this,85);
+        }
+    };
+
 
     private int dp(float n){return Math.round(getResources().getDisplayMetrics().density*n);}
     private GradientDrawable panelBackground(int color,int radius){
@@ -95,12 +123,10 @@ public final class MainActivity extends Activity {
         if(which==1){
             TextView status=caption(nativeBuildState(),12,0xFFE2D9BD);
             status.setPadding(0,2,0,8);content.addView(status);
-            TextView materialTitle=caption("1 · ANYAGOK BEGYŰJTÉSE",12,0xFF9EC9B9);
+            TextView materialTitle=caption("1 · A KÖRNYEZETBEN TALÁLHATÓ NYERSANYAG",12,0xFF9EC9B9);
             content.addView(materialTitle);
-            addVertical(content,"Faág gyűjtése",()->act("wood"));
-            addVertical(content,"Kő gyűjtése",()->act("stone"));
-            addVertical(content,"Leveles ág gyűjtése",()->act("leaves"));
-            addVertical(content,"Gyújtós gyűjtése",()->act("tinder"));
+            content.addView(caption(nativeNearby(),12,0xFFDDCEB2));
+            addVertical(content,"Közeli nyersanyag felvétele",()->act("gather"));
             content.addView(caption("2 · MEGMUNKÁLÁS",12,0xFF9EC9B9));
             addVertical(content,"Kőél készítése · 2 kő",()->act("knap"));
             addVertical(content,"Cölöp megmunkálása · 1 faág + kopó kőél",()->act("pole"));
@@ -149,24 +175,81 @@ public final class MainActivity extends Activity {
         float x=e.getX(1)-e.getX(0),y=e.getY(1)-e.getY(0);
         return (float)Math.sqrt(x*x+y*y);
     }
-    private boolean touch(MotionEvent e){
-        int action=e.getActionMasked();
-        if(action==MotionEvent.ACTION_DOWN){lastX=e.getX();lastY=e.getY();lastSpan=0;return true;}
-        if(action==MotionEvent.ACTION_POINTER_DOWN){lastSpan=dist(e);return true;}
+    private boolean touch(MotionEvent e,boolean fromMovementPad){
+        final int action=e.getActionMasked();
+        if(action==MotionEvent.ACTION_DOWN){
+            lastX=e.getX();lastY=e.getY();lastSpan=0;
+            moveIntent=fromMovementPad ||
+                (e.getX()<surface.getWidth()*.38f && e.getY()>surface.getHeight()*.30f);
+            if(moveIntent){
+                moving=true;anchorX=e.getX();anchorY=e.getY();
+                axisX=axisY=0f;movementTicks=0;
+                movementHandler.removeCallbacks(movementLoop);
+                movementHandler.post(movementLoop);
+            }
+            return true;
+        }
+        if(action==MotionEvent.ACTION_POINTER_DOWN){
+            moving=false;moveIntent=false;
+            movementHandler.removeCallbacks(movementLoop);
+            lastSpan=dist(e);return true;
+        }
         if(action==MotionEvent.ACTION_MOVE){
             if(e.getPointerCount()>=2){
-                float s=dist(e);
-                if(lastSpan>4){zoom=Math.min(26,Math.max(7,zoom*lastSpan/s));}
-                lastSpan=s;
+                float span=dist(e);
+                if(lastSpan>4)zoom=Math.min(26,Math.max(7,zoom*lastSpan/span));
+                lastSpan=span;
+                nativeSetView(orbit,zoom);
+                refreshScene();return true;
+            }
+            if(moveIntent){
+                float dx=e.getX()-anchorX;
+                float dy=e.getY()-anchorY;
+                float length=(float)Math.sqrt(dx*dx+dy*dy);
+                float factor=length<8?0:Math.min(1f,length/66f)/length;
+                axisX=dx*factor;
+                axisY=-dy*factor;
             }else{
                 float dx=e.getX()-lastX;
                 orbit+=dx*.008f;
                 lastX=e.getX();lastY=e.getY();
+                nativeSetView(orbit,zoom);refreshScene();
             }
-            nativeSetView(orbit,zoom);refreshScene();return true;
+            return true;
+        }
+        if(action==MotionEvent.ACTION_CANCEL||action==MotionEvent.ACTION_UP){
+            moving=false;moveIntent=false;axisX=axisY=0;
+            movementHandler.removeCallbacks(movementLoop);
+            if(proximity!=null)proximity.setText(nativeNearby());
+            refreshScene();return true;
         }
         if(action==MotionEvent.ACTION_POINTER_UP){lastSpan=0;return true;}
         return true;
+    }
+    private void openGameMenu(){
+        closePanel();
+        String[] commands={"Folytatás","Mentés","Új világ","Kamera alaphelyzet","Készítők","Kilépés"};
+        new AlertDialog.Builder(this).setTitle("TAKS WORLD · FŐMENÜ")
+            .setItems(commands,(dialog,index)->{
+                switch(index){
+                    case 0: break;
+                    case 1: save(); break;
+                    case 2: new AlertDialog.Builder(this)
+                         .setTitle("Új világ indítása")
+                         .setMessage("Biztosan új világot szeretnél? A régi mentés megmarad, amíg nem mentesz ismét.")
+                         .setPositiveButton("Új világ",(d,w)->{
+                             nativeReset();refreshScene();
+                             if(proximity!=null)proximity.setText(nativeNearby());
+                             say("Új világ indult. A régi mentés még nincs felülírva.");
+                         })
+                         .setNegativeButton("Mégse",null).show();break;
+                    case 3: orbit=0f;zoom=14f;nativeSetView(orbit,zoom);refreshScene();break;
+                    case 4: new AlertDialog.Builder(this).setTitle("Készítők")
+                              .setMessage("TAKS WORLD – saját fejlesztésű natív játékmotor. A grafika és az oksági szimuláció fejlesztés alatt.")
+                              .setPositiveButton("OK",null).show();break;
+                    case 5: save();finish();break;
+                }
+            }).setNegativeButton("Vissza a játékba",null).show();
     }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
@@ -205,7 +288,7 @@ public final class MainActivity extends Activity {
             @Override public void onDrawFrame(javax.microedition.khronos.opengles.GL10 gl){nativeRender();}
         });
         surface.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
-        surface.setOnTouchListener((v,e)->touch(e));
+        surface.setOnTouchListener((v,e)->touch(e,false));
         root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
         nativeSetView(orbit,zoom);
 
@@ -217,7 +300,7 @@ public final class MainActivity extends Activity {
         FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
         hp.setMargins(dp(12),dp(12),0,0);root.addView(header,hp);
 
-        hint=caption("Húzd: kamera forgatása    •    Két ujjal: nagyítás",12,0xFFECE9DC);
+        hint=caption("Bal oldalon húzd: mozgás · jobb oldalon: kamera · két ujjal: zoom",12,0xFFECE9DC);
         hint.setPadding(dp(10),dp(7),dp(10),dp(7));
         hint.setBackground(panelBackground(0xA5101A18,10));
         FrameLayout.LayoutParams hintParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
@@ -233,14 +316,27 @@ public final class MainActivity extends Activity {
             if(notice.getText().toString().startsWith("3D próbaszektor")) notice.setVisibility(View.GONE);
         },9000);
 
+        proximity=caption(nativeNearby(),12,0xFFE8E0CC);
+        proximity.setPadding(dp(9),dp(6),dp(9),dp(6));
+        proximity.setBackground(panelBackground(0xBE162821,10));
+        FrameLayout.LayoutParams proxParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.RIGHT);
+        proxParams.topMargin=dp(75);proxParams.rightMargin=dp(12);root.addView(proximity,proxParams);
+
+        TextView movePad=caption("MOZGÁS\n  ◉",13,0xFFF4E8D2);
+        movePad.setGravity(Gravity.CENTER);
+        movePad.setBackground(panelBackground(0x9713211D,40));
+        movePad.setOnTouchListener((v,e)->touch(e,true));
+        FrameLayout.LayoutParams moveParams=new FrameLayout.LayoutParams(dp(82),dp(82),Gravity.LEFT|Gravity.BOTTOM);
+        moveParams.setMargins(dp(11),0,0,bottomBarPx()+dp(17));root.addView(movePad,moveParams);
+
         LinearLayout bottom=new LinearLayout(this);bottom.setGravity(Gravity.CENTER);
         bottom.setPadding(4,2,4,2);
         bottom.setBackground(panelBackground(0xC7101B19,15));
-        Button build=button("ÉPÍTÉS",()->togglePanel(1),true);
-        Button info=button("ÁLLAPOT",()->togglePanel(2),false);
-        Button time=button("IDŐ +1 óra",()->{nativeAdvance();say("Egy játékóra eltelt: ellenőrizd a talaj és a tűz állapotát.");},false);
-        Button save=button("MENTÉS",this::save,false);
-        for(Button b:new Button[]{build,info,time,save}){
+        Button pick=button("FELVESZ",()->act("gather"),true);
+        Button build=button("ÉPÍTÉS",()->togglePanel(1),false);
+        Button info=button("TÁSKA",()->togglePanel(2),false);
+        Button menu=button("MENÜ",this::openGameMenu,false);
+        for(Button b:new Button[]{pick,build,info,menu}){
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,Math.max(45,bottomBarPx()-10),1);
             lp.setMargins(dp(3),0,dp(3),0);bottom.addView(b,lp);
         }
@@ -250,6 +346,7 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();if(surface!=null)surface.onResume();}
     @Override protected void onPause(){
+        moving=false;movementHandler.removeCallbacks(movementLoop);
         saves.edit().putString("state",nativeSave()).apply();
         if(surface!=null)surface.onPause();
         super.onPause();
