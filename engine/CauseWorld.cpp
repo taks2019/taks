@@ -148,27 +148,45 @@ std::string World::summary() const {
     return os.str();
 }
 std::string World::save() const {
-    std::ostringstream o; o<<std::setprecision(17);
-    o<<"TAKS_NATIVE_1 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
+    std::ostringstream o;o<<std::setprecision(17);
+    o<<"TAKS_NATIVE_2 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
      <<carriedWood<<' '<<carriedStone<<' '<<carriedTinder<<' '
      <<hours<<' '<<humidity<<' '<<rainIntensity<<' '<<woodMoisture<<' '
      <<groundMoisture<<' '<<stamina<<' '<<fireFuel<<' '
-     <<(hearthBuilt?1:0)<<' '<<(fireLit?1:0)<<' '<<eventCounter;
+     <<(hearthBuilt?1:0)<<' '<<(fireLit?1:0)<<' '<<eventCounter<<' '
+     <<groundLeaves<<' '<<carriedLeaves<<' '<<chippedEdgeWear<<' '<<stoneDebris<<' '
+     <<preparedPoles<<' '<<shelterStage<<' '<<playerWetness<<' '<<(underShelter?1:0);
     return o.str();
 }
 bool World::load(const std::string& data) {
-    std::istringstream is(data); std::string header; World tmp; int hearth=0, fire=0;
-    if(!(is>>header) || header!="TAKS_NATIVE_1") return false;
+    std::istringstream is(data);std::string header;World tmp;int hearth=0,fire=0,covered=0;
+    if(!(is>>header) || (header!="TAKS_NATIVE_1" && header!="TAKS_NATIVE_2"))return false;
     if(!(is>>tmp.groundWood>>tmp.groundStone>>tmp.groundTinder
       >>tmp.carriedWood>>tmp.carriedStone>>tmp.carriedTinder
       >>tmp.hours>>tmp.humidity>>tmp.rainIntensity>>tmp.woodMoisture
-      >>tmp.groundMoisture>>tmp.stamina>>tmp.fireFuel>>hearth>>fire>>tmp.eventCounter)) return false;
-    if(tmp.groundWood<0 || tmp.groundStone<0 || tmp.groundTinder<0 || tmp.carriedWood<0 || tmp.carriedStone<0 || tmp.carriedTinder<0 ||
-       !std::isfinite(tmp.hours) || tmp.hours<0 || tmp.hours>1e9 || !std::isfinite(tmp.humidity) || tmp.humidity<0 || tmp.humidity>1 ||
-       !std::isfinite(tmp.rainIntensity) || tmp.rainIntensity<0 || tmp.rainIntensity>1 || !std::isfinite(tmp.woodMoisture) || tmp.woodMoisture<0 || tmp.woodMoisture>1 ||
-       !std::isfinite(tmp.groundMoisture) || tmp.groundMoisture<0 || tmp.groundMoisture>1 || !std::isfinite(tmp.stamina) || tmp.stamina<0 || tmp.stamina>100 ||
-       !std::isfinite(tmp.fireFuel) || tmp.fireFuel<0 || (hearth!=0&&hearth!=1) || (fire!=0&&fire!=1)) return false;
-    tmp.hearthBuilt=hearth!=0;tmp.fireLit=fire!=0;
+      >>tmp.groundMoisture>>tmp.stamina>>tmp.fireFuel>>hearth>>fire>>tmp.eventCounter))return false;
+    if(header=="TAKS_NATIVE_2"){
+        if(!(is>>tmp.groundLeaves>>tmp.carriedLeaves>>tmp.chippedEdgeWear>>tmp.stoneDebris
+              >>tmp.preparedPoles>>tmp.shelterStage>>tmp.playerWetness>>covered))return false;
+    }
+    std::string trailing;
+    if(is>>trailing)return false;
+    if(tmp.groundWood<0||tmp.groundStone<0||tmp.groundTinder<0||
+       tmp.carriedWood<0||tmp.carriedStone<0||tmp.carriedTinder<0||
+       tmp.groundLeaves<0||tmp.carriedLeaves<0||tmp.chippedEdgeWear<0||tmp.chippedEdgeWear>6||
+       tmp.stoneDebris<0||tmp.preparedPoles<0||tmp.shelterStage<0||tmp.shelterStage>3||
+       !std::isfinite(tmp.hours)||tmp.hours<0||tmp.hours>1e9||
+       !std::isfinite(tmp.humidity)||tmp.humidity<0||tmp.humidity>1||
+       !std::isfinite(tmp.rainIntensity)||tmp.rainIntensity<0||tmp.rainIntensity>1||
+       !std::isfinite(tmp.woodMoisture)||tmp.woodMoisture<0||tmp.woodMoisture>1||
+       !std::isfinite(tmp.groundMoisture)||tmp.groundMoisture<0||tmp.groundMoisture>1||
+       !std::isfinite(tmp.stamina)||tmp.stamina<0||tmp.stamina>100||
+       !std::isfinite(tmp.fireFuel)||tmp.fireFuel<0||
+       !std::isfinite(tmp.playerWetness)||tmp.playerWetness<0||tmp.playerWetness>1||
+       (hearth!=0&&hearth!=1)||(fire!=0&&fire!=1)||(covered!=0&&covered!=1))return false;
+    if(covered && tmp.shelterStage!=3)return false;
+    if(fire && !hearth)return false;
+    tmp.hearthBuilt=hearth!=0;tmp.fireLit=fire!=0;tmp.underShelter=covered!=0;
     *this=tmp;return true;
 }
 }
