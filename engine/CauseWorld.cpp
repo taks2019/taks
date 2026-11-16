@@ -7,24 +7,77 @@
 namespace taks {
 namespace { double clamp(double v, double lo, double hi){return std::max(lo, std::min(hi,v));} }
 std::string World::act(const std::string& action) {
-    // Az összes cselekvés ugyanazt az ellenőrzés -> költség -> következmény útvonalat használja.
-    if(action=="wood" || action=="stone" || action=="tinder") {
-        int* source = action=="wood"? &groundWood : action=="stone"? &groundStone : &groundTinder;
-        int* bag = action=="wood"? &carriedWood : action=="stone"? &carriedStone : &carriedTinder;
-        if(*source<=0) return "Nincs több elérhető nyersanyag a közelben.";
-        if(stamina<2) return "Túl fáradt vagy a gyűjtéshez. Pihenned kell.";
-        --(*source); ++(*bag); stamina-=2; ++eventCounter;
-        return action=="wood" ? "Összegyűjtöttél egy faágat. A helyi készlet csökkent." :
-               action=="stone"? "Felvettél egy követ. A helyi készlet csökkent." :
-                                 "Száraz gyújtóst gyűjtöttél. A helyi készlet csökkent.";
+    // Minden sikeres cselekvés: előfeltételek, véges anyag, energia, idő, állapotváltozás.
+    if(action=="wood" || action=="stone" || action=="tinder" || action=="leaves") {
+        int* source = action=="wood"?&groundWood:action=="stone"?&groundStone:action=="tinder"?&groundTinder:&groundLeaves;
+        int* bag = action=="wood"?&carriedWood:action=="stone"?&carriedStone:action=="tinder"?&carriedTinder:&carriedLeaves;
+        if(*source<=0) return "Itt elfogyott a keresett alapanyag; a semmiből nem teremthető új.";
+        if(stamina<2) return "A gyűjtéshez pihenés szükséges: nincs elég állóképesség.";
+        --(*source);++(*bag);stamina-=2;step(0.10);++eventCounter;
+        return action=="wood"?"Faág összegyűjtve: a környezeti készlet csökkent. (+0,1 óra)":
+               action=="stone"?"Kő felvéve: a lelőhely készlete csökkent. (+0,1 óra)":
+               action=="tinder"?"Gyújtós összegyűjtve. (+0,1 óra)":
+               "Leveles ág összegyűjtve a későbbi tetőfedéshez. (+0,1 óra)";
+    }
+    if(action=="knap") {
+        if(chippedEdgeWear>0) return "Már van használható kőéled; a követ a későbbi munkára tartalékold.";
+        if(carriedStone<2) return "Kőeszköz: két kő szükséges (ütőkő és nyersanyag).";
+        if(stamina<6) return "Kőmegmunkálás: előbb pihenned kell.";
+        carriedStone-=2;stoneDebris+=1;chippedEdgeWear=6;stamina-=6;step(0.40);++eventCounter;
+        return "Éles kőszilánk készült: 2 kő -> 1 használható él + kőhulladék. A szerszám kopik.";
+    }
+    if(action=="pole") {
+        if(chippedEdgeWear<=0) return "Fa megmunkálásához előbb éles kőeszköz szükséges.";
+        if(carriedWood<1) return "Nincs nyers faág, amiből cölöp készülhetne.";
+        if(stamina<5) return "Cölöp készítése: nincs elég állóképességed.";
+        if(woodMoisture>0.85) return "A fa nagyon átázott: várj a megmunkálással.";
+        --carriedWood;++preparedPoles;--chippedEdgeWear;
+        if(chippedEdgeWear==0)++stoneDebris;
+        stamina-=5;step(0.30);++eventCounter;
+        return "Egy faágból megmunkált cölöp lett; a kőeszköz éle kopott. (+0,3 óra)";
+    }
+    if(action=="base") {
+        if(shelterStage!=0) return "Az oszlopalapok már a helyükön vannak.";
+        if(preparedPoles<2) return "Oszlopalap: előbb 2 megmunkált cölöp kell.";
+        if(carriedStone<2) return "Oszlopalap: 2 támasztókő szükséges.";
+        if(stamina<12) return "Alapozás: kevés az állóképesség, előbb pihenj.";
+        preparedPoles-=2;carriedStone-=2;stamina-=12;step(1.00);shelterStage=1;++eventCounter;
+        return "Két cölöp és két kő elhelyezve: a tartóoszlopok állnak. A tető még hiányzik.";
+    }
+    if(action=="frame") {
+        if(shelterStage<1) return "Tetővázat nem lehet rögzíteni oszlopok nélkül.";
+        if(shelterStage>1) return "A tetőváz már a helyén van.";
+        if(preparedPoles<3) return "Tetőváz: 3 megmunkált cölöp (gerenda + 2 ferde tartó) kell.";
+        if(stamina<14) return "Tetőváz: kevés az állóképesség.";
+        preparedPoles-=3;stamina-=14;step(1.10);shelterStage=2;++eventCounter;
+        return "Tetőváz felállítva: 3 cölöp beépült, fedés nélkül még átázik.";
+    }
+    if(action=="roof") {
+        if(shelterStage<2) return "Tetőfedés előtt a tartóoszlopoknak és a tetőváznak is állniuk kell.";
+        if(shelterStage==3) return "A levélfedés már elkészült.";
+        if(carriedLeaves<6) return "Tetőfedés: 6 leveles ág kell az átlapolt fedéshez.";
+        if(stamina<9) return "Tetőfedés: a munkához előbb pihenj.";
+        carriedLeaves-=6;stamina-=9;step(0.80);shelterStage=3;++eventCounter;
+        return "Elkészült a levélfedés. A menedék alatt már csökken az esőterhelés, de be is kell húzódnod.";
+    }
+    if(action=="shelter_enter") {
+        if(shelterStage<3) return "A menedék még nem fedett, nem véd megfelelően az esőtől.";
+        if(underShelter) return "Már a menedék alatt vagy.";
+        underShelter=true;step(0.10);++eventCounter;
+        return "Behúzódtál a menedékbe: a fedés mérsékli a rád jutó csapadékot.";
+    }
+    if(action=="shelter_exit") {
+        if(!underShelter) return "Jelenleg nem vagy a menedékben.";
+        underShelter=false;step(0.10);++eventCounter;
+        return "Elhagytad a menedéket: újra közvetlenül ér a környezet.";
     }
     if(action=="hearth") {
         if(hearthBuilt) return "A tűzhely már felépült.";
-        if(carriedWood<3) return "Tűzhely: legalább 3 faág hiányzik vagy nincs nálad.";
+        if(carriedWood<3) return "Tűzhely: 3 faág szükséges.";
         if(carriedStone<2) return "Tűzhely: 2 kő szükséges.";
-        if(stamina<12) return "Nem tudod felépíteni: túl kevés az állóképességed.";
-        carriedWood-=3; carriedStone-=2; stamina-=12; hearthBuilt=true; step(0.75); ++eventCounter;
-        return "A tűzhely elkészült. 3 faág és 2 kő felhasználva; nőtt a fáradtság.";
+        if(stamina<12) return "Tűzhely: a munkához túl kevés az állóképességed.";
+        carriedWood-=3;carriedStone-=2;stamina-=12;hearthBuilt=true;step(0.75);++eventCounter;
+        return "A tűzhely elkészült. 3 faág, 2 kő és 0,75 játékóra elfogyott.";
     }
     if(action=="ignite") {
         if(!hearthBuilt) return "Nem gyújthatsz tüzet: előbb tűzhely szükséges.";
@@ -32,14 +85,15 @@ std::string World::act(const std::string& action) {
         if(carriedTinder<1) return "Nem gyújthatsz tüzet: hiányzik a gyújtós.";
         if(carriedWood<2) return "Nem gyújthatsz tüzet: legalább 2 faágnyi tüzelő kell.";
         if(woodMoisture>0.40) return "A fa túl nedves: előbb száradnia kell.";
-        if(rainIntensity>0.60) return "A csapadék túl intenzív; az előkészítetlen tűzhely beázik.";
-        if(stamina<4) return "Túl fáradt vagy a tűzgyújtáshoz.";
-        --carriedTinder; carriedWood-=2; stamina-=4; fireFuel=2.0; fireLit=true; ++eventCounter;
-        return "A tűz meggyulladt. Gyújtós és tüzelő fogyott; most hőt és fényt termel.";
+        if(rainIntensity>0.60) return "Az erős eső eláztatja az előkészítetlen tűzhelyet.";
+        if(stamina<4) return "Tűzgyújtáshoz pihenned kell.";
+        --carriedTinder;carriedWood-=2;stamina-=4;fireFuel=2.0;fireLit=true;++eventCounter;
+        return "A tűz meggyulladt. Gyújtós és tüzelő fogyott; fény és hő keletkezett.";
     }
     if(action=="rest") {
-        step(1.0); stamina=clamp(stamina+25.0,0.0,100.0); ++eventCounter;
-        return "Pihentél: az állóképességed helyreállt, az idő azonban tovább halad.";
+        step(1.0);stamina=clamp(stamina+(underShelter?30.0:25.0),0.0,100.0);++eventCounter;
+        return underShelter?"Pihenés a menedék alatt: egy óra telt el, a fedés csökkentette a kitettséget.":
+                            "Pihentél egy játékórát. Az időjárás és a tüzelőanyag ezalatt is változott.";
     }
     return "Ismeretlen cselekvés: a világ állapota nem módosult.";
 }
