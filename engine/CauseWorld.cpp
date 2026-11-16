@@ -101,27 +101,50 @@ void World::forceRainForTest(double intensity){ testWeather=true; rainIntensity=
 void World::step(double hoursElapsed) {
     if(!std::isfinite(hoursElapsed) || hoursElapsed<=0.0 || hoursElapsed>24.0) return;
     hours+=hoursElapsed;
-    // Egyszerű, determinisztikus éghajlati modell; még nem éghajlati rekonstrukció.
+    // Közelítő determinisztikus időjárás, nem hiteles paleoklimatológiai rekonstrukció.
     humidity=clamp(0.38+0.32*std::sin(hours*0.30),0.04,0.98);
     if(!testWeather) rainIntensity=clamp((humidity-0.62)*2.8,0.0,1.0);
     groundMoisture=clamp(groundMoisture+rainIntensity*0.25*hoursElapsed-(1-rainIntensity)*0.035*hoursElapsed,0,1);
     woodMoisture=clamp(woodMoisture+rainIntensity*0.23*hoursElapsed-(1-rainIntensity)*0.07*hoursElapsed,0,1);
+    // A tető NEM teleportálja szárazra a játékost. Csak fedett menedékbe húzódva véd.
+    const double exposure=(underShelter && shelterStage==3)?0.07:1.0;
+    playerWetness=clamp(playerWetness+rainIntensity*0.34*exposure*hoursElapsed
+                        -(underShelter?0.09:0.035)*hoursElapsed,0.0,1.0);
     if(fireLit) {
         fireFuel-=hoursElapsed*(0.35+0.15*rainIntensity);
-        if(rainIntensity>0.85 || fireFuel<=0) {fireFuel=0; fireLit=false; ++eventCounter;}
+        if(rainIntensity>0.85 || fireFuel<=0.0){fireFuel=0.0;fireLit=false;++eventCounter;}
     }
-    stamina=clamp(stamina+0.5*hoursElapsed,0.0,100.0);
+    const double gain=(underShelter?0.85:0.35)*hoursElapsed;
+    const double dampPenalty=playerWetness>0.70?1.6*hoursElapsed:0.0;
+    stamina=clamp(stamina+gain-dampPenalty,0.0,100.0);
+}
+std::string World::shelterStatus() const {
+    std::ostringstream os;
+    os<<"MENEDÉK: ";
+    switch(shelterStage){
+       case 0:os<<"Nincs alap. Következő: 2 cölöp + 2 kő, oszlopok beállítása.";break;
+       case 1:os<<"Oszlopok állnak. Következő: 3 megmunkált cölöp, tetőváz.";break;
+       case 2:os<<"A tetőváznak nincs fedése. Következő: 6 leveles ág.";break;
+       default:os<<"Fedett. "<<(underShelter?"A menedék alatt vagy.":"A szabadban vagy, a fedés még nem véd téged.");break;
+    }
+    os<<"\nESZKÖZ: kőél "<<chippedEdgeWear<<"/6 használat"
+      <<"\nALKATRÉSZ: "<<preparedPoles<<" megmunkált cölöp"
+      <<"\nFEDŐANYAG: "<<carriedLeaves<<" leveles ág"
+      <<"\nKŐHULLADÉK: "<<stoneDebris;
+    return os.str();
 }
 std::string World::summary() const {
-    std::ostringstream os; os<<std::fixed<<std::setprecision(2);
+    std::ostringstream os;os<<std::fixed<<std::setprecision(2);
     os<<"IDŐ: "<<hours<<" óra\n"
-      <<"PÁRA: "<<humidity*100<<"% | CSAPADÉK: "<<rainIntensity*100<<"%\n"
-      <<"TALAJNEDVESSÉG: "<<groundMoisture*100<<"% | FA NEDVESSÉGE: "<<woodMoisture*100<<"%\n\n"
-      <<"KÖZELI KÉSZLET: "<<groundWood<<" faág, "<<groundStone<<" kő, "<<groundTinder<<" gyújtós\n"
-      <<"NÁLAD: "<<carriedWood<<" faág, "<<carriedStone<<" kő, "<<carriedTinder<<" gyújtós\n"
+      <<"CSAPADÉK: "<<rainIntensity*100<<"% | TALAJNEDVESSÉG: "<<groundMoisture*100<<"%\n"
+      <<"FA NEDVESSÉGE: "<<woodMoisture*100<<"% | ÁTÁZÁS: "<<playerWetness*100<<"%\n"
+      <<"KÖRNYEZET: "<<groundWood<<" faág, "<<groundStone<<" kő, "<<groundLeaves<<" leveles ág, "<<groundTinder<<" gyújtós\n"
+      <<"KÉSZLET: "<<carriedWood<<" faág, "<<carriedStone<<" kő, "<<carriedLeaves<<" leveles ág, "<<carriedTinder<<" gyújtós\n"
+      <<"CÖLÖP: "<<preparedPoles<<" | KŐÉL: "<<chippedEdgeWear<<"/6 | KŐHULLADÉK: "<<stoneDebris<<"\n"
       <<"ÁLLÓKÉPESSÉG: "<<stamina<<"%\n"
-      <<"TŰZHELY: "<<(hearthBuilt?"elkészült":"hiányzik")<<" | TŰZ: "<<(fireLit?"ég":"nem ég")<<"\n"
-      <<"ESEMÉNYEK: "<<eventCounter;
+      <<"MENEDÉK FÁZIS: "<<shelterStage<<"/3 | FEDETT: "<<(underShelter?"igen":"nem")<<"\n"
+      <<"TŰZHELY: "<<(hearthBuilt?"felépült":"hiányzik")<<" | TŰZ: "<<(fireLit?"ég":"nem ég")<<"\n"
+      <<"OKOZATI ESEMÉNYEK: "<<eventCounter;
     return os.str();
 }
 std::string World::save() const {
