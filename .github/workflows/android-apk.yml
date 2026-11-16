@@ -1,0 +1,41 @@
+name: TAKS World natív Android APK
+on:
+  push:
+    branches: [main, master, develop]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-causality-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: C++ ok-okozati motor fordítás
+        run: cmake -S engine -B build-native -DCMAKE_BUILD_TYPE=Release
+      - name: Natív tesztmotor készítése
+        run: cmake --build build-native --config Release --parallel 2
+      - name: Oksági tesztek
+        run: ctest --test-dir build-native --output-on-failure
+  android-debug-apk:
+    needs: native-causality-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Android SDK NDK és CMake telepítése
+        run: |
+          sdkmanager --install 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018' 'cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Natív TAKS World debug APK fordítása
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-native-debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
