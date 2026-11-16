@@ -54,22 +54,22 @@ vec2 geo(vec3 p){
    if(dot(diff,diff)>1.35)continue;
    float h=terrain(node.xy);
    vec3 local=p-vec3(node.x,h,node.y);
-   float resource=10.0;
+   float resShape=10.0;
    if(node.z<.5){
      // Két egymásnak támaszkodó, vékony földre helyezett ág.
      float a=sdSegment(local,vec3(-.38,.09,-.12),vec3(.40,.15,.16),.065);
      float b=sdSegment(local,vec3(-.22,.10,.20),vec3(.28,.13,-.24),.054);
-     resource=min(a,b);
+     resShape=min(a,b);
    }else if(node.z<1.5){
-     resource=sdOcta((local-vec3(0.,.18,0.))*vec3(1.,1.30,1.),.38);
+     resShape=sdOcta((local-vec3(0.,.18,0.))*vec3(1.,1.30,1.),.38);
    }else if(node.z<2.5){
-     resource=min(sdSegment(local,vec3(-.18,.08,0.),vec3(.17,.22,.12),.065),
+     resShape=min(sdSegment(local,vec3(-.18,.08,0.),vec3(.17,.22,.12),.065),
                   sdSegment(local,vec3(.11,.08,-.12),vec3(-.18,.22,.12),.05));
    }else{
-     resource=sdBox(local-vec3(0.,.10,0.),vec3(.34,.06,.26));
-     resource+=.04*(n3(p*8.)-.5);
+     resShape=sdBox(local-vec3(0.,.10,0.),vec3(.34,.06,.26));
+     resShape+=.04*(n3(p*8.)-.5);
    }
-   if(resource<d){d=resource;mat=node.z<.5?5.:node.z<1.5?3.:node.z<2.5?9.:6.;}
+   if(resShape<d){d=resShape;mat=node.z<.5?5.:node.z<1.5?3.:node.z<2.5?9.:6.;}
   }
  }
  // Világkoordinátában mozgó, emberi méretarányú munkakarakter-váz.
