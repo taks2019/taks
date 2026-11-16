@@ -140,6 +140,12 @@ public final class MainActivity extends Activity {
         root=new FrameLayout(this);
         surface=new GLSurfaceView(this);
         surface.setEGLContextClientVersion(3);
+        // Kijelzőmérethez illeszkedő, kisebb GPU framebuffer; nincs nyújtás.
+        android.util.DisplayMetrics metrics=getResources().getDisplayMetrics();
+        float renderScale=Math.min(1.0f,960.0f/Math.max(metrics.widthPixels,metrics.heightPixels));
+        int bufferWidth=Math.max(320,Math.round(metrics.widthPixels*renderScale));
+        int bufferHeight=Math.max(180,Math.round(metrics.heightPixels*renderScale));
+        surface.getHolder().setFixedSize(bufferWidth,bufferHeight);
         surface.setPreserveEGLContextOnPause(true);
         surface.setRenderer(new GLSurfaceView.Renderer(){
             @Override public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl,javax.microedition.khronos.egl.EGLConfig config){
@@ -170,12 +176,16 @@ public final class MainActivity extends Activity {
         hint.setBackground(panelBackground(0xA5101A18,10));
         FrameLayout.LayoutParams hintParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
         hintParams.topMargin=dp(16);root.addView(hint,hintParams);
+        hint.postDelayed(()->hint.setVisibility(View.GONE),6500);
 
         notice=caption("3D próbaszektor · A barlang még nem hiteles Wonderwerk-rekonstrukció.",13,0xFFF1E3C9);
         notice.setPadding(dp(12),dp(9),dp(12),dp(9));
         notice.setBackground(panelBackground(0xE0192420,12));
         FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
         np.setMargins(dp(12),0,dp(12),dp(78));root.addView(notice,np);
+        notice.postDelayed(()->{
+            if(notice.getText().toString().startsWith("3D próbaszektor")) notice.setVisibility(View.GONE);
+        },9000);
 
         LinearLayout bottom=new LinearLayout(this);bottom.setGravity(Gravity.CENTER);
         bottom.setPadding(dp(8),dp(7),dp(8),dp(7));
