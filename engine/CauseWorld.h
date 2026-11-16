@@ -28,6 +28,7 @@ struct World {
     std::string act(const std::string& action);
     std::string move(double dx,double dz);
     std::string nearby() const;
+    std::string nextObjective() const;
     void syncGroundCounts();
     bool isNear(double x,double z,double radius) const;
     void step(double hoursElapsed);
