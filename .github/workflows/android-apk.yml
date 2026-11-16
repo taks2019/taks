@@ -16,6 +16,22 @@ jobs:
         run: cmake --build build-native --config Release --parallel 2
       - name: Oksági tesztek
         run: ctest --test-dir build-native --output-on-failure
+  graphics-render-check:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Headless OpenGL ES 3 render test with actual shader
+        env:
+          EGL_PLATFORM: surfaceless
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: python3 tests/render_scene.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TAKS-World-3D-screenshots
+          path: build-previews/*.png
+          if-no-files-found: warn
   android-debug-apk:
     needs: native-causality-tests
     runs-on: ubuntu-latest
