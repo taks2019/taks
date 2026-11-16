@@ -6,18 +6,86 @@
 
 namespace taks {
 namespace { double clamp(double v, double lo, double hi){return std::max(lo, std::min(hi,v));} }
+bool World::isNear(double x,double z,double radius) const {
+    const double dx=playerX-x,dz=playerZ-z;
+    return dx*dx+dz*dz<=radius*radius;
+}
+void World::syncGroundCounts(){
+    groundWood=groundStone=groundTinder=groundLeaves=0;
+    for(const auto& node:nodes) {
+        if(node.type==0)groundWood+=node.amount;
+        if(node.type==1)groundStone+=node.amount;
+        if(node.type==2)groundTinder+=node.amount;
+        if(node.type==3)groundLeaves+=node.amount;
+    }
+}
+std::string World::nearby() const{
+    const ResourceNode* best=nullptr;
+    double distSq=1e12;
+    for(const auto& node:nodes) {
+        if(node.amount<=0)continue;
+        const double dx=node.x-playerX,dz=node.z-playerZ;
+        const double d=dx*dx+dz*dz;
+        if(d<distSq){best=&node;distSq=d;}
+    }
+    if(!best)return "A bejárható terület ismert készletei elfogytak.";
+    static const char* labels[]={"Faág","Kő","Gyújtós","Leveles ág"};
+    std::ostringstream out;out<<std::fixed<<std::setprecision(1);
+    out<<"KÖZELI: "<<labels[best->type]<<" · "<<std::sqrt(distSq)<<" m"
+       <<" · készlet "<<best->amount;
+    if(distSq<=1.7*1.7)out<<" · FELVEHETŐ";
+    else out<<" · menj közelebb";
+    return out.str();
+}
+std::string World::move(double dx,double dz){
+    if(!std::isfinite(dx)||!std::isfinite(dz))return "Érvénytelen mozgás.";
+    const double requested=std::sqrt(dx*dx+dz*dz);
+    if(requested<0.00001)return "A karakter helyben maradt.";
+    if(stamina<0.5)return "A karakter kimerült: pihennie kell.";
+    // Az érintéses mozgás egy-egy kicsi világkoordináta-lépés; nem teleport.
+    const double factor=std::min(1.0,0.75/requested);
+    dx*=factor;dz*=factor;
+    const double nx=playerX+dx,nz=playerZ+dz;
+    if(nx< -7.5||nx>7.5||nz< -7.5||nz>13.0)return "A világ jelenlegi bejárható határához értél.";
+    // A barlang homlokzatának oldalsó sziklafalán nem lehet átsétálni.
+    if(nz>2.75 && nz<4.15 && std::abs(nx)>1.45 && std::abs(nx)<7.8)
+        return "A sziklafal elállja az utat. A barlangnyílás középen található.";
+    const double length=std::sqrt(dx*dx+dz*dz);
+    playerX=nx;playerZ=nz;walkPhase+=length*5.5;
+    stamina=clamp(stamina-length*(0.50+groundMoisture*0.65),0.0,100.0);
+    step(length*.013);
+    // A menedék nem véd, ha elhagytuk a valódi fedett területet.
+    if(underShelter && !isNear(3.1,-1.55,1.65))underShelter=false;
+    ++eventCounter;
+    return nearby();
+}
 std::string World::act(const std::string& action) {
     // Minden sikeres cselekvés: előfeltételek, véges anyag, energia, idő, állapotváltozás.
-    if(action=="wood" || action=="stone" || action=="tinder" || action=="leaves") {
-        int* source = action=="wood"?&groundWood:action=="stone"?&groundStone:action=="tinder"?&groundTinder:&groundLeaves;
-        int* bag = action=="wood"?&carriedWood:action=="stone"?&carriedStone:action=="tinder"?&carriedTinder:&carriedLeaves;
-        if(*source<=0) return "Itt elfogyott a keresett alapanyag; a semmiből nem teremthető új.";
-        if(stamina<2) return "A gyűjtéshez pihenés szükséges: nincs elég állóképesség.";
-        --(*source);++(*bag);stamina-=2;step(0.10);++eventCounter;
-        return action=="wood"?"Faág összegyűjtve: a környezeti készlet csökkent. (+0,1 óra)":
-               action=="stone"?"Kő felvéve: a lelőhely készlete csökkent. (+0,1 óra)":
-               action=="tinder"?"Gyújtós összegyűjtve. (+0,1 óra)":
-               "Leveles ág összegyűjtve a későbbi tetőfedéshez. (+0,1 óra)";
+    if(action=="gather" || action=="wood" || action=="stone" || action=="tinder" || action=="leaves") {
+        const int wanted=action=="wood"?0:action=="stone"?1:action=="tinder"?2:action=="leaves"?3:-1;
+        int nodeId=-1;double distanceSquared=1e12;
+        for(int i=0;i<resourceCount;++i){
+            const auto& node=nodes[i];if(node.amount<=0 || (wanted>=0 && node.type!=wanted))continue;
+            const double dx=node.x-playerX,dz=node.z-playerZ;
+            const double d=dx*dx+dz*dz;
+            if(d<distanceSquared){distanceSquared=d;nodeId=i;}
+        }
+        if(nodeId<0)return "Ebből a nyersanyagból nincs több ismert készlet a területen.";
+        if(distanceSquared>1.7*1.7){
+            std::ostringstream out;out<<std::fixed<<std::setprecision(1);
+            out<<"A nyersanyag "<<std::sqrt(distanceSquared)<<" méterre van: menj közelebb, nem gyűjthetsz távolról.";
+            return out.str();
+        }
+        if(stamina<2)return "A gyűjtéshez pihenés szükséges: nincs elég állóképesség.";
+        ResourceNode& node=nodes[nodeId];
+        const int type=node.type;
+        int* bag=type==0?&carriedWood:type==1?&carriedStone:type==2?&carriedTinder:&carriedLeaves;
+        --node.amount;++(*bag);syncGroundCounts();
+        stamina-=2;step(.10);++eventCounter;
+        return type==0?"Faág felvéve a lelőhelyről. A világ készlete 1-gyel csökkent.":
+               type==1?"Kő felvéve a lelőhelyről. A világ készlete 1-gyel csökkent.":
+               type==2?"Gyújtós felvéve a lelőhelyről. A világ készlete 1-gyel csökkent.":
+                       "Leveles ág felvéve a lelőhelyről. A világ készlete 1-gyel csökkent.";
     }
     if(action=="knap") {
         if(chippedEdgeWear>0) return "Már van használható kőéled; a követ a későbbi munkára tartalékold.";
@@ -37,6 +105,7 @@ std::string World::act(const std::string& action) {
         return "Egy faágból megmunkált cölöp lett; a kőeszköz éle kopott. (+0,3 óra)";
     }
     if(action=="base") {
+        if(!isNear(3.1,-1.55,3.0))return "Az oszlopok helyszíne túl messze van: menj az építés helyére.";
         if(shelterStage!=0) return "Az oszlopalapok már a helyükön vannak.";
         if(preparedPoles<2) return "Oszlopalap: előbb 2 megmunkált cölöp kell.";
         if(carriedStone<2) return "Oszlopalap: 2 támasztókő szükséges.";
@@ -45,6 +114,7 @@ std::string World::act(const std::string& action) {
         return "Két cölöp és két kő elhelyezve: a tartóoszlopok állnak. A tető még hiányzik.";
     }
     if(action=="frame") {
+        if(!isNear(3.1,-1.55,3.0))return "A tetővázat a menedék helyszínén kell összeszerelni.";
         if(shelterStage<1) return "Tetővázat nem lehet rögzíteni oszlopok nélkül.";
         if(shelterStage>1) return "A tetőváz már a helyén van.";
         if(preparedPoles<3) return "Tetőváz: 3 megmunkált cölöp (gerenda + 2 ferde tartó) kell.";
@@ -53,6 +123,7 @@ std::string World::act(const std::string& action) {
         return "Tetőváz felállítva: 3 cölöp beépült, fedés nélkül még átázik.";
     }
     if(action=="roof") {
+        if(!isNear(3.1,-1.55,3.0))return "A tetőfedést a menedéknél kell elvégezni.";
         if(shelterStage<2) return "Tetőfedés előtt a tartóoszlopoknak és a tetőváznak is állniuk kell.";
         if(shelterStage==3) return "A levélfedés már elkészült.";
         if(carriedLeaves<6) return "Tetőfedés: 6 leveles ág kell az átlapolt fedéshez.";
@@ -61,6 +132,7 @@ std::string World::act(const std::string& action) {
         return "Elkészült a levélfedés. A menedék alatt már csökken az esőterhelés, de be is kell húzódnod.";
     }
     if(action=="shelter_enter") {
+        if(!isNear(3.1,-1.55,2.0))return "Előbb oda kell menned a menedékhez.";
         if(shelterStage<3) return "A menedék még nem fedett, nem véd megfelelően az esőtől.";
         if(underShelter) return "Már a menedék alatt vagy.";
         underShelter=true;step(0.10);++eventCounter;
@@ -72,6 +144,7 @@ std::string World::act(const std::string& action) {
         return "Elhagytad a menedéket: újra közvetlenül ér a környezet.";
     }
     if(action=="hearth") {
+        if(!isNear(-1.15,-1.8,2.7))return "Tűzhelyet csak a kijelölt munkaterületen építhetsz: menj oda.";
         if(hearthBuilt) return "A tűzhely már felépült.";
         if(carriedWood<3) return "Tűzhely: 3 faág szükséges.";
         if(carriedStone<2) return "Tűzhely: 2 kő szükséges.";
@@ -80,6 +153,7 @@ std::string World::act(const std::string& action) {
         return "A tűzhely elkészült. 3 faág, 2 kő és 0,75 játékóra elfogyott.";
     }
     if(action=="ignite") {
+        if(!isNear(-1.15,-1.8,2.7))return "A tűzgyújtáshoz oda kell menned a tűzhelyhez.";
         if(!hearthBuilt) return "Nem gyújthatsz tüzet: előbb tűzhely szükséges.";
         if(fireLit) return "A tűz már ég.";
         if(carriedTinder<1) return "Nem gyújthatsz tüzet: hiányzik a gyújtós.";
@@ -139,7 +213,8 @@ std::string World::summary() const {
       <<"CSAPADÉK: "<<rainIntensity*100<<"% | TALAJNEDVESSÉG: "<<groundMoisture*100<<"%\n"
       <<"FA NEDVESSÉGE: "<<woodMoisture*100<<"% | ÁTÁZÁS: "<<playerWetness*100<<"%\n"
       <<"KÖRNYEZET: "<<groundWood<<" faág, "<<groundStone<<" kő, "<<groundLeaves<<" leveles ág, "<<groundTinder<<" gyújtós\n"
-      <<"KÉSZLET: "<<carriedWood<<" faág, "<<carriedStone<<" kő, "<<carriedLeaves<<" leveles ág, "<<carriedTinder<<" gyújtós\n"
+      <<"KÉSZLET: "<<carriedWood<<" faág, "<<carriedStone<<" kő, "<<carriedLeaves<<" leveles ág, "<<carriedTinder<<" gyújtós\n"      <<"JÁTÉKOS: "<<playerX<<" m, "<<playerZ<<" m | "<<nearby()<<"\n"
+
       <<"CÖLÖP: "<<preparedPoles<<" | KŐÉL: "<<chippedEdgeWear<<"/6 | KŐHULLADÉK: "<<stoneDebris<<"\n"
       <<"ÁLLÓKÉPESSÉG: "<<stamina<<"%\n"
       <<"MENEDÉK FÁZIS: "<<shelterStage<<"/3 | FEDETT: "<<(underShelter?"igen":"nem")<<"\n"
