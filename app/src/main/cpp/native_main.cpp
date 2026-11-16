@@ -46,6 +46,10 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeMove(
     std::lock_guard<std::mutex> guard(worldLock);
     return toJava(env,world.move(static_cast<double>(dx),static_cast<double>(dz)));
 }
+extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeGoal(JNIEnv* env,jobject){
+    std::lock_guard<std::mutex> guard(worldLock);
+    return toJava(env,world.nextObjective());
+}
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeNearby(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
     return toJava(env,world.nearby());
