@@ -23,7 +23,7 @@ std::string World::act(const std::string& action) {
         if(carriedWood<3) return "Tűzhely: legalább 3 faág hiányzik vagy nincs nálad.";
         if(carriedStone<2) return "Tűzhely: 2 kő szükséges.";
         if(stamina<12) return "Nem tudod felépíteni: túl kevés az állóképességed.";
-        carriedWood-=3; carriedStone-=2; stamina-=12; hearthBuilt=true; ++eventCounter;
+        carriedWood-=3; carriedStone-=2; stamina-=12; hearthBuilt=true; step(0.75); ++eventCounter;
         return "A tűzhely elkészült. 3 faág és 2 kő felhasználva; nőtt a fáradtság.";
     }
     if(action=="ignite") {
@@ -38,7 +38,7 @@ std::string World::act(const std::string& action) {
         return "A tűz meggyulladt. Gyújtós és tüzelő fogyott; most hőt és fényt termel.";
     }
     if(action=="rest") {
-        stamina=clamp(stamina+25.0,0.0,100.0); ++eventCounter;
+        step(1.0); stamina=clamp(stamina+25.0,0.0,100.0); ++eventCounter;
         return "Pihentél: az állóképességed helyreállt, az idő azonban tovább halad.";
     }
     return "Ismeretlen cselekvés: a világ állapota nem módosult.";
