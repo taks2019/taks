@@ -11,6 +11,9 @@ uniform float u_hearth;
 uniform float u_shelterStage;
 uniform float u_fire;
 uniform float u_quality;
+uniform vec2 u_player;
+uniform float u_walkPhase;
+uniform vec4 u_nodes[12];
 
 float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
 float n3(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
@@ -42,6 +45,53 @@ vec2 geo(vec3 p){
   float stone=sdOcta(v*vec3(1.05,1.6,1.2),.54+.15*hash(vec3(k)));stone+=.035*(n3(p*5.)-.5);
   if(stone<d){d=stone;mat=3.;}
  }
+
+ // A térbeli készletek NEM HUD-ikonok: látható, véges helyi lerakódások.
+ if(p.y>-1.2 && p.y<1.85 && p.z<3.4){
+  for(int i=0;i<12;i++){
+   vec4 node=u_nodes[i];if(node.w<0.5)continue;
+   vec2 diff=p.xz-node.xy;
+   if(dot(diff,diff)>1.35)continue;
+   float h=terrain(node.xy);
+   vec3 local=p-vec3(node.x,h,node.y);
+   float resource=10.0;
+   if(node.z<.5){
+     // Két egymásnak támaszkodó, vékony földre helyezett ág.
+     float a=sdSegment(local,vec3(-.38,.09,-.12),vec3(.40,.15,.16),.065);
+     float b=sdSegment(local,vec3(-.22,.10,.20),vec3(.28,.13,-.24),.054);
+     resource=min(a,b);
+   }else if(node.z<1.5){
+     resource=sdOcta((local-vec3(0.,.18,0.))*vec3(1.,1.30,1.),.38);
+   }else if(node.z<2.5){
+     resource=min(sdSegment(local,vec3(-.18,.08,0.),vec3(.17,.22,.12),.065),
+                  sdSegment(local,vec3(.11,.08,-.12),vec3(-.18,.22,.12),.05));
+   }else{
+     resource=sdBox(local-vec3(0.,.10,0.),vec3(.34,.06,.26));
+     resource+=.04*(n3(p*8.)-.5);
+   }
+   if(resource<d){d=resource;mat=node.z<.5?5.:node.z<1.5?3.:node.z<2.5?9.:6.;}
+  }
+ }
+ // Világkoordinátában mozgó, emberi méretarányú munkakarakter-váz.
+ // Ideiglenes ellenőrző geometria, nem végleges hiteles embermodell.
+ if(abs(p.x-u_player.x)<.8 && abs(p.z-u_player.y)<.8){
+  float ground=terrain(u_player);
+  vec3 human=p-vec3(u_player.x,ground,u_player.y);
+  float walk=sin(u_walkPhase)*.15;
+  float torso=sdSegment(human,vec3(0.,.80,0.),vec3(0.,1.37,0.),.18);
+  float head=length((human-vec3(0.,1.56,0.))*vec3(1.,1.08,1.))-0.125;
+  float leftLeg=sdSegment(human,vec3(-.10,.80,0.),vec3(-.12,.10,walk),.075);
+  float rightLeg=sdSegment(human,vec3(.10,.80,0.),vec3(.12,.10,-walk),.075);
+  float leftArm=sdSegment(human,vec3(-.20,1.28,0.),vec3(-.26,.85,-walk*.5),.06);
+  float rightArm=sdSegment(human,vec3(.20,1.28,0.),vec3(.26,.85,walk*.5),.06);
+  float humanShape=min(torso,min(head,min(leftLeg,min(rightLeg,min(leftArm,rightArm)))));
+  if(humanShape<d){d=humanShape;mat=head<humanShape+.01?7.:8.;}
+  // Földhöz rögzített kiválasztó jel, nem lebegő ikon.
+  float ring=abs(length(human.xz)-.32)-.016;
+  ring=max(ring,abs(human.y-.018)-.022);
+  if(ring<d){d=ring;mat=9.;}
+ }
+
  if(u_hearth>.5){
   float h=terrain(vec2(-1.15,-1.8));
   for(int j=0;j<7;j++){
@@ -113,15 +163,18 @@ vec3 material(vec3 p,vec3 norm,float id){
  if(id<3.5)return rock*(1.-wet*.35);
  if(id<4.5)return vec3(.37,.31,.25)*(1.-wet*.45);
  if(id<5.5)return mix(vec3(.19,.105,.052),vec3(.38,.24,.13),fb(p*vec3(3.,7.,3.)))*(1.-wet*.22);
- return mix(vec3(.22,.27,.10),vec3(.46,.40,.15),fb(p*4.5))*(1.-wet*.3);
+ if(id<6.5)return mix(vec3(.22,.27,.10),vec3(.46,.40,.15),fb(p*4.5))*(1.-wet*.3);
+ if(id<7.5)return vec3(.45,.29,.19);
+ if(id<8.5)return vec3(.24,.17,.115);
+ return vec3(.8,.64,.28);
 }
 vec3 sky(vec3 d,vec3 sun){float h=clamp(d.y*.6+.45,0.,1.);vec3 c=mix(vec3(.81,.76,.65),vec3(.29,.50,.67),h);float solar=pow(max(dot(d,sun),0.),330.);c+=vec3(1.,.70,.35)*solar*1.9;float haze=pow(1.-max(d.y,0.),6.);c+=vec3(.22,.16,.09)*haze;return c;}
 void main(){
  vec2 uv=(gl_FragCoord.xy-.5*u_resolution)/u_resolution.y;
  float angle=u_orbit;
  float dist=max(7.,u_zoom);
- vec3 eye=vec3(sin(angle)*dist*.8,dist*.43,-cos(angle)*dist*.86)+vec3(0.,1.5,3.7);
- vec3 target=vec3(0.,1.40,3.4);
+ vec3 eye=vec3(sin(angle)*dist*.8,dist*.43,-cos(angle)*dist*.86)+vec3(u_player.x,1.5,u_player.y+2.1);
+ vec3 target=vec3(u_player.x,1.20,u_player.y+2.1);
  vec3 forward=normalize(target-eye),right=normalize(cross(forward,vec3(0.,1.,0.))),up=cross(right,forward);
  vec3 rd=normalize(forward+uv.x*right*1.12+uv.y*up*1.12);
  vec3 sun=normalize(vec3(-.55,1.1,-.6));
