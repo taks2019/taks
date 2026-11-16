@@ -224,25 +224,32 @@ std::string World::summary() const {
 }
 std::string World::save() const {
     std::ostringstream o;o<<std::setprecision(17);
-    o<<"TAKS_NATIVE_2 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
+    o<<"TAKS_NATIVE_3 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
      <<carriedWood<<' '<<carriedStone<<' '<<carriedTinder<<' '
      <<hours<<' '<<humidity<<' '<<rainIntensity<<' '<<woodMoisture<<' '
      <<groundMoisture<<' '<<stamina<<' '<<fireFuel<<' '
      <<(hearthBuilt?1:0)<<' '<<(fireLit?1:0)<<' '<<eventCounter<<' '
      <<groundLeaves<<' '<<carriedLeaves<<' '<<chippedEdgeWear<<' '<<stoneDebris<<' '
-     <<preparedPoles<<' '<<shelterStage<<' '<<playerWetness<<' '<<(underShelter?1:0);
+     <<preparedPoles<<' '<<shelterStage<<' '<<playerWetness<<' '<<(underShelter?1:0)
+     <<' '<<playerX<<' '<<playerZ<<' '<<walkPhase;
+    for(const auto& node:nodes)o<<' '<<node.amount;
     return o.str();
 }
 bool World::load(const std::string& data) {
     std::istringstream is(data);std::string header;World tmp;int hearth=0,fire=0,covered=0;
-    if(!(is>>header) || (header!="TAKS_NATIVE_1" && header!="TAKS_NATIVE_2"))return false;
+    if(!(is>>header) ||
+       (header!="TAKS_NATIVE_1" && header!="TAKS_NATIVE_2" && header!="TAKS_NATIVE_3"))return false;
     if(!(is>>tmp.groundWood>>tmp.groundStone>>tmp.groundTinder
       >>tmp.carriedWood>>tmp.carriedStone>>tmp.carriedTinder
       >>tmp.hours>>tmp.humidity>>tmp.rainIntensity>>tmp.woodMoisture
       >>tmp.groundMoisture>>tmp.stamina>>tmp.fireFuel>>hearth>>fire>>tmp.eventCounter))return false;
-    if(header=="TAKS_NATIVE_2"){
+    if(header!="TAKS_NATIVE_1"){
         if(!(is>>tmp.groundLeaves>>tmp.carriedLeaves>>tmp.chippedEdgeWear>>tmp.stoneDebris
               >>tmp.preparedPoles>>tmp.shelterStage>>tmp.playerWetness>>covered))return false;
+    }
+    if(header=="TAKS_NATIVE_3"){
+        if(!(is>>tmp.playerX>>tmp.playerZ>>tmp.walkPhase))return false;
+        for(auto& node:tmp.nodes){if(!(is>>node.amount))return false;}
     }
     std::string trailing;
     if(is>>trailing)return false;
@@ -258,9 +265,37 @@ bool World::load(const std::string& data) {
        !std::isfinite(tmp.stamina)||tmp.stamina<0||tmp.stamina>100||
        !std::isfinite(tmp.fireFuel)||tmp.fireFuel<0||
        !std::isfinite(tmp.playerWetness)||tmp.playerWetness<0||tmp.playerWetness>1||
+       !std::isfinite(tmp.playerX)||tmp.playerX<-7.5||tmp.playerX>7.5||
+       !std::isfinite(tmp.playerZ)||tmp.playerZ<-7.5||tmp.playerZ>13.0||
+       !std::isfinite(tmp.walkPhase)||tmp.walkPhase<0||tmp.walkPhase>1e9||
        (hearth!=0&&hearth!=1)||(fire!=0&&fire!=1)||(covered!=0&&covered!=1))return false;
     if(covered && tmp.shelterStage!=3)return false;
     if(fire && !hearth)return false;
+
+    if(header=="TAKS_NATIVE_3"){
+        // Sérült/túlírt mentésből nem szabad nyersanyagot teremteni.
+        for(const auto& node:tmp.nodes)if(node.amount<0 || node.amount>100000)return false;
+        const int expected[4]={tmp.groundWood,tmp.groundStone,tmp.groundTinder,tmp.groundLeaves};
+        tmp.syncGroundCounts();
+        if(tmp.groundWood!=expected[0]||tmp.groundStone!=expected[1]||
+           tmp.groundTinder!=expected[2]||tmp.groundLeaves!=expected[3])return false;
+    }else{
+        // A v1/v2 még csak globális készleteket mentett. Visszamenőleges
+        // kompatibilitás: a készletet térbeli lelőhelyek között osztjuk szét.
+        const int counts[4]={tmp.groundWood,tmp.groundStone,tmp.groundTinder,tmp.groundLeaves};
+        for(int type=0;type<4;++type){
+            int remaining=counts[type],first=-1;
+            for(int i=0;i<World::resourceCount;++i){
+                auto& node=tmp.nodes[i];
+                if(node.type!=type)continue;
+                if(first<0)first=i;
+                const int amount=std::min(remaining,node.amount);
+                node.amount=amount;remaining-=amount;
+            }
+            if(remaining>0 && first>=0)tmp.nodes[first].amount+=remaining;
+        }
+        tmp.syncGroundCounts();
+    }
     tmp.hearthBuilt=hearth!=0;tmp.fireLit=fire!=0;tmp.underShelter=covered!=0;
     *this=tmp;return true;
 }
