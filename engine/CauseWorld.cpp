@@ -19,6 +19,27 @@ void World::syncGroundCounts(){
         if(node.type==3)groundLeaves+=node.amount;
     }
 }
+std::string World::nextObjective() const {
+    if(shelterStage==0){
+        if(chippedEdgeWear<=0 && preparedPoles<2)
+            return carriedStone<2?"CÉL: Gyűjts két követ, és készíts belőlük kőélt.":"CÉL: Készíts kőélt a begyűjtött kövekből.";
+        if(preparedPoles<2)return "CÉL: Munkálj meg két faágat, hogy tartóoszlopok készülhessenek.";
+        if(carriedStone<2)return "CÉL: Gyűjts két támasztókövet az oszlopokhoz.";
+        return "CÉL: Menj az építés helyére, és állítsd fel az oszlopokat.";
+    }
+    if(shelterStage==1){
+        if(preparedPoles<3)return "CÉL: Készíts még három cölöpöt a tetővázhoz.";
+        return "CÉL: Menj a menedékhez és építsd meg a tetővázat.";
+    }
+    if(shelterStage==2){
+        if(carriedLeaves<6)return "CÉL: Gyűjts hat leveles ágat a fedéshez.";
+        return "CÉL: Készíts tetőfedést a menedéknél.";
+    }
+    if(!underShelter)return "CÉL: Lépj a kész menedék közelébe, és húzódj alá.";
+    if(!hearthBuilt)return "CÉL: Gyűjts 3 faágat és 2 követ a tűzhelyhez.";
+    if(!fireLit)return "CÉL: Szerezz száraz tüzelőt és gyújtóst, majd gyújts tüzet.";
+    return "Az első menedék és tűz elkészült. Kísérletezz az időjárással, a tűzzel és a mentéssel.";
+}
 std::string World::nearby() const{
     const ResourceNode* best=nullptr;
     double distSq=1e12;
