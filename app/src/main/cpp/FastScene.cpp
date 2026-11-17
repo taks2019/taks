@@ -443,6 +443,6 @@ void render(int width,int height,const FastFrame& f){
                  objectsMesh.empty()?nullptr:objectsMesh.data(),GL_STREAM_DRAW);
     glDrawArrays(GL_TRIANGLES,0,(GLsizei)objectsMesh.size());
     glBindVertexArray(0);
-    taks::RealModels::render(vp.a,f.nodes);
+    taks::RealModels::render(vp.a,f.nodes,f.grass,f.trees,f.verifiedFerns,f.clock,f.rain);
 }
 }
