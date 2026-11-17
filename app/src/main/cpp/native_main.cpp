@@ -125,6 +125,33 @@ extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUplo
     if(env->ExceptionCheck())return JNI_FALSE;
     return taks::RealModels::upload(id,mesh.data(),mesh.size(),texture.data(),width,height)?JNI_TRUE:JNI_FALSE;
 }
+// Exactly the saved simulation's causal facts feed the prehistoric menu.
+// Unknown fern, vine and rope species/skills remain locked; leaf resources
+// do not magically become a discovered plant species.
+extern "C" JNIEXPORT jfloatArray JNICALL Java_hu_taks_world_MainActivity_nativeMenuCues(
+    JNIEnv* env,jobject){
+    jfloat snapshot[11]={};
+    {
+        std::lock_guard<std::mutex> guard(worldLock);
+        snapshot[0]=static_cast<jfloat>(world.hours);
+        snapshot[1]=static_cast<jfloat>(world.rainIntensity);
+        snapshot[2]=static_cast<jfloat>(world.groundMoisture);
+        snapshot[3]=world.fireLit?1.f:0.f;
+        bool vegetation=false;
+        for(const auto& node:world.nodes){
+            if(node.type==3 && node.amount>0){vegetation=true;break;}
+        }
+        snapshot[4]=vegetation?1.f:0.f;
+        snapshot[5]=world.stoneDebris>0?1.f:0.f;
+        snapshot[6]=(world.preparedPoles>0||world.shelterStage>0)?1.f:0.f;
+        snapshot[7]=world.shelterStage>0?1.f:0.f;
+        // The current World does not yet have a real fern, vine or rope system.
+        snapshot[8]=0.f; snapshot[9]=0.f; snapshot[10]=0.f;
+    }
+    jfloatArray arr=env->NewFloatArray(11);
+    if(arr)env->SetFloatArrayRegion(arr,0,11,snapshot);
+    return arr;
+}
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeRendererError(JNIEnv* env,jobject){
     const auto& e=taks::FastScene::lastError();
     if(!e.empty())return toJava(env,e);
