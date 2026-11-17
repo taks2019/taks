@@ -7,6 +7,8 @@
 
 static void walkTo(taks::World& w,double x,double z){
     for(int step=0;step<128;++step){
+        // Hosszú munkanap után a játékosnak a valós játékszabályok szerint pihennie kell.
+        if(w.stamina<2.0)w.act("rest");
         const double dx=x-w.playerX,dz=z-w.playerZ;
         const double dist=std::sqrt(dx*dx+dz*dz);
         if(dist<0.08)return;
