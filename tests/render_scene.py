@@ -78,6 +78,13 @@ array=(cf*len(values))(*values)
 pLoc=gl.glGetUniformLocation(program,b"u_nodes[0]")
 assert pLoc>=0, "Nodes uniform was optimized out: spatial resources not visible."
 gl.glUniform4fv(pLoc,len(nodes),array)
+workers=[
+ (-3.6,-2.1,0,0),(2.7,-1.1,1,0),(4.4,-2.0,2,0),(-1.8,-2.4,3,0)
+]
+workerArray=(cf*16)(*[value for worker in workers for value in worker])
+workerLoc=gl.glGetUniformLocation(program,b"u_npcs[0]")
+assert workerLoc>=0, "NPC uniforms optimized out - markers would not follow workers."
+gl.glUniform4fv(workerLoc,4,workerArray)
 
 def scalar(name,value):
     idx=gl.glGetUniformLocation(program,name.encode())
@@ -110,7 +117,7 @@ def render(name,px,pz,stage):
     print("Saved",outputDir/name,"min",min(output),"max",max(output))
     return output
 
-initial=render("01-kezdo-terulet.png",0.,-5.2,0.)
+initial=render("01-kezdo-terulet-negy-munkassal.png",0.,-5.2,0.)
 moved=render("02-menedek-fazis3.png",3.1,-1.55,3.)
 assert initial!=moved, "Player movement and shelter construction did not change the image"
 print("TAKS GLES3 SPATIAL RENDER TEST PASSED")
