@@ -8,6 +8,9 @@ struct FastFrame {
     float rain=0, moisture=0, clock=8;
     float hearth=0, fire=0;
     float nodes[48]={};
+    float grass[16]={}; // [x,z,real biomass,real health] x4
+    float trees[12]={}; // [x,z,real height,alive] x3
+    bool verifiedFerns=false;
     float npcs[16]={};
     float sites[12]={};
 };
