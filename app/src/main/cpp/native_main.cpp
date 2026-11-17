@@ -182,6 +182,21 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
             f.nodes[i*4+2]=static_cast<float>(world.nodes[i].type);
             f.nodes[i*4+3]=static_cast<float>(world.nodes[i].amount);
         }
+        for(int i=0;i<taks::LivingWorld::grassCount;++i){
+            const auto& g=world.ecology.grass[i];
+            f.grass[i*4+0]=static_cast<float>(g.x);
+            f.grass[i*4+1]=static_cast<float>(g.z);
+            f.grass[i*4+2]=static_cast<float>(g.biomass);
+            f.grass[i*4+3]=static_cast<float>(g.health);
+        }
+        for(int i=0;i<taks::LivingWorld::treeCount;++i){
+            const auto& t=world.ecology.trees[i];
+            f.trees[i*4+0]=static_cast<float>(t.x);
+            f.trees[i*4+1]=static_cast<float>(t.z);
+            f.trees[i*4+2]=static_cast<float>(t.heightM);
+            f.trees[i*4+3]=t.alive?1.f:0.f;
+        }
+        f.verifiedFerns=world.ecology.verifiedFerns;
         for(int i=0;i<taks::World::npcCount;++i){
             f.npcs[i*4+0]=static_cast<float>(world.npcs[i].x);
             f.npcs[i*4+1]=static_cast<float>(world.npcs[i].z);
