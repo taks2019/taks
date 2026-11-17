@@ -3,7 +3,7 @@
 #include <cstdint>
 namespace taks {
 struct FastFrame {
-    float yaw=0.785398f, pitch=0.615480f, zoom=14.0f;
+    float yaw=0.785398f, pitch=0.615480f, zoom=10.0f;
     float playerX=0,playerZ=-5.2f,walkPhase=0;
     float rain=0, moisture=0, mud=0, clock=8;
     float hearth=0, fire=0;
