@@ -24,7 +24,7 @@ Vec3 mul(Vec3 v,float s){return {v.x*s,v.y*s,v.z*s};}
 float dot(Vec3 a,Vec3 b){return a.x*b.x+a.y*b.y+a.z*b.z;}
 Vec3 cross(Vec3 a,Vec3 b){return {a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x};}
 Vec3 norm(Vec3 v){float d=std::sqrt(std::max(dot(v,v),.00000001f));return mul(v,1.f/d);}
-float height(float x,float z){
+float surfaceHeight(float x,float z){
     return -.27f+.17f*std::sin(x*.21f)*std::cos(z*.22f)+.09f*std::sin(x*.87f+z*.57f)
            +.065f*std::cos(z*.73f-x*.42f);
 }
@@ -53,7 +53,7 @@ void axisBar(std::vector<Vertex>& v,Vec3 a,Vec3 b,float radius,float kind,int si
 }
 void irregularRock(std::vector<Vertex>& v,float x,float z,float radius,float scale,float kind,int seed=0){
     constexpr int sides=9;
-    float h=height(x,z);
+    float h=surfaceHeight(x,z);
     Vec3 centerTop{x,h+radius*scale*.85f,z};
     for(int i=0;i<sides;++i){
         float a=2.f*PI*i/sides,b=2.f*PI*(i+1)/sides;
@@ -80,7 +80,7 @@ void buildStatic(){
     for(int j=0;j<nz;++j)for(int i=0;i<nx;++i){
         float x=x0+(x1-x0)*float(i)/float(nx),xx=x0+(x1-x0)*float(i+1)/float(nx);
         float z=z0+(z1-z0)*float(j)/float(nz),zz=z0+(z1-z0)*float(j+1)/float(nz);
-        Vec3 a{x,height(x,z),z},b{xx,height(xx,z),z},c{xx,height(xx,zz),zz},d{x,height(x,zz),zz};
+        Vec3 a{x,surfaceHeight(x,z),z},b{xx,surfaceHeight(xx,z),z},c{xx,surfaceHeight(xx,zz),zz},d{x,surfaceHeight(x,zz),zz};
         quad(terrainMesh,a,d,c,b,0.f);
     }
     // Természetes sziklafal, valódi 3D elülső és oldalsó mélységgel.
@@ -108,8 +108,8 @@ void buildStatic(){
         Vec3 aa{a.x*.86f,a.y,6.7f},bb{b.x*.86f,b.y,6.7f};
         quad(terrainMesh,a,b,bb,aa,6.f);
     }
-    quad(terrainMesh,{-1.45f,height(-1.45f,3.75f),3.75f},{1.45f,height(1.45f,3.75f),3.75f},
-        {1.45f,height(1.45f,6.7f),6.7f},{-1.45f,height(-1.45f,6.7f),6.7f},1.f);
+    quad(terrainMesh,{-1.45f,surfaceHeight(-1.45f,3.75f),3.75f},{1.45f,surfaceHeight(1.45f,3.75f),3.75f},
+        {1.45f,surfaceHeight(1.45f,6.7f),6.7f},{-1.45f,surfaceHeight(-1.45f,6.7f),6.7f},1.f);
     quad(terrainMesh,{-1.1f,0.0f,6.7f},{1.1f,0.0f,6.7f},
         {1.1f,2.7f,6.7f},{-1.1f,2.7f,6.7f},6.f);
     for(int i=0;i<8;++i){
@@ -167,7 +167,7 @@ void addResources(const FastFrame& scene){
     for(int i=0;i<12;++i){
         const float* n=scene.nodes+i*4;
         if(n[3]<.5f)continue;
-        float x=n[0],z=n[1],h=height(x,z);
+        float x=n[0],z=n[1],h=surfaceHeight(x,z);
         int type=(int)(n[2]+.5f);
         if(type==0){ // faágak
             axisBar(objectsMesh,{x-.32f,h+.07f,z-.16f},{x+.32f,h+.11f,z+.16f},.045f,3.f,6);
@@ -190,19 +190,19 @@ void addBuildings(const FastFrame& scene){
     for(int i=0;i<3;++i){
         const float* s=scene.sites+i*4;
         if(s[2]<-.5f)continue;
-        float x=s[0],z=s[1],h=height(x,z),stage=s[2],integrity=s[3];
+        float x=s[0],z=s[1],h=surfaceHeight(x,z),stage=s[2],integrity=s[3];
         if(stage<.5f){irregularRock(objectsMesh,x,z,.18f,.9f,2.f,i);continue;}
         for(int k=0;k<2;++k){
             float xx=x-1.05f+2.10f*k;
             irregularRock(objectsMesh,xx,z,.25f,1.0f,2.f,k);
-            axisBar(objectsMesh,{xx,height(xx,z)+.11f,z},{xx,h+2.25f,z},.10f,3.f);
+            axisBar(objectsMesh,{xx,surfaceHeight(xx,z)+.11f,z},{xx,h+2.25f,z},.10f,3.f);
         }
         if(stage>1.5f){
             axisBar(objectsMesh,{x-1.10f,h+2.25f,z},{x+1.10f,h+2.25f,z},.11f,3.f);
             for(int k=0;k<2;++k){
                 float xx=x-1.05f+2.10f*k;
                 axisBar(objectsMesh,{xx,h+2.23f,z},
-                        {xx,height(xx,z+2.4f)+.40f,z+2.4f},.085f,3.f);
+                        {xx,surfaceHeight(xx,z+2.4f)+.40f,z+2.4f},.085f,3.f);
             }
         }
         if(stage>2.5f){
@@ -219,7 +219,7 @@ void addBuildings(const FastFrame& scene){
 }
 void addPlayerAndNpcs(const FastFrame& scene){
     auto addCharacter=[](float x,float z,float phase,float accent){
-        float h=height(x,z);
+        float h=surfaceHeight(x,z);
         // A végleges embermodell helyett az animált mozgási és pozíciós teszt geometria.
         float w=.10f*std::sin(phase);
         axisBar(objectsMesh,{x,h+.9f,z},{x,h+1.40f,z},.135f,5.f,8);
@@ -239,7 +239,7 @@ void addPlayerAndNpcs(const FastFrame& scene){
     addCharacter(scene.playerX,scene.playerZ,scene.walkPhase,7.f);
     for(int i=0;i<4;++i){
         const float* n=scene.npcs+i*4;
-        float x=n[0],z=n[1],h=height(x,z),c=8.f+float(i%2);
+        float x=n[0],z=n[1],h=surfaceHeight(x,z),c=8.f+float(i%2);
         // A társak még nem fotórealisztikusak: egyszerű térbeli helyzetjelölő.
         axisBar(objectsMesh,{x,h+.05f,z},{x,h+.46f,z},.045f,c,5);
         for(int j=0;j<12;++j){
@@ -250,7 +250,7 @@ void addPlayerAndNpcs(const FastFrame& scene){
         }
     }
     if(scene.hearth>.5f){
-        float x=-1.15f,z=-1.8f,h=height(x,z);
+        float x=-1.15f,z=-1.8f,h=surfaceHeight(x,z);
         for(int k=0;k<7;++k){
             float a=2*PI*k/7;
             irregularRock(objectsMesh,x+.39f*std::cos(a),z+.37f*std::sin(a),.18f,.6f,2.f,k);
@@ -361,7 +361,7 @@ void render(int width,int height,const FastFrame& f){
     float aspect=float(width)/float(height);
     float yaw=f.yaw,pitch=std::clamp(f.pitch,.349066f,1.396263f);
     float distance=std::max(18.f,f.zoom*2.f);
-    Vec3 focus{f.playerX,height(f.playerX,f.playerZ)+.90f,f.playerZ+1.2f};
+    Vec3 focus{f.playerX,surfaceHeight(f.playerX,f.playerZ)+.90f,f.playerZ+1.2f};
     Vec3 delta{std::sin(yaw)*std::cos(pitch)*distance,
                std::sin(pitch)*distance,
                -std::cos(yaw)*std::cos(pitch)*distance};
