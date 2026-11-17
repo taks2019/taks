@@ -273,39 +273,73 @@ std::string World::act(const std::string& action) {
         stamina-=5;step(0.30);++eventCounter;
         return "Egy faágból megmunkált cölöp lett; a kőeszköz éle kopott. (+0,3 óra)";
     }
-    if(action=="base") {
-        if(!isNear(3.1,-1.55,3.0))return "Az oszlopok helyszíne túl messze van: menj az építés helyére.";
-        if(shelterStage!=0) return "Az oszlopalapok már a helyükön vannak.";
-        if(preparedPoles<2) return "Oszlopalap: előbb 2 megmunkált cölöp kell.";
-        if(carriedStone<2) return "Oszlopalap: 2 támasztókő szükséges.";
-        if(stamina<12) return "Alapozás: kevés az állóképesség, előbb pihenj.";
-        preparedPoles-=2;carriedStone-=2;stamina-=12;step(1.00);shelterStage=1;++eventCounter;
-        return "Két cölöp és két kő elhelyezve: a tartóoszlopok állnak. A tető még hiányzik.";
+    if(action=="site") {
+        if(siteCount>=maxBuildSites)return "A próbaszektorban egyszerre három építési hely kezelhető.";
+        if(playerX<-5.7||playerX>5.7||playerZ<-6.0||playerZ>1.3)
+            return "Itt nincs elegendő szabad építési terület: menj síkabb, nyitott részre.";
+        if(isNear(-.30,-3.40,1.9)||isNear(-1.15,-1.8,1.8))
+            return "A tábori készletet és a tűzhelyet nem lehet beépíteni.";
+        for(int i=0;i<siteCount;++i){
+            const double dx=playerX-sites[i].x,dz=playerZ-sites[i].z;
+            if(dx*dx+dz*dz<3.7*3.7)return "Az új menedék túl közel lenne egy másikhoz.";
+        }
+        if(carriedStone<1)return "Az építési hely kijelöléséhez egy követ kell elhelyezned a terepen.";
+        if(stamina<2)return "A kijelöléshez előbb pihenned kell.";
+        --carriedStone;stamina-=2;
+        auto& site=sites[siteCount++];
+        site.x=playerX;site.z=playerZ;site.stage=0;site.condition=100.0;
+        step(.15);++eventCounter;
+        return "Új építési hely kijelölve. A jelölőkő felhasználva; ide kerülhet az oszlopszerkezet.";
     }
-    if(action=="frame") {
-        if(!isNear(3.1,-1.55,3.0))return "A tetővázat a menedék helyszínén kell összeszerelni.";
-        if(shelterStage<1) return "Tetővázat nem lehet rögzíteni oszlopok nélkül.";
-        if(shelterStage>1) return "A tetőváz már a helyén van.";
-        if(preparedPoles<3) return "Tetőváz: 3 megmunkált cölöp (gerenda + 2 ferde tartó) kell.";
-        if(stamina<14) return "Tetőváz: kevés az állóképesség.";
-        preparedPoles-=3;stamina-=14;step(1.10);shelterStage=2;++eventCounter;
-        return "Tetőváz felállítva: 3 cölöp beépült, fedés nélkül még átázik.";
-    }
-    if(action=="roof") {
-        if(!isNear(3.1,-1.55,3.0))return "A tetőfedést a menedéknél kell elvégezni.";
-        if(shelterStage<2) return "Tetőfedés előtt a tartóoszlopoknak és a tetőváznak is állniuk kell.";
-        if(shelterStage==3) return "A levélfedés már elkészült.";
-        if(carriedLeaves<6) return "Tetőfedés: 6 leveles ág kell az átlapolt fedéshez.";
-        if(stamina<9) return "Tetőfedés: a munkához előbb pihenj.";
-        carriedLeaves-=6;stamina-=9;step(0.80);shelterStage=3;++eventCounter;
-        return "Elkészült a levélfedés. A menedék alatt már csökken az esőterhelés, de be is kell húzódnod.";
+    if(action=="base" || action=="frame" || action=="roof" || action=="repair") {
+        const int index=nearbySiteIndex();
+        if(index<0)return "A szerkezethez menj a kijelölt építési helyre, vagy jelölj ki újat.";
+        auto& site=sites[index];
+        if(action=="base"){
+            if(site.stage!=0)return "Ezen a helyen az oszlopok már elkészültek.";
+            if(preparedPoles<2)return "Oszlopok: két megmunkált cölöp hiányzik.";
+            if(carriedStone<2)return "Oszlopok: két támasztókő hiányzik.";
+            if(stamina<12)return "Oszlopok: a munkához kevés az állóképesség.";
+            preparedPoles-=2;carriedStone-=2;stamina-=12;site.stage=1;
+            shelterStage=std::max(shelterStage,site.stage);
+            step(1.0);++eventCounter;
+            return "A két oszlop a kijelölt helyen áll. Az anyagok ténylegesen elfogytak.";
+        }
+        if(action=="frame"){
+            if(site.stage<1)return "Előbb két tartóoszlopot kell felállítani ezen a helyen.";
+            if(site.stage>1)return "Itt már elkészült a tetőváz.";
+            if(preparedPoles<3)return "A tetővázhoz három megmunkált cölöp kell.";
+            if(stamina<14)return "A tetővázhoz előbb pihenned kell.";
+            preparedPoles-=3;stamina-=14;site.stage=2;
+            shelterStage=std::max(shelterStage,site.stage);
+            step(1.1);++eventCounter;
+            return "A tetőváz elkészült ezen a helyen, de még nincs fedése.";
+        }
+        if(action=="roof"){
+            if(site.stage<2)return "Előbb oszlopokat és tetővázat kell megépíteni.";
+            if(site.stage==3)return "Ez a menedék már fedett.";
+            if(carriedLeaves<6)return "Fedéshez hat leveles ág szükséges.";
+            if(stamina<9)return "A fedéshez előbb pihenned kell.";
+            carriedLeaves-=6;stamina-=9;site.stage=3;
+            shelterStage=std::max(shelterStage,site.stage);
+            step(.8);++eventCounter;
+            return "Felkerült a fedés. A szerkezet csak akkor véd, ha behúzódsz alá.";
+        }
+        if(site.stage<3)return "Javítani csak felépített menedéket lehet.";
+        if(site.condition>=99.5)return "A szerkezet még ép, nem szorul javításra.";
+        if(preparedPoles<1 || carriedLeaves<2)return "Javításhoz egy cölöp és két leveles ág kell.";
+        if(stamina<8)return "Javításhoz előbb pihenned kell.";
+        --preparedPoles;carriedLeaves-=2;stamina-=8;
+        site.condition=std::min(100.0,site.condition+35.0);
+        step(.7);++eventCounter;
+        return "A sérült tartó és a fedés javítva; alkatrész és idő fogyott.";
     }
     if(action=="shelter_enter") {
-        if(!isNear(3.1,-1.55,2.0))return "Előbb oda kell menned a menedékhez.";
-        if(shelterStage<3) return "A menedék még nem fedett, nem véd megfelelően az esőtől.";
-        if(underShelter) return "Már a menedék alatt vagy.";
-        underShelter=true;step(0.10);++eventCounter;
-        return "Behúzódtál a menedékbe: a fedés mérsékli a rád jutó csapadékot.";
+        if(!protectedAtPlayer())
+            return "Csak ténylegesen fedett, ép menedék alá húzódhatsz. Menj közelebb vagy javítsd meg.";
+        if(underShelter)return "Már a fedés alatt vagy.";
+        underShelter=true;step(.1);++eventCounter;
+        return "Behúzódtál a fedés alá: csökkent a közvetlen esőterhelés.";
     }
     if(action=="shelter_exit") {
         if(!underShelter) return "Jelenleg nem vagy a menedékben.";
