@@ -50,6 +50,18 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeGoal(
     std::lock_guard<std::mutex> guard(worldLock);
     return toJava(env,world.nextObjective());
 }
+extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeNpcStatus(JNIEnv* env,jobject){
+    std::lock_guard<std::mutex> guard(worldLock);
+    return toJava(env,world.npcStatus());
+}
+extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeCampStatus(JNIEnv* env,jobject){
+    std::lock_guard<std::mutex> guard(worldLock);
+    return toJava(env,world.campStatus());
+}
+extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeTick(JNIEnv*,jobject){
+    std::lock_guard<std::mutex> guard(worldLock);
+    world.step(0.04);
+}
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeNearby(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
     return toJava(env,world.nearby());
@@ -126,7 +138,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         return;
     }
     float angle,dist,hours,rain,wet,hearth,fire,shelterStage;
-    float px,pz,walkPhase,nodes[4*taks::World::resourceCount];
+    float px,pz,walkPhase,nodes[4*taks::World::resourceCount],npcs[4*taks::World::npcCount];
     {
         std::lock_guard<std::mutex> guard(worldLock);
         angle=orbit;dist=zoom;
@@ -142,6 +154,12 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
             nodes[4*i+1]=static_cast<float>(world.nodes[i].z);
             nodes[4*i+2]=static_cast<float>(world.nodes[i].type);
             nodes[4*i+3]=static_cast<float>(world.nodes[i].amount);
+        }
+        for(int i=0;i<taks::World::npcCount;++i){
+            npcs[4*i]=static_cast<float>(world.npcs[i].x);
+            npcs[4*i+1]=static_cast<float>(world.npcs[i].z);
+            npcs[4*i+2]=static_cast<float>(world.npcs[i].role);
+            npcs[4*i+3]=static_cast<float>(world.npcs[i].carrying);
         }
     }
     GLint vp[4]={0,0,1,1};
@@ -163,6 +181,8 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
     u1("u_walkPhase",walkPhase);
     const GLint nodeLoc=glGetUniformLocation(program,"u_nodes[0]");
     if(nodeLoc>=0)glUniform4fv(nodeLoc,taks::World::resourceCount,nodes);
+    const GLint npcLoc=glGetUniformLocation(program,"u_npcs[0]");
+    if(npcLoc>=0)glUniform4fv(npcLoc,taks::World::npcCount,npcs);
     u1("u_quality",1.f);
     glDrawArrays(GL_TRIANGLES,0,3);
     glBindVertexArray(0);
