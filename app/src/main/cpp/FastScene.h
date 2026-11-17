@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <cstdint>
 namespace taks {
 struct FastFrame {
     float yaw=0.785398f, pitch=0.615480f, zoom=14.0f;
