@@ -39,7 +39,7 @@ public final class MainActivity extends Activity {
     private native void nativeReset();
     private native void nativeOnSurfaceCreated(String fragmentSource);
     private native void nativeRender();
-    private native void nativeSetView(float angle,float zoom);
+    private native void nativeSetView(float angle,float pitch,float zoom);
     private native String nativeRendererError();
 
     private GLSurfaceView surface;
@@ -49,7 +49,7 @@ public final class MainActivity extends Activity {
     private TextView notice;
     private TextView hint;
     private String shaderSource;
-    private float orbit=0f,zoom=14f,lastX=0,lastY=0,lastSpan=0;
+    private float orbit=.785398f,cameraPitch=.615480f,zoom=14f,lastX=0,lastY=0,lastSpan=0;
     private int activePanel=0;
     private final Handler worldHandler=new Handler(Looper.getMainLooper());
     private int worldTickNumber=0;
@@ -72,7 +72,7 @@ public final class MainActivity extends Activity {
             if(Math.abs(axisX)+Math.abs(axisY)>.12f){
                 float wx=(float)(-Math.cos(orbit)*axisX+Math.sin(orbit)*axisY);
                 float wz=(float)(-Math.sin(orbit)*axisX+Math.cos(orbit)*axisY);
-                String result=nativeMove(wx*.17f,wz*.17f);
+                String result=nativeMove(wx*.065f,wz*.065f);
                 if(result.contains("kimerült")||result.contains("elállja")||result.contains("határához")){
                     if(movementTicks%6==0)say(result);
                 }
@@ -80,7 +80,7 @@ public final class MainActivity extends Activity {
                 if(proximity!=null && movementTicks%2==0)proximity.setText(nativeNearby());
                 movementTicks++;
             }
-            movementHandler.postDelayed(this,85);
+            movementHandler.postDelayed(this,33);
         }
     };
 
@@ -230,9 +230,9 @@ public final class MainActivity extends Activity {
         if(action==MotionEvent.ACTION_MOVE){
             if(e.getPointerCount()>=2){
                 float span=dist(e);
-                if(lastSpan>4)zoom=Math.min(26,Math.max(7,zoom*lastSpan/span));
+                if(lastSpan>4)zoom=Math.min(26,Math.max(6,zoom*lastSpan/span));
                 lastSpan=span;
-                nativeSetView(orbit,zoom);
+                nativeSetView(orbit,cameraPitch,zoom);
                 refreshScene();return true;
             }
             if(moveIntent){
@@ -244,9 +244,11 @@ public final class MainActivity extends Activity {
                 axisY=-dy*factor;
             }else{
                 float dx=e.getX()-lastX;
-                orbit+=dx*.008f;
+                float dy=e.getY()-lastY;
+                orbit+=dx*.0075f;
+                cameraPitch=Math.min(1.396263f,Math.max(.349066f,cameraPitch-dy*.006f));
                 lastX=e.getX();lastY=e.getY();
-                nativeSetView(orbit,zoom);refreshScene();
+                nativeSetView(orbit,cameraPitch,zoom);refreshScene();
             }
             return true;
         }
@@ -259,9 +261,26 @@ public final class MainActivity extends Activity {
         if(action==MotionEvent.ACTION_POINTER_UP){lastSpan=0;return true;}
         return true;
     }
+    private void chooseGraphicsResolution(){
+        final String[] presets={"Gyors – 640 képpont széles","Kiegyensúlyozott – 840 képpont széles","Részletesebb – 1200 képpont széles"};
+        new AlertDialog.Builder(this).setTitle("3D grafikai teljesítmény")
+            .setItems(presets,(dialog,which)->{
+                int targetWidth=which==0?640:which==1?840:1200;
+                applyFramebufferSize(targetWidth);
+                refreshScene();
+                say("Renderfelbontás: "+targetWidth+" px. A kamera valódi ortografikus 3D.");
+            }).setNegativeButton("Mégse",null).show();
+    }
+    private void applyFramebufferSize(int desiredWidth){
+        android.util.DisplayMetrics m=getResources().getDisplayMetrics();
+        float scale=Math.min(1.0f,(float)desiredWidth/Math.max(m.widthPixels,m.heightPixels));
+        int width=Math.max(320,Math.round(m.widthPixels*scale));
+        int height=Math.max(180,Math.round(m.heightPixels*scale));
+        surface.getHolder().setFixedSize(width,height);
+    }
     private void openGameMenu(){
         closePanel();
-        String[] commands={"Folytatás","Mi a következő cél?","Mentés","Új világ","Kamera alaphelyzet","Készítők","Kilépés"};
+        String[] commands={"Folytatás","Mi a következő cél?","Mentés","Új világ","Izometrikus kamera visszaállítása","Kamera: felülnézet","Kamera: alacsony nézet","Grafikai felbontás","Készítők","Kilépés"};
         new AlertDialog.Builder(this).setTitle("TAKS WORLD · FŐMENÜ")
             .setItems(commands,(dialog,index)->{
                 switch(index){
@@ -280,11 +299,14 @@ public final class MainActivity extends Activity {
                              say(nativeGoal());
                          })
                          .setNegativeButton("Mégse",null).show();break;
-                    case 4: orbit=0f;zoom=14f;nativeSetView(orbit,zoom);refreshScene();break;
-                    case 5: new AlertDialog.Builder(this).setTitle("Készítők")
+                    case 4: orbit=.785398f;cameraPitch=.615480f;zoom=14f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
+                    case 5: cameraPitch=1.37f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
+                    case 6: cameraPitch=.40f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
+                    case 7: chooseGraphicsResolution();break;
+                    case 8: new AlertDialog.Builder(this).setTitle("Készítők")
                               .setMessage("TAKS WORLD – saját fejlesztésű natív játékmotor. A grafika és az oksági szimuláció fejlesztés alatt.")
                               .setPositiveButton("OK",null).show();break;
-                    case 6: save();finish();break;
+                    case 9: save();finish();break;
                 }
             }).setNegativeButton("Vissza a játékba",null).show();
     }
@@ -306,12 +328,8 @@ public final class MainActivity extends Activity {
         root=new FrameLayout(this);
         surface=new GLSurfaceView(this);
         surface.setEGLContextClientVersion(3);
-        // Kijelzőmérethez illeszkedő, kisebb GPU framebuffer; nincs nyújtás.
-        android.util.DisplayMetrics metrics=getResources().getDisplayMetrics();
-        float renderScale=Math.min(1.0f,720.0f/Math.max(metrics.widthPixels,metrics.heightPixels));
-        int bufferWidth=Math.max(320,Math.round(metrics.widthPixels*renderScale));
-        int bufferHeight=Math.max(180,Math.round(metrics.heightPixels*renderScale));
-        surface.getHolder().setFixedSize(bufferWidth,bufferHeight);
+        // Isometric GPU mesh renderer: dynamic resolution menu, aspect ratio always preserved.
+        applyFramebufferSize(840);
         surface.setPreserveEGLContextOnPause(true);
         surface.setRenderer(new GLSurfaceView.Renderer(){
             @Override public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl,javax.microedition.khronos.egl.EGLConfig config){
@@ -327,17 +345,17 @@ public final class MainActivity extends Activity {
         surface.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         surface.setOnTouchListener((v,e)->touch(e,false));
         root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
-        nativeSetView(orbit,zoom);
+        nativeSetView(orbit,cameraPitch,zoom);
 
         LinearLayout header=new LinearLayout(this);header.setOrientation(LinearLayout.VERTICAL);
         header.setPadding(dp(15),dp(10),dp(10),dp(10));
         header.setBackground(panelBackground(0xB8101A1A,13));
         header.addView(caption("TAKS WORLD",22,0xFFE6D6B5));
-        header.addView(caption("NATÍV VILÁG · TÉRBELI ÉPÍTÉS · 0.5",10,0xFFC3D1C5));
+        header.addView(caption("TAKS ENGINE 0.6 · IZOMETRIKUS 3D",10,0xFFC3D1C5));
         FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
         hp.setMargins(dp(12),dp(12),0,0);root.addView(header,hp);
 
-        hint=caption("Bal oldalon húzd: mozgás · jobb oldalon: kamera · két ujjal: zoom",12,0xFFECE9DC);
+        hint=caption("Bal: mozgás · Jobb: kamera forgatás és döntés · Két ujjal: zoom",12,0xFFECE9DC);
         hint.setPadding(dp(10),dp(7),dp(10),dp(7));
         hint.setBackground(panelBackground(0xA5101A18,10));
         FrameLayout.LayoutParams hintParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
