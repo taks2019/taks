@@ -12,7 +12,7 @@ namespace taks::RealModels {
 namespace {
 struct Vertex { float pos[3], normal[3], uv[2]; };
 struct Model { GLuint vao=0,vbo=0,texture=0; GLsizei count=0; };
-std::array<Model,6> models;
+std::array<Model,7> models;
 GLuint shader=0;
 GLint uVP=-1,uModel=-1,uTexture=-1,uCutoff=-1,uDaylight=-1,uRain=-1;
 std::string error;
@@ -176,11 +176,13 @@ bool upload(int id,const std::uint8_t* bytes,std::size_t size,
  return true;
 }
 bool complete(){return models[0].vao&&models[0].texture&&models[1].vao&&models[1].texture;}
+bool hasRealHuman(){return models[6].vao!=0 && models[6].texture!=0 && models[6].count>=15000;}
 const char* errorMessage(){return error.c_str();}
 void render(const float* viewProjection,const float* worldNodes,
             const float* grass,const float* trees,bool fernApproved,
-            float worldClock,float rain){
- if(!shader||!viewProjection||!worldNodes||!grass||!trees||!complete())return;
+            float worldClock,float rain,float playerX,float playerZ,
+            const float* npcPositions){
+ if(!shader||!viewProjection||!worldNodes||!grass||!trees||!npcPositions||!complete())return;
  glUseProgram(shader);
  glUniformMatrix4fv(uVP,1,GL_FALSE,viewProjection);
  glUniform1i(uTexture,0);
@@ -242,6 +244,18 @@ void render(const float* viewProjection,const float* worldNodes,
     glUniform1f(uCutoff,.42f);
     // This biome plant is only visible when ecological verification is explicit.
     if(grass[2]>.12f)draw(models[4],grass[0]+.72f,grass[1]-.25f,.85f,.6f);
+ }
+ // Anatomical human meshes are real CC0 source geometry, not rod people.
+ // This still tests a static neutral pose, not historical Homo erectus identity
+ // or a finished skeletal walking animation.
+ if(hasRealHuman()){
+    glUniform1f(uCutoff,.34f);
+    draw(models[6],playerX,playerZ,.99f,.25f);
+    for(int i=0;i<4;++i){
+        const float* n=npcPositions+i*4;
+        const float scale=.92f+.025f*float(i);
+        draw(models[6],n[0],n[1],scale,float(i)*1.33f+.47f);
+    }
  }
  glUniform1f(uCutoff,0.f);
  glBindVertexArray(0);
