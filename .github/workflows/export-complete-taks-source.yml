@@ -1,0 +1,63 @@
+name: TAKS World forraskod es valodi 3D asset ZIP csomag
+on:
+  push:
+    branches: [taks-world-visual-ecology-step-3]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  export-complete-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install build-time model converters
+        run: python -m pip install --disable-pip-version-check 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2'
+      - name: Generate true CC0 offline rocks and natural materials
+        run: python scripts/import_cc0_rocks.py
+      - name: Generate true CC0 grass and fern meshes and RGBA textures
+        run: python scripts/import_cc0_foliage.py
+      - name: Package exact branch source plus authentic offline model assets
+        run: |
+          python - <<'PY'
+          import subprocess,zipfile,io
+          from pathlib import Path
+          name='TAKS_World_Nativ_3D_EloVilag_Forras_es_Modellek.zip'
+          raw=subprocess.check_output(['git','archive','--format=zip','--prefix=TAKS_World/','HEAD'])
+          with zipfile.ZipFile(io.BytesIO(raw)) as src, zipfile.ZipFile(name,'w',zipfile.ZIP_DEFLATED,compresslevel=6) as output:
+              for info in src.infolist():
+                  if info.is_dir():continue
+                  output.writestr(info.filename,src.read(info.filename))
+              for path in sorted(Path('app/src/main/assets/models').glob('*')):
+                  if path.is_file():
+                      output.write(path,'TAKS_World/'+str(path).replace('\\','/'))
+              output.writestr('TAKS_World/CSOMAG_INFO.txt',
+                  'TAKS WORLD: NATIV 3D + ELO OKOZATI OKOSZISZTEMA\n'
+                  'FORRASKOD ES VALODI CC0 MODELLADATOK - NEM APK\n'
+                  'A Wonderwerk korszaknak meg nem igazolt novenyek kulon tesztadatok.\n'
+                  'Ellenorzott vilag- es 3D-tesztek: GitHub Actions.\n'
+                  'A nagy reszletessegu fa mobil LOD miatt meg nincs benne.\n')
+          with zipfile.ZipFile(name) as z:
+              assert z.testzip() is None
+              required=[
+                'TAKS_World/engine/CauseWorld.cpp',
+                'TAKS_World/engine/LivingWorld.cpp',
+                'TAKS_World/app/src/main/cpp/RealModels.cpp',
+                'TAKS_World/app/src/main/assets/models/grass_bermuda_01.tkm',
+                'TAKS_World/app/src/main/assets/models/grass_bermuda_01.png',
+                'TAKS_World/app/src/main/assets/models/fern_02.tkm',
+                'TAKS_World/app/src/main/assets/models/fern_02.png',
+                'TAKS_World/app/src/main/assets/models/foliage_manifest.json',
+                'TAKS_World/app/src/main/assets/models/rock_07.tkm',
+              ]
+              for item in required:assert item in z.namelist(),item
+              print('VERIFIED ZIP',name,'members',len(z.namelist()),'bytes',Path(name).stat().st_size)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-Forras-es-Valodi-3D-Modellek
+          path: TAKS_World_Nativ_3D_EloVilag_Forras_es_Modellek.zip
+          if-no-files-found: error
