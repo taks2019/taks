@@ -45,6 +45,7 @@ public final class MainActivity extends Activity {
     private native void nativeRender();
     private native void nativeSetView(float angle,float pitch,float zoom);
     private native String nativeRendererError();
+    private native boolean nativeUploadRealModel(int slot,byte[] model,int[] argb,int width,int height);
 
     private GLSurfaceView surface;
     private SharedPreferences saves;
@@ -93,6 +94,30 @@ public final class MainActivity extends Activity {
         }
     };
 
+
+    private boolean loadAuthenticRockAsset(int slot,String name){
+        // The compressed PNG and mesh are bundled into the APK by the CI import job.
+        try(InputStream meshStream=getAssets().open("models/"+name+".tkm");
+            java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream()){
+            byte[] buffer=new byte[8192];int count;
+            while((count=meshStream.read(buffer))!=-1)bytes.write(buffer,0,count);
+            Bitmap image;
+            try(InputStream imageStream=getAssets().open("models/"+name+".png")){
+                image=BitmapFactory.decodeStream(imageStream);
+            }
+            if(image==null)throw new java.io.IOException("Photographic texture decode failed: "+name);
+            int width=image.getWidth(),height=image.getHeight();
+            int[] pixels=new int[width*height];
+            image.getPixels(pixels,0,width,0,0,width,height);
+            image.recycle();
+            boolean loaded=nativeUploadRealModel(slot,bytes.toByteArray(),pixels,width,height);
+            if(!loaded)throw new java.io.IOException("The native GLES 3D model importer rejected "+name);
+            return true;
+        }catch(Exception exception){
+            android.util.Log.e("TAKS_MODEL","Missing or invalid CC0 scanned model: "+name,exception);
+            return false;
+        }
+    }
 
     private int dp(float n){return Math.round(getResources().getDisplayMetrics().density*n);}
     private GradientDrawable panelBackground(int color,int radius){
@@ -489,9 +514,16 @@ public final class MainActivity extends Activity {
         surface.setRenderer(new GLSurfaceView.Renderer(){
             @Override public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl,javax.microedition.khronos.egl.EGLConfig config){
                 nativeOnSurfaceCreated(shaderSource);
+                // A kép nem távoli webes tartalom: a valódi fotogrammetriai modellek
+                // és saját fénykép-textúráik közvetlenül az Android APK assetjeiből töltődnek.
+                boolean rockOk=loadAuthenticRockAsset(0,"rock_07");
+                boolean bouldersOk=loadAuthenticRockAsset(1,"namaqualand_boulders_01");
                 runOnUiThread(()->{
                     String err=nativeRendererError();
-                    if(err!=null&&!err.isEmpty())say("3D motor hiba: "+err);
+                    if(!rockOk||!bouldersOk||err!=null&&!err.isEmpty()){
+                        say("Valódi 3D modellhiba: "+(err==null?"":err)+
+                            " · Az APK modellcsomagja sérült vagy hiányzik.");
+                    }
                 });
             }
             @Override public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,int w,int h){GLES30.glViewport(0,0,w,h);}
