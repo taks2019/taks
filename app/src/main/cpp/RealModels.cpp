@@ -213,8 +213,20 @@ void render(const float* viewProjection,const float* worldNodes,
         const float biomass=std::clamp(g[2],0.f,1.f);
         const float health=std::clamp(g[3],0.f,1.f);
         if(biomass<.02f||health<=0.f)continue;
-        // Grazer consumption and regrowth affect the exact model scale.
-        draw(models[3],g[0],g[1],.30f+1.05f*biomass,float(i)*1.7f);
+        // An ecological clump is a distributed PATCH of the real scanned
+        // plant, never an invented fifth or infinite independent resource.
+        // Grazing shrinks the whole patch, drought reduces visual density.
+        const int count=std::max(1,int(30.f*biomass*health));
+        for(int j=0;j<count;++j){
+            const float phase=float(j)*2.39996323f+float(i)*.87f;
+            const float radial=std::sqrt((float(j)+.5f)/30.f);
+            const float localR=1.5f*radial;
+            const float x=g[0]+std::cos(phase)*localR;
+            const float z=g[1]+std::sin(phase)*localR;
+            const float scale=(.23f+.12f*std::sin(float(j)*1.23f+float(i)*2.1f)
+                              +.22f*biomass);
+            draw(models[3],x,z,std::max(.10f,scale),phase+.42f);
+        }
     }
  }
  if(models[5].vao && models[5].texture){
