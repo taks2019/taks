@@ -6,6 +6,29 @@
 
 namespace taks {
 namespace { double clamp(double v, double lo, double hi){return std::max(lo, std::min(hi,v));} }
+int World::nearbySiteIndex(double range) const {
+    int chosen=-1;
+    double minSq=range*range;
+    for(int i=0;i<siteCount;++i){
+        const double dx=playerX-sites[i].x,dz=playerZ-sites[i].z;
+        const double ds=dx*dx+dz*dz;
+        if(ds<=minSq){chosen=i;minSq=ds;}
+    }
+    return chosen;
+}
+int World::nearbySiteStage() const {
+    const int index=nearbySiteIndex();
+    return index<0?-1:sites[index].stage;
+}
+bool World::protectedAtPlayer() const {
+    for(int i=0;i<siteCount;++i){
+        const auto& site=sites[i];
+        if(site.stage<3 || site.condition<25.0)continue;
+        const double dx=playerX-site.x,dz=playerZ-site.z;
+        if(dx*dx+dz*dz<=1.65*1.65)return true;
+    }
+    return false;
+}
 bool World::isNear(double x,double z,double radius) const {
     const double dx=playerX-x,dz=playerZ-z;
     return dx*dx+dz*dz<=radius*radius;
@@ -178,7 +201,7 @@ std::string World::move(double dx,double dz){
     stamina=clamp(stamina-length*(0.50+groundMoisture*0.65),0.0,100.0);
     step(length*.013);
     // A menedék nem véd, ha elhagytuk a valódi fedett területet.
-    if(underShelter && !isNear(3.1,-1.55,1.65))underShelter=false;
+    if(underShelter && !protectedAtPlayer())underShelter=false;
     ++eventCounter;
     return nearby();
 }
