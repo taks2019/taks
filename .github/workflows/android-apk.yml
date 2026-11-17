@@ -6,6 +6,24 @@ on:
 permissions:
   contents: read
 jobs:
+  cc0-asset-import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install actual 3D model import dependencies
+        run: python -m pip install --disable-pip-version-check 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31'
+      - name: Download and bake real CC0 Poly Haven scanned rock meshes / textures
+        run: python scripts/import_cc0_rocks.py
+      - name: Publish downloadable offline geometry and texture bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-real-CC0-rock-models
+          path: app/src/main/assets/models/
+          if-no-files-found: error
   native-causality-tests:
     runs-on: ubuntu-latest
     steps:
