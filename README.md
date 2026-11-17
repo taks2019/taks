@@ -1,8 +1,27 @@
 # TAKS WORLD · natív Android / C++ TAKS Engine
 
-**Jelenlegi mérföldkő: 0.5.0-free-building — különálló, gyalogos helyválasztású építés, kopás és javítás.**
+**Jelenlegi mérföldkő: 0.6.0-isometric-fast — natív gyors 3D hálókirajzolás, valódi izometrikus kamera és kétirányú forgatás.**
 
 Ez a felhasználó saját játékmotorjának **valódi natív Android** fejlesztése, nem HTML/Canvas, Unity vagy Godot.
+
+## 0.6.0 – Izometrikus kamera és mobilon is gyorsabb valódi 3D
+
+A 0.5-ben a teljes képet képpontonként drága sugármeneteléssel számoltuk, ezért a játék szaggatott. A gyártásban használt 0.6-os natív 3D motor az aktuális játékvilágot **OpenGL ES 3 háromszögmesh-geometriával, valódi mélységkezeléssel és GPU-rasterizációval** rajzolja. Ezen a lépcsőn ez sebességoptimalizálás, **nem** a végső fotórealisztikus megoldás.
+
+- **Valódi ortografikus izometrikus alapnézet:** 45° alapforgatás, 35,264°-os emelkedési szög. Nincs perspektivikus deformáció.
+- **Szabad 3D kameraforgatás:** a jobb oldali érintés vízszintesen 360°-ban forgatja, függőlegesen pedig 20–80° között döntheti a kamerát.
+- **Nagyítás:** kétujjas mozdulattal, ortografikus vetítés mellett. A kamera követi a játékost.
+- **A mozgás és a kamera iránya összefügg:** a bal oldali irányítás forgatott kameránál is a képernyőhöz igazodik.
+- **Lényegesen kevesebb GPU-terhelés:** nincs 92-szeres képpontonkénti világvizsgálat; helyette a terep, a sziklafal, a nyersanyagok, az NPC-jelölők és az építmények valódi 3D háromszögekből állnak.
+- **30 Hz-es mozgásfrissítés** a korábbi 85 ms helyett 33 ms-onként, arányosan kisebb mozgási lépésekkel.
+- **Három választható grafikai mód:** 640 / 840 / 1200 képpontos belső szélesség. A kijelző képaránya minden módban megmarad.
+- **Menüből választható kameraállások:** izometrikus alaphelyzet, felülnézet, alacsonyabb 3D nézet.
+- A három építési hely, az anyagfogyás, a négy NPC és a mentések változatlanul a korábbi natív C++ világállapotból dolgoznak.
+- A GitHub Actions most már a **valóban futtatott háromszög-rasterizáló** GLES3 megjelenítőt teszteli négy külön ortografikus kameranézettel. A korábbi, kikapcsolt sugármenetelő shader tesztjének sikeressége nem volna elég.
+
+**Mérések:** a GitHub Mesa szoftveres OpenGL ES tesztjében a bemelegítés utáni 640×360-as képkockák kb. 14–17 ms alatt készültek el. Ez nem Samsung Galaxy A56 vagy Honor Pad X8 mérés; a tényleges telefonos FPS-t a készüléken kell ellenőrizni.
+
+**Továbbra is hiányzik:** eredeti, részletes embermodellek, valós fényképalapú PBR anyagok, hiteles Wonderwerk-felmérés és teljes 3D világszerkesztő. A 0.6-os lépés a sebességet és a kamerát javítja, nem állítja, hogy a látvány már megfelel a Bibliának.
 
 ## 0.5.0 – Szabad helyválasztású, különálló építmények
 - **Új HELY KIJELÖLÉSE** művelet: a játékos gyalog elmegy a kívánt, szabad területre, és 1 követ elhasználva kijelöli a menedék helyét.
