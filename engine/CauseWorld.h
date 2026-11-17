@@ -11,6 +11,11 @@ struct Npc {
     int carrying=0, task=0, delivered=0; // task: 0 indul,1 odamegy,2 hazavisz,3 pihen,4 nincs anyag
     double walkPhase=0.0;
 };
+struct BuildSite {
+    double x=0.0,z=0.0;
+    int stage=0;             // 0 kijelölt, 1 oszlop, 2 tetőváz, 3 fedés
+    double condition=100.0; // eső okozta kopás, javítással helyreállítható
+};
 struct World {
     int groundWood=14, groundStone=8, groundTinder=5;
     int carriedWood=0, carriedStone=0, carriedTinder=0;
@@ -20,7 +25,10 @@ struct World {
     // Anyagok, feldolgozott alkatrészek és megőrzött munkafázisok.
     int groundLeaves=18, carriedLeaves=0;
     int chippedEdgeWear=0, stoneDebris=0, preparedPoles=0;
-    int shelterStage=0; // 0: üres hely, 1: oszlopok, 2: tetőváz, 3: fedett menedék
+    int shelterStage=0; // kompatibilitási mező: a menedékek legmagasabb készültsége
+    static constexpr int maxBuildSites=3;
+    std::array<BuildSite,maxBuildSites> sites{};
+    int siteCount=0;
     double playerWetness=0.10;
     bool underShelter=false;
     double playerX=0.0,playerZ=-5.2,walkPhase=0.0;
@@ -53,6 +61,9 @@ struct World {
     void step(double hoursElapsed);
     std::string summary() const;
     std::string shelterStatus() const;
+    int nearbySiteIndex(double range=2.8) const;
+    int nearbySiteStage() const;
+    bool protectedAtPlayer() const;
     std::string save() const;
     bool load(const std::string& data);
     void forceRainForTest(double intensity);
