@@ -132,7 +132,7 @@ int main(){
     assert(community.campStock[0]==0);
     assert(community.npcs.size()==4);
     const int originalMaterials[4]={community.groundWood,community.groundStone,
-                                    community.groundLeaves,community.groundTinder};
+                                    community.groundTinder,community.groundLeaves};
     community.step(4.0);
     int rolesDelivered=0;
     for(const auto& worker:community.npcs){
