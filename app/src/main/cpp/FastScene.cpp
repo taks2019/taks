@@ -1,4 +1,5 @@
 #include "FastScene.h"
+#include "RealModels.h"
 #include <GLES3/gl3.h>
 #include <algorithm>
 #include <array>
@@ -338,6 +339,7 @@ void shutdown(){
     if(dynamicVAO)glDeleteVertexArrays(1,&dynamicVAO);
     if(program)glDeleteProgram(program);
     staticVBO=dynamicVBO=staticVAO=dynamicVAO=program=0;
+    taks::RealModels::shutdown();
 }
 bool init(){
     // OpenGL erőforrásait csak az aktív grafikus kontextus szálán kezeljük.
@@ -362,6 +364,7 @@ bool init(){
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
     glDisable(GL_CULL_FACE);
+    if(!taks::RealModels::init()){error=taks::RealModels::errorMessage();return false;}
     return glGetError()==GL_NO_ERROR;
 }
 void render(int width,int height,const FastFrame& f){
@@ -394,5 +397,6 @@ void render(int width,int height,const FastFrame& f){
                  objectsMesh.empty()?nullptr:objectsMesh.data(),GL_STREAM_DRAW);
     glDrawArrays(GL_TRIANGLES,0,(GLsizei)objectsMesh.size());
     glBindVertexArray(0);
+    taks::RealModels::render(vp.a,f.nodes);
 }
 }
