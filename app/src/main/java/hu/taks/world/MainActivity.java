@@ -60,7 +60,7 @@ public final class MainActivity extends Activity {
     private final ArrayList<View> gameHud=new ArrayList<>();
     private boolean inMainMenu=true;
     private Button pickupButton;
-    private float orbit=.785398f,cameraPitch=.615480f,zoom=14f,lastX=0,lastY=0,lastSpan=0;
+    private float orbit=.785398f,cameraPitch=.615480f,zoom=10f,lastX=0,lastY=0,lastSpan=0;
     private int activePanel=0;
     private final Handler worldHandler=new Handler(Looper.getMainLooper());
     private int worldTickNumber=0;
@@ -359,7 +359,7 @@ public final class MainActivity extends Activity {
                              say(nativeGoal());
                          })
                          .setNegativeButton("Mégse",null).show();break;
-                    case 4: orbit=.785398f;cameraPitch=.615480f;zoom=14f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
+                    case 4: orbit=.785398f;cameraPitch=.615480f;zoom=10f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
                     case 5: cameraPitch=1.37f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
                     case 6: cameraPitch=.40f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
                     case 7: chooseGraphicsResolution();break;
@@ -429,7 +429,7 @@ public final class MainActivity extends Activity {
             .setItems(items,(dialog,which)->{
                 switch(which){
                     case 0:chooseGraphicsResolution();break;
-                    case 1:orbit=.785398f;cameraPitch=.615480f;zoom=14f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
+                    case 1:orbit=.785398f;cameraPitch=.615480f;zoom=10f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
                     case 2:cameraPitch=1.37f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
                     case 3:cameraPitch=.40f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
                     case 4:new AlertDialog.Builder(this).setTitle("IRÁNYÍTÁS")
