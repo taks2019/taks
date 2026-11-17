@@ -226,6 +226,9 @@ void addBuildings(const FastFrame& scene){
     }
 }
 void addPlayerAndNpcs(const FastFrame& scene){
+    // The old anatomical rods are a test fallback only when real mesh import
+    // fails. They must never overlap genuine human geometry.
+    if(!taks::RealModels::hasRealHuman()){
     auto addCharacter=[](float x,float z,float phase,float accent){
         float h=surfaceHeight(x,z);
         // A végleges embermodell helyett az animált mozgási és pozíciós teszt geometria.
@@ -257,6 +260,7 @@ void addPlayerAndNpcs(const FastFrame& scene){
             axisBar(objectsMesh,p,q,.016f,c,3);
         }
     }
+    } // fallback characters end; preserve physical hearth in either renderer.
     if(scene.hearth>.5f){
         float x=-1.15f,z=-1.8f,h=surfaceHeight(x,z);
         for(int k=0;k<7;++k){
@@ -454,6 +458,6 @@ void render(int width,int height,const FastFrame& f){
                  objectsMesh.empty()?nullptr:objectsMesh.data(),GL_STREAM_DRAW);
     glDrawArrays(GL_TRIANGLES,0,(GLsizei)objectsMesh.size());
     glBindVertexArray(0);
-    taks::RealModels::render(vp.a,f.nodes,f.grass,f.trees,f.verifiedFerns,f.clock,f.rain);
+    taks::RealModels::render(vp.a,f.nodes,f.grass,f.trees,f.verifiedFerns,f.clock,f.rain,f.playerX,f.playerZ,f.npcs);
 }
 }
