@@ -30,7 +30,7 @@ SELECTION = {
                       "role":"living growing tree; species identification pending"},
 }
 MAX_TRIANGLES = 180_000
-MAX_PARTS = 12
+MAX_PARTS = 256
 TILE = 512
 
 
