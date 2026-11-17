@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <vector>
 
 static void walkTo(taks::World& w,double x,double z){
     for(int step=0;step<128;++step){
@@ -233,5 +234,27 @@ int main(){
     assert(std::abs(loadedSites.sites[0].x-loadedSites.sites[1].x)>5.0);
     assert(!loadedSites.load("TAKS_NATIVE_5 missing sites"));
     assert(loadedSites.save()==allSites);
+    // A 0.4-es APK rögzített helyű menedéke valóban a régi helyén marad.
+    taks::World preV5;
+    preV5.shelterStage=3;
+    const auto current=preV5.save();
+    std::istringstream savedParts(current);
+    std::vector<std::string> oldFields;
+    std::string token;
+    while(savedParts>>token)oldFields.push_back(token);
+    assert(oldFields.size()>15);
+    oldFields[0]="TAKS_NATIVE_4";
+    oldFields.resize(oldFields.size()-13); // v5 only: 1 siteCount + 3 × 4 site fields
+    std::ostringstream oldText;
+    for(size_t i=0;i<oldFields.size();++i){
+        if(i)oldText<<' ';
+        oldText<<oldFields[i];
+    }
+    taks::World migratedOld;
+    assert(migratedOld.load(oldText.str()));
+    assert(migratedOld.siteCount==1 && migratedOld.sites[0].stage==3);
+    assert(std::abs(migratedOld.sites[0].x-3.1)<1e-6);
+    assert(std::abs(migratedOld.sites[0].z+1.55)<1e-6);
+    assert(migratedOld.save().find("TAKS_NATIVE_5")==0);
     std::cout<<"TAKS spatial game, construction and save migration tests PASSED\n";
 }
