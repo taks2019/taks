@@ -70,7 +70,7 @@ public final class MainActivity extends Activity {
         @Override public void run(){
             if(!moving)return;
             if(Math.abs(axisX)+Math.abs(axisY)>.12f){
-                float wx=(float)(-Math.cos(orbit)*axisX+Math.sin(orbit)*axisY);
+                float wx=(float)(-Math.cos(orbit)*axisX-Math.sin(orbit)*axisY);
                 float wz=(float)(-Math.sin(orbit)*axisX+Math.cos(orbit)*axisY);
                 String result=nativeMove(wx*.065f,wz*.065f);
                 if(result.contains("kimerült")||result.contains("elállja")||result.contains("határához")){
