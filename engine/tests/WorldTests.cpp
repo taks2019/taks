@@ -15,6 +15,7 @@ static void walkTo(taks::World& w,double x,double z){
         assert(result.find("elállja")==std::string::npos);
         assert(result.find("határához")==std::string::npos);
     }
+    std::cerr<<"Cannot walk to "<<x<<","<<z<<" from "<<w.playerX<<","<<w.playerZ<<" stamina "<<w.stamina<<" goal: "<<w.nextObjective()<<"\n";
     assert(false && "The player could not reach the test destination");
 }
 static void gather(taks::World& w,const char* type,int count){
