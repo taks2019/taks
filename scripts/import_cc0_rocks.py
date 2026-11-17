@@ -27,6 +27,10 @@ SELECTION = {
         "target_span_m": 1.5,
         "source": "https://polyhaven.com/a/namaqualand_boulders_01"
     },
+    "namaqualand_cliff_02": {
+        "target_span_m": 7.0,
+        "source": "https://polyhaven.com/a/namaqualand_cliff_02"
+    },
 }
 MAX_MB = 96
 PBR_MATERIALS = {
@@ -205,7 +209,7 @@ def main():
         for slug,name in PBR_MATERIALS.items():
             manifest["materials"].append(fetch_terrain_material(slug,name,session,Path(scratch)))
     (OUT/"manifest.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding="utf-8")
-    assert len(manifest["models"])==2
+    assert len(manifest["models"])==3
     assert len(manifest["materials"])==2
     print("TAKS REAL CC0 SCANNED 3D MODEL IMPORT PASSED",flush=True)
 
