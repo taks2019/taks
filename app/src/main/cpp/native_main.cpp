@@ -168,8 +168,8 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         for(int i=0;i<taks::World::maxBuildSites;++i){
             sites[4*i]=static_cast<float>(world.sites[i].x);
             sites[4*i+1]=static_cast<float>(world.sites[i].z);
-            sites[4*i+2]=static_cast<float>(world.sites[i].stage);
-            sites[4*i+3]=i<world.siteCount?1.0f:0.0f;
+            sites[4*i+2]=i<world.siteCount?static_cast<float>(world.sites[i].stage):-1.0f;
+            sites[4*i+3]=static_cast<float>(world.sites[i].condition/100.0);
         }
     }
     GLint vp[4]={0,0,1,1};
