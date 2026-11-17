@@ -4,6 +4,10 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.BitmapFactory;
+import android.graphics.Bitmap;
+import android.widget.ImageView;
+import java.util.ArrayList;
 import android.graphics.drawable.GradientDrawable;
 import android.opengl.GLES30;
 import android.opengl.GLSurfaceView;
@@ -49,12 +53,17 @@ public final class MainActivity extends Activity {
     private TextView notice;
     private TextView hint;
     private String shaderSource;
+    private FrameLayout menuCover;
+    private final ArrayList<View> gameHud=new ArrayList<>();
+    private boolean inMainMenu=true;
+    private Button pickupButton;
     private float orbit=.785398f,cameraPitch=.615480f,zoom=14f,lastX=0,lastY=0,lastSpan=0;
     private int activePanel=0;
     private final Handler worldHandler=new Handler(Looper.getMainLooper());
     private int worldTickNumber=0;
     private final Runnable worldLoop=new Runnable(){
         @Override public void run(){
+            if(inMainMenu)return;
             nativeTick();
             if(surface!=null)surface.requestRender();
             if(activePanel==3 && ++worldTickNumber%7==0)showPanel(3);
@@ -77,7 +86,7 @@ public final class MainActivity extends Activity {
                     if(movementTicks%6==0)say(result);
                 }
                 refreshScene();
-                if(proximity!=null && movementTicks%2==0)proximity.setText(nativeNearby());
+                if(proximity!=null && movementTicks%2==0)refreshNearby();
                 movementTicks++;
             }
             movementHandler.postDelayed(this,33);
@@ -108,8 +117,13 @@ public final class MainActivity extends Activity {
         return b;
     }
     private void refreshScene(){if(surface!=null)surface.requestRender();}
+    private void refreshNearby(){
+        final String nearby=nativeNearby();
+        if(proximity!=null)proximity.setText(nearby);
+        if(pickupButton!=null)pickupButton.setVisibility(nearby.contains("FELVEHETŐ")?View.VISIBLE:View.GONE);
+    }
     private void say(String msg){notice.setText(msg);notice.setVisibility(View.VISIBLE);}
-    private void act(String cmd){say(nativeDo(cmd));if(proximity!=null)proximity.setText(nativeNearby());refreshScene();if(activePanel!=0)showPanel(activePanel);}
+    private void act(String cmd){say(nativeDo(cmd));refreshNearby();refreshScene();if(activePanel!=0)showPanel(activePanel);}
     private void save(){saves.edit().putString("state",nativeSave()).apply();say("Világállapot mentve az eszközön.");}
     private int bottomBarPx(){
         int h=getResources().getDisplayMetrics().heightPixels;
@@ -255,7 +269,7 @@ public final class MainActivity extends Activity {
         if(action==MotionEvent.ACTION_CANCEL||action==MotionEvent.ACTION_UP){
             moving=false;moveIntent=false;axisX=axisY=0;
             movementHandler.removeCallbacks(movementLoop);
-            if(proximity!=null)proximity.setText(nativeNearby());
+            refreshNearby();
             refreshScene();return true;
         }
         if(action==MotionEvent.ACTION_POINTER_UP){lastSpan=0;return true;}
@@ -279,6 +293,9 @@ public final class MainActivity extends Activity {
         surface.getHolder().setFixedSize(width,height);
     }
     private void openGameMenu(){
+        showMainMenu();
+    }
+    private void openGameTools(){
         closePanel();
         String[] commands={"Folytatás","Mi a következő cél?","Mentés","Új világ","Izometrikus kamera visszaállítása","Kamera: felülnézet","Kamera: alacsony nézet","Grafikai felbontás","Készítők","Kilépés"};
         new AlertDialog.Builder(this).setTitle("TAKS WORLD · FŐMENÜ")
@@ -309,6 +326,141 @@ public final class MainActivity extends Activity {
                     case 9: save();finish();break;
                 }
             }).setNegativeButton("Vissza a játékba",null).show();
+    }
+    private void setHudVisibility(boolean visible){
+        for(View v:gameHud)v.setVisibility(visible?View.VISIBLE:View.GONE);
+        if(visible)refreshNearby();
+    }
+    private void startPlaying(){
+        inMainMenu=false;
+        if(menuCover!=null){root.removeView(menuCover);menuCover=null;}
+        setHudVisibility(true);
+        refreshScene();
+        worldHandler.removeCallbacks(worldLoop);
+        worldHandler.postDelayed(worldLoop,1800);
+    }
+    private void newWorldFromMenu(){
+        final String existing=saves.getString("state",null);
+        if(existing==null){
+            nativeReset();
+            saves.edit().putString("state",nativeSave()).apply();
+            startPlaying();return;
+        }
+        final String[] choices={"Folytatás a mentett világból","Új világ indítása","Mégse"};
+        new AlertDialog.Builder(this).setTitle("TAKS WORLD · ÚJ JÁTÉK")
+            .setItems(choices,(dialog,choice)->{
+                if(choice==0){startPlaying();return;}
+                if(choice!=1)return;
+                new AlertDialog.Builder(this).setTitle("Új világ indítása")
+                    .setMessage("A meglévő világot külön biztonsági másolatba mentjük. Az új világban minden anyagot újra meg kell szerezni.")
+                    .setPositiveButton("Új világ",(d,which)->{
+                        saves.edit().putString("backup_state",existing).apply();
+                        nativeReset();
+                        saves.edit().putString("state",nativeSave()).apply();
+                        startPlaying();
+                    }).setNegativeButton("Vissza",null).show();
+            }).show();
+    }
+    private void restoreOldWorld(){
+        final String backup=saves.getString("backup_state",null);
+        if(backup==null){
+            new AlertDialog.Builder(this).setMessage("Még nincs korábbi világ biztonsági másolata.")
+                .setPositiveButton("Rendben",null).show();return;
+        }
+        new AlertDialog.Builder(this).setTitle("Korábbi világ visszaállítása")
+            .setMessage("A jelenlegi világot előbb biztonsági másolatba mentjük, majd a régi világot visszatöltjük.")
+            .setPositiveButton("Visszaállítás",(dialog,which)->{
+                String current=nativeSave();
+                if(nativeLoad(backup)){
+                    saves.edit().putString("state",nativeSave())
+                        .putString("backup_state",current).apply();
+                    refreshNearby();refreshScene();
+                }else new AlertDialog.Builder(this).setMessage("A mentés sérült vagy nem kompatibilis; semmit sem módosítottunk.")
+                    .setPositiveButton("Rendben",null).show();
+            }).setNegativeButton("Mégse",null).show();
+    }
+    private void showSettings(){
+        final String[] items={"Grafikai felbontás","Izometrikus kamera","Kamera felülnézetből",
+                              "Kamera alacsonyabb nézetből","Vezérlés és ok-okozati szabályok","Korábbi mentés visszaállítása"};
+        new AlertDialog.Builder(this).setTitle("BEÁLLÍTÁSOK")
+            .setItems(items,(dialog,which)->{
+                switch(which){
+                    case 0:chooseGraphicsResolution();break;
+                    case 1:orbit=.785398f;cameraPitch=.615480f;zoom=14f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
+                    case 2:cameraPitch=1.37f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
+                    case 3:cameraPitch=.40f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
+                    case 4:new AlertDialog.Builder(this).setTitle("IRÁNYÍTÁS")
+                         .setMessage("Bal oldalon: a karakter mozgatása.\nJobb oldalon: 3D kamera forgatása és döntése.\nKét ujjal: izometrikus nagyítás.\n\nAz építéshez valódi anyag, szerszám, idő és munkavégzés kell. Sikertelenségnél a játék kiírja az okot.")
+                         .setPositiveButton("Rendben",null).show();break;
+                    case 5:restoreOldWorld();break;
+                }
+            }).setNegativeButton("Vissza",null).show();
+    }
+    private void showCredits(){
+        new AlertDialog.Builder(this).setTitle("TAKS WORLD")
+            .setMessage("Saját TAKS Engine · Wonderwerk\n\nNatív C++ játékmotor, Android 3D grafika és ok-okozati szimuláció.\n\nFejlesztői változat. A valódi geológiai és embermodellek, valamint az eredeti jóváhagyott logó külön forrásfájlokhoz kötöttek; a jelenlegi APK-ban még nincsenek kész.")
+            .setPositiveButton("Vissza",null).show();
+    }
+    private View originalLogoOrTitle(){
+        // A Biblia név szerint ezt az EREDETI assetet rögzíti. Nem generálunk helyette másik logót.
+        try(InputStream stream=getAssets().open("logo/TAKS_WORLD_LOGO.png")){
+            Bitmap bitmap=BitmapFactory.decodeStream(stream);
+            if(bitmap!=null){
+                ImageView logo=new ImageView(this);
+                logo.setImageBitmap(bitmap);
+                logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                return logo;
+            }
+        }catch(Exception missing){}
+        TextView title=caption("TAKS WORLD",29,0xFFE7D5B4);
+        title.setGravity(Gravity.CENTER);
+        title.setLetterSpacing(.13f);
+        return title;
+    }
+    private void showMainMenu(){
+        inMainMenu=true;
+        worldHandler.removeCallbacks(worldLoop);
+        moving=false;moveIntent=false;axisX=axisY=0;
+        movementHandler.removeCallbacks(movementLoop);
+        closePanel();
+        setHudVisibility(false);
+        if(menuCover!=null)root.removeView(menuCover);
+
+        menuCover=new FrameLayout(this);
+        menuCover.setBackgroundColor(0xD5091411);
+        LinearLayout stack=new LinearLayout(this);
+        stack.setOrientation(LinearLayout.VERTICAL);
+        stack.setGravity(Gravity.CENTER);
+        stack.setPadding(dp(12),dp(8),dp(12),dp(8));
+        View logo=originalLogoOrTitle();
+        LinearLayout.LayoutParams logoSize=new LinearLayout.LayoutParams(-1,dp(58));
+        logoSize.bottomMargin=dp(9);
+        stack.addView(logo,logoSize);
+        String[] labels={"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐK","KILÉPÉS"};
+        Runnable[] actions={this::newWorldFromMenu,this::showSettings,this::showCredits,
+                ()->new AlertDialog.Builder(this).setTitle("Kilépés")
+                    .setMessage("Biztosan kilépsz? A világállapot mentésre kerül.")
+                    .setPositiveButton("Kilépés",(dialog,choice)->{save();finish();})
+                    .setNegativeButton("Vissza",null).show()};
+        for(int i=0;i<labels.length;++i){
+            Button menuButton=button(labels[i],actions[i],i==0);
+            menuButton.setTextSize(16);
+            menuButton.setLetterSpacing(.035f);
+            LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(43));
+            bp.bottomMargin=dp(8);
+            stack.addView(menuButton,bp);
+        }
+        FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(
+            Math.min(dp(340),getResources().getDisplayMetrics().widthPixels-dp(32)),
+            -2,Gravity.CENTER);
+        menuCover.addView(stack,p);
+        root.addView(menuCover,new FrameLayout.LayoutParams(-1,-1));
+    }
+    @Override public void onBackPressed(){
+        if(!inMainMenu){showMainMenu();return;}
+        new AlertDialog.Builder(this).setTitle("TAKS WORLD").setMessage("Kilépsz a játékból?")
+            .setPositiveButton("Kilépés",(d,w)->{save();finish();})
+            .setNegativeButton("Vissza",null).show();
     }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
@@ -353,20 +505,20 @@ public final class MainActivity extends Activity {
         header.addView(caption("TAKS WORLD",22,0xFFE6D6B5));
         header.addView(caption("TAKS ENGINE 0.6 · IZOMETRIKUS 3D",10,0xFFC3D1C5));
         FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
-        hp.setMargins(dp(12),dp(12),0,0);root.addView(header,hp);
+        hp.setMargins(dp(12),dp(12),0,0);root.addView(header,hp);gameHud.add(header);
 
         hint=caption("Bal: mozgás · Jobb: kamera forgatás és döntés · Két ujjal: zoom",12,0xFFECE9DC);
         hint.setPadding(dp(10),dp(7),dp(10),dp(7));
         hint.setBackground(panelBackground(0xA5101A18,10));
         FrameLayout.LayoutParams hintParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
-        hintParams.topMargin=dp(16);root.addView(hint,hintParams);
+        hintParams.topMargin=dp(16);root.addView(hint,hintParams);gameHud.add(hint);
         hint.postDelayed(()->hint.setVisibility(View.GONE),6500);
 
         notice=caption(nativeGoal(),12,0xFFF1E3C9);
         notice.setPadding(dp(12),dp(9),dp(12),dp(9));
         notice.setBackground(panelBackground(0xE0192420,12));
         FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
-        np.setMargins(dp(12),0,dp(12),bottomBarPx()+7);root.addView(notice,np);
+        np.setMargins(dp(12),0,dp(12),bottomBarPx()+7);root.addView(notice,np);gameHud.add(notice);
         notice.postDelayed(()->{
             if(notice.getText().toString().startsWith("CÉL:")) notice.setVisibility(View.GONE);
         },9000);
@@ -375,36 +527,48 @@ public final class MainActivity extends Activity {
         proximity.setPadding(dp(9),dp(6),dp(9),dp(6));
         proximity.setBackground(panelBackground(0xBE162821,10));
         FrameLayout.LayoutParams proxParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.RIGHT);
-        proxParams.topMargin=dp(75);proxParams.rightMargin=dp(12);root.addView(proximity,proxParams);
+        proxParams.topMargin=dp(49);proxParams.rightMargin=dp(12);root.addView(proximity,proxParams);gameHud.add(proximity);
 
         TextView movePad=caption("MOZGÁS\n  ◉",13,0xFFF4E8D2);
         movePad.setGravity(Gravity.CENTER);
         movePad.setBackground(panelBackground(0x9713211D,40));
         movePad.setOnTouchListener((v,e)->touch(e,true));
         FrameLayout.LayoutParams moveParams=new FrameLayout.LayoutParams(dp(82),dp(82),Gravity.LEFT|Gravity.BOTTOM);
-        moveParams.setMargins(dp(11),0,0,bottomBarPx()+dp(17));root.addView(movePad,moveParams);
+        moveParams.setMargins(dp(11),0,0,dp(18));root.addView(movePad,moveParams);gameHud.add(movePad);
 
+        // Kontextuális FELVESZ – csak akkor van a képernyőn, ha tényleg van elérhető tárgy.
+        pickupButton=button("FELVESZ",()->act("gather"),true);
+        FrameLayout.LayoutParams collectLayout=new FrameLayout.LayoutParams(dp(98),dp(43),Gravity.BOTTOM|Gravity.RIGHT);
+        collectLayout.setMargins(0,0,dp(16),dp(72));
+        root.addView(pickupButton,collectLayout);
+        gameHud.add(pickupButton);
+
+        // Kompakt, jobb alsó kezelősáv. A világ képernyőjét nem takarja 5 óriásgomb.
         LinearLayout bottom=new LinearLayout(this);bottom.setGravity(Gravity.CENTER);
-        bottom.setPadding(4,2,4,2);
-        bottom.setBackground(panelBackground(0xC7101B19,15));
-        Button pick=button("FELVESZ",()->act("gather"),true);
+        bottom.setPadding(dp(2),dp(2),dp(2),dp(2));
+        bottom.setBackground(panelBackground(0xC9101B19,11));
         Button build=button("ÉPÍTÉS",()->togglePanel(1),false);
         Button npc=button("TÁRSAK",()->togglePanel(3),false);
         Button info=button("TÁSKA",()->togglePanel(2),false);
         Button menu=button("MENÜ",this::openGameMenu,false);
-        for(Button b:new Button[]{pick,build,npc,info,menu}){
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,Math.max(45,bottomBarPx()-10),1);
-            lp.setMargins(dp(3),0,dp(3),0);bottom.addView(b,lp);
+        for(Button b:new Button[]{build,npc,info,menu}){
+            b.setTextSize(11);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(43),1);
+            lp.setMargins(dp(2),0,dp(2),0);bottom.addView(b,lp);
         }
-        FrameLayout.LayoutParams bp=new FrameLayout.LayoutParams(-1,bottomBarPx(),Gravity.BOTTOM);
-        bp.setMargins(dp(6),0,dp(6),dp(6));root.addView(bottom,bp);
+        FrameLayout.LayoutParams bp=new FrameLayout.LayoutParams(
+            Math.min(dp(395),getResources().getDisplayMetrics().widthPixels-dp(124)),
+            dp(48),Gravity.BOTTOM|Gravity.RIGHT);
+        bp.setMargins(0,0,dp(8),dp(8));root.addView(bottom,bp);
+        gameHud.add(bottom);
         setContentView(root);
+        showMainMenu();
     }
     @Override protected void onResume(){
         super.onResume();
         if(surface!=null)surface.onResume();
         worldHandler.removeCallbacks(worldLoop);
-        worldHandler.postDelayed(worldLoop,1800);
+        if(!inMainMenu)worldHandler.postDelayed(worldLoop,1800);
     }
     @Override protected void onPause(){
         moving=false;movementHandler.removeCallbacks(movementLoop);
