@@ -299,9 +299,16 @@ void main(){
     float lines=.5+.5*sin(wPos.y*8.5+sin(wPos.x*.69+wPos.z*.21)*1.8);
     vec3 base;
     if(matId==0){
-        base=texture(u_groundTexture,wPos.xz*.45).rgb * (0.85+0.15*grain);
-        // Wet/sticky soil from ecology, not an arbitrary decorative overlay.
-        base*=1.0-0.46*clamp(u_mud,0.0,1.0);
+        // Two scales of the SAME authentic gravel photograph break up the
+        // old coarse diagonal tile pattern. Fine grit stays visible near feet.
+        vec3 micro=texture(u_groundTexture,wPos.xz*1.41).rgb;
+        vec3 macro=texture(u_groundTexture,vec2(wPos.z*.19,wPos.x*.23)).rgb;
+        float patch=clamp(.45+.25*sin(wPos.x*.38+wPos.z*.27)*
+                                        sin(wPos.z*.51-wPos.x*.16),0.,1.);
+        base=mix(macro,micro,patch)*(.90+.10*grain);
+        // Soil dampness/mud follows saved ecological simulation and darkens
+        // the photographic surface instead of painting a new brown slab.
+        base*=1.0-0.36*clamp(u_mud,0.0,1.0);
     }else if(matId==1){
         base=texture(u_cliffTexture,vec2(wPos.x*.25,wPos.y*.34)).rgb * (0.88+0.12*lines);
     }else if(matId==2){
@@ -407,7 +414,7 @@ void render(int width,int height,const FastFrame& f){
     float aspect=float(width)/float(height);
     float yaw=f.yaw,pitch=std::clamp(f.pitch,.349066f,1.396263f);
     float distance=std::max(18.f,f.zoom*2.f);
-    Vec3 focus{f.playerX,surfaceHeight(f.playerX,f.playerZ)+.90f,f.playerZ+1.2f};
+    Vec3 focus{f.playerX,surfaceHeight(f.playerX,f.playerZ)+.90f,f.playerZ+1.65f};
     Vec3 delta{std::sin(yaw)*std::cos(pitch)*distance,
                std::sin(pitch)*distance,
                -std::cos(yaw)*std::cos(pitch)*distance};
