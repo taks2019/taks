@@ -27,9 +27,9 @@ SELECTION = {
         "target_span_m": 1.5,
         "source": "https://polyhaven.com/a/namaqualand_boulders_01"
     },
-    "namaqualand_cliff_02": {
+    "namaqualand_cliff_01": {
         "target_span_m": 7.0,
-        "source": "https://polyhaven.com/a/namaqualand_cliff_02"
+        "source": "https://polyhaven.com/a/namaqualand_cliff_01"
     },
 }
 MAX_MB = 96
