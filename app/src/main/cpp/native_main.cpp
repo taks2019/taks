@@ -171,6 +171,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         f.clock=static_cast<float>(world.hours);
         f.rain=static_cast<float>(world.rainIntensity);
         f.moisture=static_cast<float>(world.groundMoisture);
+        f.mud=static_cast<float>(world.ecology.mud);
         f.hearth=world.hearthBuilt?1.f:0.f;
         f.fire=world.fireLit?1.f:0.f;
         f.playerX=static_cast<float>(world.playerX);
