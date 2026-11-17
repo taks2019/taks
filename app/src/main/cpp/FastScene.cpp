@@ -123,10 +123,7 @@ void buildStatic(){
         {1.45f,surfaceHeight(1.45f,6.7f),6.7f},{-1.45f,surfaceHeight(-1.45f,6.7f),6.7f},1.f);
     quad(terrainMesh,{-1.1f,0.0f,6.7f},{1.1f,0.0f,6.7f},
         {1.1f,2.7f,6.7f},{-1.1f,2.7f,6.7f},6.f);
-    for(int i=0;i<8;++i){
-        float x=-6.4f+std::fmod(i*3.71f,12.1f),z=-5.9f+std::fmod(i*2.18f,7.2f);
-        irregularRock(terrainMesh,x,z,.30f+.11f*float(i%4),.9f+.12f*float(i%3),2.f,i+2);
-    }
+    // The previous 8 angular polygon-stones are removed: natural stones are now true photogrammetry meshes.
 }
 Mat4 multiply(const Mat4& l,const Mat4& r){
     Mat4 m;
@@ -184,7 +181,7 @@ void addResources(const FastFrame& scene){
             axisBar(objectsMesh,{x-.32f,h+.07f,z-.16f},{x+.32f,h+.11f,z+.16f},.045f,3.f,6);
             axisBar(objectsMesh,{x-.24f,h+.06f,z+.18f},{x+.19f,h+.12f,z-.13f},.035f,3.f,6);
         }else if(type==1){
-            irregularRock(objectsMesh,x,z,.27f,.85f,2.f,i+11);
+            // The authentic CC0 UV-mapped scanned stone is drawn by RealModels at this exact finite resource node.
         }else if(type==2){
             axisBar(objectsMesh,{x-.2f,h+.05f,z},{x+.19f,h+.08f,z+.08f},.045f,3.f,5);
             axisBar(objectsMesh,{x,h+.08f,z-.2f},{x-.1f,h+.15f,z+.16f},.028f,4.f,5);
