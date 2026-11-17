@@ -2,6 +2,7 @@
 #include <GLES3/gl3.h>
 #include <android/log.h>
 #include "CauseWorld.h"
+#include "FastScene.h"
 #include <string>
 #include <mutex>
 #include <cmath>
@@ -10,7 +11,7 @@ namespace {
 taks::World world;
 std::mutex worldLock;
 GLuint program=0, vertexArray=0;
-float orbit=0.0f, zoom=14.0f;
+float orbit=0.785398f, pitch=0.615480f, zoom=14.0f;
 std::string rendererError;
 jstring toJava(JNIEnv* env,const std::string& s){return env->NewStringUTF(s.c_str());}
 GLuint compile(GLenum type,const char* source){
@@ -92,110 +93,55 @@ extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeLoad
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeReset(JNIEnv*,jobject){
     std::lock_guard<std::mutex> guard(worldLock);world=taks::World();
 }
-extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetView(JNIEnv*,jobject,jfloat angle,jfloat distance){
+extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetView(JNIEnv*,jobject,jfloat yaw,jfloat cameraPitch,jfloat scale){
     std::lock_guard<std::mutex> guard(worldLock);
-    if(std::isfinite(angle))orbit=angle;
-    if(std::isfinite(distance))zoom=std::fmax(7.f,std::fmin(26.f,distance));
+    if(std::isfinite(yaw))orbit=yaw;
+    if(std::isfinite(cameraPitch))pitch=std::fmax(.349066f,std::fmin(1.396263f,cameraPitch));
+    if(std::isfinite(scale))zoom=std::fmax(6.f,std::fmin(26.f,scale));
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeRendererError(JNIEnv* env,jobject){
-    return toJava(env,rendererError);
+    return toJava(env,taks::FastScene::lastError());
 }
-extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeOnSurfaceCreated(JNIEnv* env,jobject,jstring fragmentSource){
-    rendererError.clear();
-    if(program){glDeleteProgram(program);program=0;}
-    if(vertexArray){glDeleteVertexArrays(1,&vertexArray);vertexArray=0;}
-    const char* vert=R"(#version 300 es
-precision highp float;
-void main(){
-    vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));
-    gl_Position=vec4(p*2.-1.,0.,1.);
-})";
-    if(!fragmentSource){rendererError="A 3D shader-forrás hiányzik.";return;}
-    const char* fragment=env->GetStringUTFChars(fragmentSource,nullptr);
-    GLuint vs=compile(GL_VERTEX_SHADER,vert);
-    GLuint fs=compile(GL_FRAGMENT_SHADER,fragment?fragment:"");
-    if(fragment)env->ReleaseStringUTFChars(fragmentSource,fragment);
-    if(!vs||!fs){
-        if(vs)glDeleteShader(vs);if(fs)glDeleteShader(fs);
-        return;
+extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeOnSurfaceCreated(JNIEnv*,jobject,jstring){
+    // Kizárólag a natív GLES3 háló-/háromszögmegjelenítő. Nincs képpontonkénti sugármenetelés.
+    if(!taks::FastScene::init()){
+        __android_log_print(ANDROID_LOG_ERROR,"TAKS_RENDER","Fast GLES3 init: %s",
+                            taks::FastScene::lastError().c_str());
     }
-    program=glCreateProgram();
-    glAttachShader(program,vs);glAttachShader(program,fs);
-    glLinkProgram(program);
-    glDeleteShader(vs);glDeleteShader(fs);
-    GLint linked=GL_FALSE;glGetProgramiv(program,GL_LINK_STATUS,&linked);
-    if(!linked){
-        GLint length=0;glGetProgramiv(program,GL_INFO_LOG_LENGTH,&length);
-        std::string err((size_t)(length>0?length:1),'\0');
-        glGetProgramInfoLog(program,length,nullptr,&err[0]);
-        rendererError=err;
-        __android_log_print(ANDROID_LOG_ERROR,"TAKS_RENDER","LINK: %s",err.c_str());
-        glDeleteProgram(program);program=0;return;
-    }
-    glGenVertexArrays(1,&vertexArray);
-    glDisable(GL_CULL_FACE);
-    glDisable(GL_DEPTH_TEST);
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(JNIEnv*,jobject){
-    if(!program){
-        glClearColor(.065f,.1f,.12f,1.f);glClear(GL_COLOR_BUFFER_BIT);
-        return;
-    }
-    float angle,dist,hours,rain,wet,hearth,fire,shelterStage;
-    float px,pz,walkPhase,nodes[4*taks::World::resourceCount],npcs[4*taks::World::npcCount],sites[4*taks::World::maxBuildSites];
+    taks::FastFrame f;
     {
         std::lock_guard<std::mutex> guard(worldLock);
-        angle=orbit;dist=zoom;
-        hours=(float)world.hours;rain=(float)world.rainIntensity;
-        wet=(float)world.groundMoisture;hearth=world.hearthBuilt?1.f:0.f;
-        fire=world.fireLit?1.f:0.f;
-        shelterStage=static_cast<float>(world.shelterStage);
-        px=static_cast<float>(world.playerX);
-        pz=static_cast<float>(world.playerZ);
-        walkPhase=static_cast<float>(world.walkPhase);
+        f.yaw=orbit;f.pitch=pitch;f.zoom=zoom;
+        f.clock=static_cast<float>(world.hours);
+        f.rain=static_cast<float>(world.rainIntensity);
+        f.moisture=static_cast<float>(world.groundMoisture);
+        f.hearth=world.hearthBuilt?1.f:0.f;
+        f.fire=world.fireLit?1.f:0.f;
+        f.playerX=static_cast<float>(world.playerX);
+        f.playerZ=static_cast<float>(world.playerZ);
+        f.walkPhase=static_cast<float>(world.walkPhase);
         for(int i=0;i<taks::World::resourceCount;++i){
-            nodes[4*i]=static_cast<float>(world.nodes[i].x);
-            nodes[4*i+1]=static_cast<float>(world.nodes[i].z);
-            nodes[4*i+2]=static_cast<float>(world.nodes[i].type);
-            nodes[4*i+3]=static_cast<float>(world.nodes[i].amount);
+            f.nodes[i*4+0]=static_cast<float>(world.nodes[i].x);
+            f.nodes[i*4+1]=static_cast<float>(world.nodes[i].z);
+            f.nodes[i*4+2]=static_cast<float>(world.nodes[i].type);
+            f.nodes[i*4+3]=static_cast<float>(world.nodes[i].amount);
         }
         for(int i=0;i<taks::World::npcCount;++i){
-            npcs[4*i]=static_cast<float>(world.npcs[i].x);
-            npcs[4*i+1]=static_cast<float>(world.npcs[i].z);
-            npcs[4*i+2]=static_cast<float>(world.npcs[i].role);
-            npcs[4*i+3]=static_cast<float>(world.npcs[i].carrying);
+            f.npcs[i*4+0]=static_cast<float>(world.npcs[i].x);
+            f.npcs[i*4+1]=static_cast<float>(world.npcs[i].z);
+            f.npcs[i*4+2]=static_cast<float>(world.npcs[i].role);
+            f.npcs[i*4+3]=static_cast<float>(world.npcs[i].carrying);
         }
         for(int i=0;i<taks::World::maxBuildSites;++i){
-            sites[4*i]=static_cast<float>(world.sites[i].x);
-            sites[4*i+1]=static_cast<float>(world.sites[i].z);
-            sites[4*i+2]=i<world.siteCount?static_cast<float>(world.sites[i].stage):-1.0f;
-            sites[4*i+3]=static_cast<float>(world.sites[i].condition/100.0);
+            f.sites[i*4+0]=static_cast<float>(world.sites[i].x);
+            f.sites[i*4+1]=static_cast<float>(world.sites[i].z);
+            f.sites[i*4+2]=i<world.siteCount?static_cast<float>(world.sites[i].stage):-1.f;
+            f.sites[i*4+3]=static_cast<float>(world.sites[i].condition/100.0);
         }
     }
     GLint vp[4]={0,0,1,1};
     glGetIntegerv(GL_VIEWPORT,vp);
-    glUseProgram(program);
-    glBindVertexArray(vertexArray);
-    GLint loc=glGetUniformLocation(program,"u_resolution");
-    if(loc>=0)glUniform2f(loc,(float)vp[2],(float)vp[3]);
-    u1("u_orbit",angle);
-    u1("u_zoom",dist);
-    u1("u_clock",hours);
-    u1("u_rain",rain);
-    u1("u_moisture",wet);
-    u1("u_hearth",hearth);
-    u1("u_fire",fire);
-    u1("u_shelterStage",shelterStage);
-    const GLint playerLoc=glGetUniformLocation(program,"u_player");
-    if(playerLoc>=0)glUniform2f(playerLoc,px,pz);
-    u1("u_walkPhase",walkPhase);
-    const GLint nodeLoc=glGetUniformLocation(program,"u_nodes[0]");
-    if(nodeLoc>=0)glUniform4fv(nodeLoc,taks::World::resourceCount,nodes);
-    const GLint npcLoc=glGetUniformLocation(program,"u_npcs[0]");
-    if(npcLoc>=0)glUniform4fv(npcLoc,taks::World::npcCount,npcs);
-    const GLint siteLoc=glGetUniformLocation(program,"u_sites[0]");
-    if(siteLoc>=0)glUniform4fv(siteLoc,taks::World::maxBuildSites,sites);
-    u1("u_quality",1.f);
-    glDrawArrays(GL_TRIANGLES,0,3);
-    glBindVertexArray(0);
+    taks::FastScene::render(vp[2],vp[3],f);
 }
