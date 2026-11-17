@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include "LivingWorld.h"
 #include <array>
 namespace taks {
 // 3D lelőhely: egyediség, anyagtípus, világkoordináta és megmaradó készlet.
@@ -17,6 +18,7 @@ struct BuildSite {
     double condition=100.0; // eső okozta kopás, javítással helyreállítható
 };
 struct World {
+    LivingWorld ecology; // canonical living ground, plants and animals
     int groundWood=14, groundStone=8, groundTinder=5;
     int carriedWood=0, carriedStone=0, carriedTinder=0;
     double hours=6.0, humidity=0.40, rainIntensity=0.0;
