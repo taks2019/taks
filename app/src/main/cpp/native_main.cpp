@@ -3,6 +3,8 @@
 #include <android/log.h>
 #include "CauseWorld.h"
 #include "FastScene.h"
+#include "RealModels.h"
+#include <vector>
 #include <string>
 #include <mutex>
 #include <cmath>
@@ -99,8 +101,25 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetView(
     if(std::isfinite(cameraPitch))pitch=std::fmax(.349066f,std::fmin(1.396263f,cameraPitch));
     if(std::isfinite(scale))zoom=std::fmax(6.f,std::fmin(26.f,scale));
 }
+// Upload a genuine triangulated CC0 photogrammetry model and its decoded photographic
+// albedo texture from Android assets. All data remains offline in the APK.
+extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUploadRealModel(
+    JNIEnv* env,jobject,jint id,jbyteArray geometry,jintArray pixels,jint width,jint height){
+    if(!geometry||!pixels||width<1||height<1)return JNI_FALSE;
+    const jsize length=env->GetArrayLength(geometry);
+    if(length<8||length>30000000||env->GetArrayLength(pixels)!=width*height)return JNI_FALSE;
+    std::vector<std::uint8_t> mesh(static_cast<std::size_t>(length));
+    env->GetByteArrayRegion(geometry,0,length,reinterpret_cast<jbyte*>(mesh.data()));
+    if(env->ExceptionCheck())return JNI_FALSE;
+    std::vector<std::uint32_t> texture(static_cast<std::size_t>(width)*height);
+    env->GetIntArrayRegion(pixels,0,width*height,reinterpret_cast<jint*>(texture.data()));
+    if(env->ExceptionCheck())return JNI_FALSE;
+    return taks::RealModels::upload(id,mesh.data(),mesh.size(),texture.data(),width,height)?JNI_TRUE:JNI_FALSE;
+}
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeRendererError(JNIEnv* env,jobject){
-    return toJava(env,taks::FastScene::lastError());
+    const auto& e=taks::FastScene::lastError();
+    if(!e.empty())return toJava(env,e);
+    return toJava(env,taks::RealModels::errorMessage());
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeOnSurfaceCreated(JNIEnv*,jobject,jstring){
     // Kizárólag a natív GLES3 háló-/háromszögmegjelenítő. Nincs képpontonkénti sugármenetelés.
