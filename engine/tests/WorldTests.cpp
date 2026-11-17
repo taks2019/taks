@@ -60,8 +60,8 @@ int main(){
     taks::World b;
     for(auto& npc:b.npcs)npc.hunger=100;
     const auto initial=b.save();
-    assert(b.act("roof").find("menedéknél")!=std::string::npos);
-    assert(b.act("base").find("helyszíne")!=std::string::npos);
+    assert(b.act("roof").find("kijelölt építési")!=std::string::npos);
+    assert(b.act("base").find("kijelölt építési")!=std::string::npos);
     assert(b.act("pole").find("kőeszköz")!=std::string::npos);
     assert(b.save()==initial);
     walkTo(b,1,-5.4);
@@ -76,18 +76,19 @@ int main(){
     assert(b.preparedPoles==5 && b.chippedEdgeWear==1);
     // A korábbi két kőből a szerszám készült, az oszlopokhoz új kövek kellenek.
     walkTo(b,1,-5.4);gather(b,"stone",1);
-    walkTo(b,3,-0.8);gather(b,"stone",1);
+    walkTo(b,3,-0.8);gather(b,"stone",2);
     walkTo(b,3.1,-1.55);
-    assert(b.act("base").find("tartóoszlopok")!=std::string::npos);
+    assert(b.act("site").find("kijelölve")!=std::string::npos);
+    assert(b.act("base").find("oszlop")!=std::string::npos);
     assert(b.shelterStage==1 && b.preparedPoles==3);
-    assert(b.act("frame").find("Tetőváz")!=std::string::npos);
+    assert(b.act("frame").find("tetőváz")!=std::string::npos);
     assert(b.shelterStage==2 && b.preparedPoles==0);
-    assert(b.act("shelter_enter").find("nem fedett")!=std::string::npos);
+    assert(b.act("shelter_enter").find("fedett, ép menedék")!=std::string::npos);
     walkTo(b,4.1,-3.3);
     gather(b,"leaves",6);
     walkTo(b,3.1,-1.55);
     if(b.stamina<12)b.act("rest");
-    assert(b.act("roof").find("levélfedés")!=std::string::npos);
+    assert(b.act("roof").find("Felkerült a fedés")!=std::string::npos);
     assert(b.shelterStage==3 && b.carriedLeaves==0);
     assert(b.act("shelter_enter").find("Behúzódtál")!=std::string::npos);
     assert(b.underShelter);
@@ -111,7 +112,7 @@ int main(){
     taks::World old1,old2;
     assert(old1.load("TAKS_NATIVE_1 14 8 5 0 0 0 6 0.4 0 0.13 0.13 100 0 0 0 0"));
     assert(old2.load("TAKS_NATIVE_2 12 7 4 1 1 1 8 0.4 0 0.13 0.13 88 0 0 0 3 15 2 6 1 0 1 0.12 0"));
-    assert(old1.save().find("TAKS_NATIVE_4")==0);
+    assert(old1.save().find("TAKS_NATIVE_5")==0);
     assert(old2.groundWood==12 && old2.groundStone==7 && old2.groundLeaves==15);
     assert(old2.nodes[0].amount<=3);
     const auto stable=old2.save();
@@ -166,7 +167,7 @@ int main(){
     taks::World legacy3;
     const auto v4Save=taks::World().save();
     // V3-ból induló mentés új NPC mezők nélkül is migrál.
-    const auto suffix=v4Save.substr(v4Save.find("TAKS_NATIVE_4")+13);
+    const auto suffix=v4Save.substr(v4Save.find("TAKS_NATIVE_5")+13);
     std::istringstream fields(suffix);
     std::string rawToken;
     // A V3-migráció kódútját a korábbi 27+12 mezővel is ellenőrizzük.
@@ -177,11 +178,57 @@ int main(){
     }
     assert(legacy3.load(v3));
     assert(legacy3.npcs[0].role==0);
-    assert(legacy3.save().find("TAKS_NATIVE_4")==0);
+    assert(legacy3.save().find("TAKS_NATIVE_5")==0);
     // A társakkal helyben lehet beszélni, távolról nincs mágikus kommunikáció.
     taks::World talk;
     assert(talk.act("npc_talk").find("Nincs beszélgetési")!=std::string::npos);
     walkTo(talk,-1.8,-2.4);
     assert(talk.act("npc_talk").find("Társ ")!=std::string::npos);
+    // Három egymástól független építési hely: külön világhelyzet, anyag és állapot.
+    taks::World multi;
+    for(auto& worker:multi.npcs)worker.hunger=100;
+    multi.carriedStone=8;multi.preparedPoles=12;multi.carriedLeaves=14;
+    walkTo(multi,3.0,-1.6);
+    assert(multi.act("site").find("kijelölve")!=std::string::npos);
+    assert(multi.siteCount==1 && multi.nearbySiteStage()==0);
+    const auto noDouble=multi.save();
+    assert(multi.act("site").find("túl közel")!=std::string::npos);
+    assert(multi.save()==noDouble);
+    assert(multi.act("base").find("oszlop")!=std::string::npos);
+    assert(multi.sites[0].stage==1);
+    walkTo(multi,-3.2,-1.4);
+    assert(multi.nearbySiteStage()==-1);
+    assert(multi.act("site").find("kijelölve")!=std::string::npos);
+    assert(multi.siteCount==2 && multi.nearbySiteStage()==0);
+    // A második menedék építésétől az első nem fejlődik automatikusan.
+    if(multi.stamina<15)multi.act("rest");
+    assert(multi.act("base").find("oszlop")!=std::string::npos);
+    assert(multi.sites[0].stage==1 && multi.sites[1].stage==1);
+    assert(multi.act("frame").find("tetőváz")!=std::string::npos);
+    assert(multi.sites[0].stage==1 && multi.sites[1].stage==2);
+    if(multi.stamina<10)multi.act("rest");
+    assert(multi.act("roof").find("Felkerült")!=std::string::npos);
+    assert(multi.sites[0].stage==1 && multi.sites[1].stage==3);
+    assert(multi.protectedAtPlayer());
+    assert(multi.act("shelter_enter").find("Behúzódtál")!=std::string::npos);
+    multi.forceRainForTest(1.0);
+    const double preWeathering=multi.sites[1].condition;
+    multi.step(24);
+    assert(multi.sites[1].condition<preWeathering);
+    // Javítás: 1 valódi cölöp, 2 fedőanyag és 0.7 óra, csak a sérült helyen.
+    if(multi.stamina<10)multi.act("rest");
+    const double damaged=multi.sites[1].condition;
+    const int priorPoles=multi.preparedPoles,priorLeaves=multi.carriedLeaves;
+    assert(multi.act("repair").find("javítva")!=std::string::npos);
+    assert(multi.sites[1].condition>damaged);
+    assert(multi.preparedPoles==priorPoles-1 && multi.carriedLeaves==priorLeaves-2);
+    assert(multi.sites[0].stage==1);
+    const auto allSites=multi.save();
+    taks::World loadedSites;
+    assert(loadedSites.load(allSites) && loadedSites.save()==allSites);
+    assert(loadedSites.siteCount==2 && loadedSites.sites[1].stage==3);
+    assert(std::abs(loadedSites.sites[0].x-loadedSites.sites[1].x)>5.0);
+    assert(!loadedSites.load("TAKS_NATIVE_5 missing sites"));
+    assert(loadedSites.save()==allSites);
     std::cout<<"TAKS spatial game, construction and save migration tests PASSED\n";
 }
