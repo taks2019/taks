@@ -17,6 +17,8 @@ from tempfile import TemporaryDirectory
 import numpy as np
 from PIL import Image
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import trimesh
 
 from import_cc0_rocks import collect_asset, OUT
@@ -130,6 +132,12 @@ def bake(gltf: Path, slug: str, spec: dict):
 
 def main():
     session=requests.Session()
+    # Retry transient CDN disconnects/429/5xx; never silently swap in fake models.
+    adapter=HTTPAdapter(max_retries=Retry(
+        total=6,connect=6,read=6,status=6,
+        backoff_factor=1.0,status_forcelist=(429,500,502,503,504),
+        allowed_methods=frozenset(["GET"])))
+    session.mount("https://",adapter)
     session.headers["User-Agent"]="TAKSWorld-Causal3D/0.9 (+https://github.com/taks2019/taks)"
     report={"version":1,"type":"native visual ecology, NOT historical botanical proof",
             "license":"CC0","models":[],
