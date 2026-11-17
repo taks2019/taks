@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iostream>
 #include <string>
+#include <sstream>
 
 static void walkTo(taks::World& w,double x,double z){
     for(int step=0;step<128;++step){
@@ -107,7 +108,7 @@ int main(){
     taks::World old1,old2;
     assert(old1.load("TAKS_NATIVE_1 14 8 5 0 0 0 6 0.4 0 0.13 0.13 100 0 0 0 0"));
     assert(old2.load("TAKS_NATIVE_2 12 7 4 1 1 1 8 0.4 0 0.13 0.13 88 0 0 0 3 15 2 6 1 0 1 0.12 0"));
-    assert(old1.save().find("TAKS_NATIVE_3")==0);
+    assert(old1.save().find("TAKS_NATIVE_4")==0);
     assert(old2.groundWood==12 && old2.groundStone==7 && old2.groundLeaves==15);
     assert(old2.nodes[0].amount<=3);
     const auto stable=old2.save();
@@ -122,5 +123,62 @@ int main(){
     taks::World wet;wet.forceRainForTest(1);
     double oldWet=wet.groundMoisture;wet.step(1);
     assert(wet.groundMoisture>oldWet);
+
+    // Négy tényleges autonóm munkás, véges lelőhely, összesített anyagmegmaradás.
+    taks::World community;
+    assert(community.campStock[0]==0);
+    assert(community.npcs.size()==4);
+    const int originalMaterials[4]={community.groundWood,community.groundStone,
+                                    community.groundLeaves,community.groundTinder};
+    community.step(4.0);
+    int rolesDelivered=0;
+    for(const auto& worker:community.npcs){
+        assert(worker.energy>=0 && worker.energy<=100);
+        assert(worker.hunger>10);
+        if(worker.delivered>0)rolesDelivered++;
+    }
+    assert(rolesDelivered>=2);
+    const int roleToType[4]={0,1,3,2};
+    for(int type=0;type<4;++type){
+        int inNodes=0,onNpc=0,inCamp=0;
+        for(const auto& node:community.nodes)if(node.type==type)inNodes+=node.amount;
+        for(const auto& worker:community.npcs)
+            if(roleToType[worker.role]==type)onNpc+=worker.carrying;
+        for(int role=0;role<4;++role)if(roleToType[role]==type)inCamp+=community.campStock[role];
+        assert(inNodes+onNpc+inCamp==originalMaterials[type]);
+    }
+    assert(community.campStock[0]>0);
+    assert(community.act("camp_wood").find("oda kell menned")!=std::string::npos);
+    community.move(0.0,0.6);
+    const int stored=community.campStock[0],bag=community.carriedWood;
+    assert(community.act("camp_wood").find("átvettél")!=std::string::npos);
+    assert(community.campStock[0]==stored-1 && community.carriedWood==bag+1);
+    const auto npcSave=community.save();
+    taks::World resumedNpc;
+    assert(resumedNpc.load(npcSave) && resumedNpc.save()==npcSave);
+    assert(resumedNpc.npcs[0].delivered==community.npcs[0].delivered);
+    assert(resumedNpc.campStock[0]==community.campStock[0]);
+    assert(resumedNpc.npcStatus().find("Társ 4")!=std::string::npos);
+    assert(resumedNpc.campStatus().find("TÁBORI KÉSZLET")!=std::string::npos);
+    taks::World legacy3;
+    const auto v4Save=taks::World().save();
+    // V3-ból induló mentés új NPC mezők nélkül is migrál.
+    const auto suffix=v4Save.substr(v4Save.find("TAKS_NATIVE_4")+13);
+    std::istringstream fields(suffix);
+    std::string rawToken;
+    // A V3-migráció kódútját a korábbi 27+12 mezővel is ellenőrizzük.
+    std::string v3="TAKS_NATIVE_3";
+    for(int i=0;i<40;++i){
+        assert(fields>>rawToken);
+        v3+=" "+rawToken;
+    }
+    assert(legacy3.load(v3));
+    assert(legacy3.npcs[0].role==0);
+    assert(legacy3.save().find("TAKS_NATIVE_4")==0);
+    // A társakkal helyben lehet beszélni, távolról nincs mágikus kommunikáció.
+    taks::World talk;
+    assert(talk.act("npc_talk").find("Nincs beszélgetési")!=std::string::npos);
+    walkTo(talk,-1.8,-2.4);
+    assert(talk.act("npc_talk").find("Társ ")!=std::string::npos);
     std::cout<<"TAKS spatial game, construction and save migration tests PASSED\n";
 }
