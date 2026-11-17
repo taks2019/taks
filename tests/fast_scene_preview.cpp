@@ -139,8 +139,8 @@ int main(){
     };
     std::copy(npc,npc+16,frame.npcs);
     const float grass[16]={
-       -5.2f,-1.7f,.62f,.95f,4.1f,-4.2f,.57f,.90f,
-       -3.8f,1.2f,.45f,.94f,5.4f,1.8f,.53f,.91f
+       -2.5f,-4.6f,.62f,.95f,2.25f,-4.2f,.57f,.90f,
+       -3.8f,.9f,.45f,.94f,4.4f,.5f,.53f,.91f
     };
     const float trees[12]={
        -6.4f,-1.3f,2.0f,1.0f,5.7f,3.1f,1.6f,1.0f,
