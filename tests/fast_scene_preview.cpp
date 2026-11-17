@@ -123,7 +123,7 @@ int main(){
 
     taks::FastFrame frame;
     frame.playerX=0.f;frame.playerZ=-5.2f;frame.yaw=.785398f;frame.pitch=.615480f;
-    frame.zoom=14.f;frame.clock=11.0f;frame.rain=.15f;
+    frame.zoom=10.f;frame.clock=11.0f;frame.rain=.15f;
     const float nodes[48]={
         -2.f,-5.5f,0,3,3.f,-4.f,0,3,-4.f,-1.2f,0,4,5.f,.5f,0,4,
         1.f,-5.4f,1,3,3.f,-.8f,1,3,-2.f,1.5f,1,2,
