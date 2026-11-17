@@ -1,8 +1,20 @@
 # TAKS WORLD · natív Android / C++ TAKS Engine
 
-**Jelenlegi mérföldkő: 0.3.0-playable — bejárható helyszín és térbeli gyűjtés.**
+**Jelenlegi mérföldkő: 0.4.0-community — autonóm NPC munkaciklus és közös készlet.**
 
 Ez a felhasználó saját játékmotorjának **valódi natív Android** fejlesztése, nem HTML/Canvas, Unity vagy Godot.
+
+## 0.4.0 – Élő közösség és ok-okozati munkavégzés
+- Négy autonóm NPC jelenik meg külön világpozícióval és négy eltérő feladattal: fa, kő, levél, gyújtós.
+- A társak **ugyanazt a véges 12 lelőhelyet** használják, mint a játékos; nincsen ingyenes anyagteremtés.
+- Elmennek a nyersanyaghoz, felveszik, visszaviszik a közös táborba, és **tábori készletet** építenek.
+- Minden NPC saját energiával, éhséggel, átázással, szállítmánnyal és feladattal rendelkezik; kimerüléskor pihen, súlyos éhségnél megáll.
+- **TÁRSAK** panel: a munkások helye és tevékenysége látható, a játékos a tábor közelében átveheti a már összegyűjtött anyagokat.
+- A világ ideje a játék közben automatikusan halad, nem kizárólag gombnyomáskor.
+- **4-es mentési formátum:** NPC-k és tábori készlet állapota is megőrződik; korábbi v1-v3 natív mentések betölthetők.
+- C++ anyagmérleg- és mentéstesztek, valamint natív GLES3 shaderes képtesztek kötelezőek az APK-fordítás előtt.
+
+**Korlát:** a négy társ világhelyzetét egyelőre fejlesztői 3D jelölők mutatják, nem kész élethű embermodellek. Az NPC-k tevékenysége egy első, erőforrásalapú munkaciklus; nincs még teljes szükséglet- és tanulásrendszer. Az élelemhiányt nem oldja fel a semmiből létrejövő étel.
 
 ## 0.3.0 – játszható mechanikai fejlesztés
 - **Bal oldali MOZGÁS érintőzóna:** a játékos világkoordinátában mozog, a kamera követi.
