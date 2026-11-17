@@ -25,8 +25,14 @@ float dot(Vec3 a,Vec3 b){return a.x*b.x+a.y*b.y+a.z*b.z;}
 Vec3 cross(Vec3 a,Vec3 b){return {a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x};}
 Vec3 norm(Vec3 v){float d=std::sqrt(std::max(dot(v,v),.00000001f));return mul(v,1.f/d);}
 float surfaceHeight(float x,float z){
-    return -.27f+.17f*std::sin(x*.21f)*std::cos(z*.22f)+.09f*std::sin(x*.87f+z*.57f)
-           +.065f*std::cos(z*.73f-x*.42f);
+    // A részletgazdag belső régió lágyan csatlakozik a távoli talajhoz;
+    // a korábbi négyzet alakú térképlap éle így nem látszik a kamerából.
+    auto saturate=[](float v){return std::max(0.f,std::min(1.f,v));};
+    float e=saturate((11.f-std::abs(x))/2.4f) *
+            saturate((z+11.f)/2.4f)*saturate((17.f-z)/2.4f);
+    float relief=-.27f+.17f*std::sin(x*.21f)*std::cos(z*.22f)+
+                 .09f*std::sin(x*.87f+z*.57f)+.065f*std::cos(z*.73f-x*.42f);
+    return -.48f+(relief+.48f)*e;
 }
 float top(float x){return 4.45f+.62f*std::sin(x*.29f+.48f)+.37f*std::sin(x*.81f);}
 void triangle(std::vector<Vertex>& v,Vec3 a,Vec3 b,Vec3 c,float kind){
@@ -75,6 +81,9 @@ bool cliffOpen(float x,float y) {
 }
 void buildStatic(){
     terrainMesh.clear();
+    // Nagyméretű háttértalaj, valódi mélységi teszttel; nincs látható "lebegő táblaszél".
+    quad(terrainMesh,{-160.f,-.485f,-160.f},{-160.f,-.485f,160.f},
+         {160.f,-.485f,160.f},{160.f,-.485f,-160.f},0.f);
     constexpr int nx=72,nz=92;
     const float x0=-11.f,x1=11.f,z0=-11.f,z1=17.f;
     for(int j=0;j<nz;++j)for(int i=0;i<nx;++i){
