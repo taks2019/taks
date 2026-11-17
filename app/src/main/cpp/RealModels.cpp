@@ -12,7 +12,7 @@ namespace taks::RealModels {
 namespace {
 struct Vertex { float pos[3], normal[3], uv[2]; };
 struct Model { GLuint vao=0,vbo=0,texture=0; GLsizei count=0; };
-std::array<Model,2> models;
+std::array<Model,3> models;
 GLuint shader=0;
 GLint uVP=-1,uModel=-1,uTexture=-1;
 std::string error;
@@ -185,6 +185,10 @@ void render(const float* viewProjection,const float* worldNodes){
  draw(models[1],-6.8f,1.9f,2.2f,.6f);
  draw(models[1],5.9f,2.4f,1.7f,2.1f);
  draw(models[1],6.8f,-2.8f,1.55f,-.25f);
+ // Large real-photo cliff mesh from South Africa. Kept behind the interactive
+ // resource field; it is geological landscape, not an invented cave survey.
+ draw(models[2],-5.6f,4.9f,1.2f,.45f);
+ draw(models[2],5.8f,5.1f,1.2f,-.64f);
  glBindVertexArray(0);
  glBindTexture(GL_TEXTURE_2D,0);
 }
