@@ -185,7 +185,7 @@ int main(){
     // Real saved ecological biomass must alter actual GPU pixels.
     frame.playerX=-5.2f;frame.playerZ=-1.7f;frame.zoom=8.2f;
     frame.yaw=.785398f;frame.pitch=.615480f;
-    const auto aliveGrass=render("07-elo-fu-es-fa.ppm");
+    const auto aliveGrass=render("07-valodi-elo-fu.ppm");
     for(int i=0;i<4;++i)frame.grass[i*4+2]=0.f;
     const auto bareGround=render("08-legelt-fu-nelkul.ppm");
     check(aliveGrass!=bareGround,
