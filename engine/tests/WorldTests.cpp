@@ -26,6 +26,8 @@ static void gather(taks::World& w,const char* type,int count){
 int main(){
     // A játékos a terepen mozog; a távoli gyűjtés semmilyen készletet nem változtathat.
     taks::World w;
+    // A játékos útvonaltesztben a társak éhesek, így nem fogyasztanak el semmit a teszt elől.
+    for(auto& npc:w.npcs)npc.hunger=100;
     const std::string before=w.save();
     assert(w.act("wood").find("menj közelebb")!=std::string::npos);
     assert(w.save()==before);
@@ -56,6 +58,7 @@ int main(){
 
     // Kőél -> 5 darab cölöp -> oszlop -> tetőváz -> fedés, valós helyszínen.
     taks::World b;
+    for(auto& npc:b.npcs)npc.hunger=100;
     const auto initial=b.save();
     assert(b.act("roof").find("menedéknél")!=std::string::npos);
     assert(b.act("base").find("helyszíne")!=std::string::npos);
