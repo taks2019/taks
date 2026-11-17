@@ -28,16 +28,16 @@ struct LivingWorld {
         double x,z,ageDays,energy,hunger,thirst,health,breedingDays;
         bool alive;
     };
-    std::array<Grass,grassCount> grass{{{
+    std::array<Grass,grassCount> grass{{
         {-5.2,-1.7,.62,.7,.95},{4.1,-4.2,.57,.66,.9},
         {-3.8,1.2,.45,.8,.94},{5.4,1.8,.53,.62,.91}
-    }}};
-    std::array<Tree,treeCount> trees{{{
+    }};
+    std::array<Tree,treeCount> trees{{
         {-6.4,-1.3,2.0,690,.90,.68,true},
         {5.7,3.1,1.6,480,.86,.57,true},
         {-5.8,5.7,.7,170,.81,.34,true}
-    }}};
-    std::array<Animal,animalCount> animals{{{
+    }};
+    std::array<Animal,animalCount> animals{{
         {0,0,-3.8,-2.3,580,75,15,16,100,0,true},
         {0,1, 3.2,-2.1,510,72,18,15,100,0,true},
         {0,0, 1.9, 1.1,160,65,18,18,100,0,true},
@@ -46,7 +46,7 @@ struct LivingWorld {
         {0,0, 0.0, 0.0,0,0,0,0,0,0,false},
         {1,0, 0.0, 0.0,0,0,0,0,0,0,false},
         {1,1, 0.0, 0.0,0,0,0,0,0,0,false}
-    }}};
+    }};
     double temperatureC=22.0, mud=0.0, snowDepth=0.0, ice=0.0;
     double soilWater=.13, simulatedDays=0.0, deadAnimals=0.0;
     // A zero value is an unloaded species/knowledge, NOT a visible fern/vine.
