@@ -37,6 +37,7 @@ def main():
         print("Downloaded real CC0 MakeHuman body:",total,"bytes",flush=True)
         result=bake(file,"makehuman_cc0",{
             "target_height_m":1.70,
+            "allow_authored_solid_materials":True,
             "target_span_m":.75,
             "source":URL,
         })
