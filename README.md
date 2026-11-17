@@ -1,5 +1,27 @@
 # TAKS WORLD · natív Android / C++ TAKS Engine
 
+> **ELUTASÍTOTT PROTOTÍPUS — NEM A JÓVÁHAGYOTT JÁTÉK.**
+> A felhasználó 2026-11-17-én elutasította a 0.6–0.7 Android grafikát és a nem eredeti logót.
+> A háromszög-primitívekből felépített FastScene, az egyszerű emberfigurák és a jelenlegi GUI
+> **nem vehetők át végleges grafikai vagy UI-referenciaként**. Ezt a vonalat nem csiszoljuk tovább.
+> A korábbi APK-k tesztverziók; nem szabad őket a Biblia megvalósításaként reklámozni.
+>
+> **Az eredeti TAKS WORLD logó helye:** `app/src/main/assets/logo/TAKS_WORLD_LOGO.png`.
+> A korábbi tévesen azonosított fájl eltávolítva. Csak a tulajdonos által megerősített
+> képet szabad ide visszatenni.
+
+## Újratervezéshez kötelező elfogadási kapuk
+
+1. A legfrissebb, tulajdonos által jóváhagyott 3D Obsidian Biblia és az **eredeti** logó pontos forrásának rögzítése.
+2. Valódi, forrásként tárolt 3D hálómodellek (GLB/GLTF vagy belső modellformátum), normális UV-k,
+   anyagtérképek és csontvázas animáció. Nem sphere/cylinder/synthetic sticks a végső grafika.
+3. Valós sziklafelszín, bejárható Wonderwerk-barlang, természetes lépték; modell- és anyageredet dokumentálva.
+4. Képfelvételes Android GPU mérés Samsung Galaxy A56-on, memória- és FPS-adatokkal.
+5. A Biblia szerinti ok-okozati környezet: fizikai anyag-, idő-, szerszám- és munka-előfeltételek.
+6. Eredeti logó és Biblia-követő, kompakt, helyzetfüggő GUI; nincs képként szimulált játék.
+7. Ezek hiányában tilos kész/élethű TAKS World APK-ként átadni.
+
+
 **Jelenlegi mérföldkő: 0.6.0-isometric-fast — natív gyors 3D hálókirajzolás, valódi izometrikus kamera és kétirányú forgatás.**
 
 Ez a felhasználó saját játékmotorjának **valódi natív Android** fejlesztése, nem HTML/Canvas, Unity vagy Godot.
