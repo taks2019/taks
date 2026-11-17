@@ -122,7 +122,7 @@ public final class MainActivity extends Activity {
         if(proximity!=null)proximity.setText(nearby);
         if(pickupButton!=null)pickupButton.setVisibility(nearby.contains("FELVEHETŐ")?View.VISIBLE:View.GONE);
     }
-    private void say(String msg){notice.setText(msg);notice.setVisibility(View.VISIBLE);}
+    private void say(String msg){if(notice!=null){notice.setText(msg);notice.setVisibility(View.VISIBLE);}}
     private void act(String cmd){say(nativeDo(cmd));refreshNearby();refreshScene();if(activePanel!=0)showPanel(activePanel);}
     private void save(){saves.edit().putString("state",nativeSave()).apply();say("Világállapot mentve az eszközön.");}
     private int bottomBarPx(){
@@ -432,9 +432,12 @@ public final class MainActivity extends Activity {
         stack.setOrientation(LinearLayout.VERTICAL);
         stack.setGravity(Gravity.CENTER);
         stack.setPadding(dp(12),dp(8),dp(12),dp(8));
+        final int usableHeight=getResources().getDisplayMetrics().heightPixels;
+        final int menuButtonHeight=Math.min(dp(43),Math.max(dp(33),(usableHeight-dp(90))/5));
+        final int menuLogoHeight=Math.min(dp(73),Math.max(dp(44),usableHeight-4*menuButtonHeight-dp(65)));
         View logo=originalLogoOrTitle();
-        LinearLayout.LayoutParams logoSize=new LinearLayout.LayoutParams(-1,dp(58));
-        logoSize.bottomMargin=dp(9);
+        LinearLayout.LayoutParams logoSize=new LinearLayout.LayoutParams(-1,menuLogoHeight);
+        logoSize.bottomMargin=dp(5);
         stack.addView(logo,logoSize);
         String[] labels={"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐK","KILÉPÉS"};
         Runnable[] actions={this::newWorldFromMenu,this::showSettings,this::showCredits,
@@ -446,8 +449,8 @@ public final class MainActivity extends Activity {
             Button menuButton=button(labels[i],actions[i],i==0);
             menuButton.setTextSize(16);
             menuButton.setLetterSpacing(.035f);
-            LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(43));
-            bp.bottomMargin=dp(8);
+            LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,menuButtonHeight);
+            bp.bottomMargin=dp(5);
             stack.addView(menuButton,bp);
         }
         FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(
@@ -503,7 +506,7 @@ public final class MainActivity extends Activity {
         header.setPadding(dp(15),dp(10),dp(10),dp(10));
         header.setBackground(panelBackground(0xB8101A1A,13));
         header.addView(caption("TAKS WORLD",22,0xFFE6D6B5));
-        header.addView(caption("TAKS ENGINE 0.6 · IZOMETRIKUS 3D",10,0xFFC3D1C5));
+        header.addView(caption("TAKS ENGINE 0.7 · FŐMENÜ",10,0xFFC3D1C5));
         FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
         hp.setMargins(dp(12),dp(12),0,0);root.addView(header,hp);gameHud.add(header);
 
