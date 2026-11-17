@@ -14,7 +14,7 @@ struct Vertex { float pos[3], normal[3], uv[2]; };
 struct Model { GLuint vao=0,vbo=0,texture=0; GLsizei count=0; };
 std::array<Model,7> models;
 GLuint shader=0;
-GLint uVP=-1,uModel=-1,uTexture=-1,uCutoff=-1,uDaylight=-1,uRain=-1;
+GLint uVP=-1,uModel=-1,uTexture=-1,uCutoff=-1,uDaylight=-1,uRain=-1,uTint=-1;
 std::string error;
 constexpr float PI=3.14159265358979323846f;
 const char* VS=R"GLSL(#version 300 es
@@ -44,13 +44,14 @@ uniform sampler2D uBaseColor;
 uniform float uAlphaCutoff;
 uniform float uDaylight;
 uniform float uRain;
+uniform vec3 uTint;
 out vec4 fragColor;
 void main(){
   // True photographic diffuse texture sampled at model UV coordinates.
   vec4 texel=texture(uBaseColor,vUV);
   // Alpha-masked photographic leaf/frond geometry, no solid billboard cards.
   if(texel.a<uAlphaCutoff)discard;
-  vec3 albedo=texel.rgb;
+  vec3 albedo=texel.rgb*uTint;
   vec3 n=normalize(vNormal);
   vec3 sun=normalize(vec3(-0.55,1.10,-0.7));
   float diffuse=max(dot(n,sun),0.0);
@@ -124,7 +125,8 @@ bool init(){
  uCutoff=glGetUniformLocation(shader,"uAlphaCutoff");
  uDaylight=glGetUniformLocation(shader,"uDaylight");
  uRain=glGetUniformLocation(shader,"uRain");
- if(uVP<0||uModel<0||uTexture<0||uCutoff<0||uDaylight<0||uRain<0){error="3D modellshader uniform hiány";shutdown();return false;}
+ uTint=glGetUniformLocation(shader,"uTint");
+ if(uVP<0||uModel<0||uTexture<0||uCutoff<0||uDaylight<0||uRain<0||uTint<0){error="3D modellshader uniform hiány";shutdown();return false;}
  return true;
 }
 bool upload(int id,const std::uint8_t* bytes,std::size_t size,
@@ -191,6 +193,7 @@ void render(const float* viewProjection,const float* worldNodes,
  glUniform1f(uDaylight,sunlight);
  glUniform1f(uRain,std::clamp(rain,0.f,1.f));
  glUniform1f(uCutoff,0.f);
+ glUniform3f(uTint,1.f,1.f,1.f);
  glActiveTexture(GL_TEXTURE0);
  // Smaller rocks follow real, finite, collectible world inventory.
  for(int i=0;i<12;++i){
@@ -250,12 +253,18 @@ void render(const float* viewProjection,const float* worldNodes,
  // or a finished skeletal walking animation.
  if(hasRealHuman()){
     glUniform1f(uCutoff,.34f);
+    // Warm, sunlit skin material correction for the source's pale neutral
+    // anatomical texture, while retaining authored face/eye/hair UV detail.
+    glUniform3f(uTint,.80f,.56f,.43f);
     draw(models[6],playerX,playerZ,.99f,.25f);
     for(int i=0;i<4;++i){
         const float* n=npcPositions+i*4;
         const float scale=.92f+.025f*float(i);
+        const float t=float(i);
+        glUniform3f(uTint,.83f-.04f*t,.60f-.025f*t,.47f-.02f*t);
         draw(models[6],n[0],n[1],scale,float(i)*1.33f+.47f);
     }
+    glUniform3f(uTint,1.f,1.f,1.f);
  }
  glUniform1f(uCutoff,0.f);
  glBindVertexArray(0);
