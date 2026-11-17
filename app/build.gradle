@@ -7,8 +7,8 @@ android {
         applicationId 'hu.taks.world'
         minSdk 26
         targetSdk 35
-        versionCode 3
-        versionName '0.3.0-playable'
+        versionCode 4
+        versionName '0.4.0-community'
         externalNativeBuild { cmake { cppFlags '-std=c++17'; arguments '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON' } }
     }
     buildTypes { release { minifyEnabled false } }
