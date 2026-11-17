@@ -54,8 +54,25 @@ def bake(gltf: Path, slug: str, spec: dict):
         img = getattr(material, "baseColorTexture", None) if material is not None else None
         if img is None and material is not None:
             img = getattr(material, "image", None)
+        if img is None and spec.get("allow_authored_solid_materials", False):
+            # MakeHuman anatomy includes authored one-color eye/teeth/hair parts.
+            # Preserve those actual source material colors and all geometry.
+            factor=getattr(material, "baseColorFactor", None)
+            if factor is None:
+                factor=getattr(material, "main_color", None)
+                if factor is not None:
+                    factor=np.asarray(factor,dtype=float)/255.0
+            if factor is None:
+                raise RuntimeError(f"{slug}: part {index} material has no authored color")
+            rgba=np.asarray(factor,dtype=float).reshape(-1)
+            if len(rgba)<3:
+                raise RuntimeError(f"{slug}: part {index} malformed authored color")
+            rgba=tuple(int(round(max(0.0,min(1.0,v))*255)) for v in list(rgba[:3]) + [rgba[3] if len(rgba)>3 else 1.])
+            img=Image.new("RGBA",(64,64),rgba)
+            if uv is None or len(uv)!=len(mesh.vertices):
+                uv=np.full((len(mesh.vertices),2),0.5,dtype=np.float32)
         if uv is None or img is None or len(uv) != len(mesh.vertices):
-            raise RuntimeError(f"{slug}: part {index} has no real UV photographic texture")
+            raise RuntimeError(f"{slug}: part {index} has no authored UV texture/material")
         tex = np.asarray(uv, dtype=np.float32).copy()
         if not np.isfinite(tex).all() or np.min(tex) < -.001 or np.max(tex) > 1.001:
             raise RuntimeError(f"{slug}: part {index} requires complex repeat UVs; cannot atlas safely")
