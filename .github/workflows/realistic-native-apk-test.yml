@@ -1,0 +1,146 @@
+name: TAKS World 0.9 native real-3D Android test APK
+on:
+  push:
+    branches: [taks-world-realistic-android-test-4]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  assets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install asset import tools (no Blender, no Canvas)
+        run: python -m pip install 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2'
+      - name: Download real CC0 geology meshes and PBR photo surfaces
+        run: python scripts/import_cc0_rocks.py
+      - name: Download and bake original CC0 grass and fern
+        run: python scripts/import_cc0_foliage.py
+      - name: Download and bake CC0 MakeHuman neutral anatomical model
+        run: python scripts/import_cc0_human.py
+      - name: Verify no missing offline assets
+        run: |
+          python - <<'PY'
+          import struct,zipfile,json
+          from pathlib import Path
+          base=Path('app/src/main/assets/models')
+          meshes=('rock_07','namaqualand_boulders_01','namaqualand_cliff_01',
+                  'grass_bermuda_01','fern_02','makehuman_cc0')
+          for m in meshes:
+              data=(base/(m+'.tkm')).read_bytes()
+              assert data[:4]==b'TKM1'
+              count=struct.unpack('<I',data[4:8])[0]
+              assert count>=300 and count%3==0 and len(data)==8+count*32
+              assert (base/(m+'.png')).stat().st_size>10_000
+              print(m,'real triangles',count//3)
+          for png in ('ground_sandy_gravel.png','wall_cliff_side.png'):
+              assert (base/png).stat().st_size>100_000
+          assert json.loads((base/'foliage_manifest.json').read_text())['models']
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-Real-Geology-Flora-Human-Assets
+          path: app/src/main/assets/models/
+          if-no-files-found: error
+          retention-days: 7
+  engine-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build C++ living ecology and persistence
+        run: |
+          cmake -S engine -B build-eco -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-eco --parallel 2
+          ctest --test-dir build-eco --output-on-failure
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Check evidence-based prehistoric menu
+        run: |
+          mkdir -p build-java
+          javac -d build-java app/src/main/java/hu/taks/world/PrehistoricMenuTheme.java tests/java/hu/taks/world/PrehistoricMenuThemeTest.java
+          java -cp build-java hu.taks.world.PrehistoricMenuThemeTest
+  real-gpu-screenshots:
+    needs: [assets,engine-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: TAKS-World-Real-Geology-Flora-Human-Assets
+          path: app/src/main/assets/models/
+      - name: Mesa GLES3 and PNG for native GPU screenshot
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libegl-dev libgles-dev libgl1-mesa-dri libpng-dev
+      - name: Compile the SAME GLES3 renderer used by Android
+        run: |
+          mkdir -p build-previews
+          g++ -std=c++17 -O2 -Wall -Wextra -Iapp/src/main/cpp \
+            tests/fast_scene_preview.cpp app/src/main/cpp/FastScene.cpp app/src/main/cpp/RealModels.cpp \
+            -o build-previews/fast_scene_test -lEGL -lGLESv2 -lpng
+      - name: Real pixels: grazing, fern gating, anatomical 3D bodies
+        env:
+          EGL_PLATFORM: surfaceless
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          build-previews/fast_scene_test
+          python3 tests/ppm_to_png.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-Realistic-0.9-GPU-Testkepek
+          path: build-previews/*.png
+          if-no-files-found: error
+          retention-days: 14
+  android-apk:
+    needs: [assets,engine-tests,real-gpu-screenshots]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: TAKS-World-Real-Geology-Flora-Human-Assets
+          path: app/src/main/assets/models/
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build real native Android APK (not web)
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Verify all real assets are physically embedded in installable APK
+        run: |
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          f=Path('app/build/outputs/apk/debug/app-debug.apk')
+          assert f.stat().st_size>8_000_000, 'APK missing large genuine 3D assets'
+          with zipfile.ZipFile(f) as z:
+              names=set(z.namelist())
+              for m in ('rock_07','namaqualand_boulders_01',
+                        'namaqualand_cliff_01','grass_bermuda_01',
+                        'fern_02','makehuman_cc0'):
+                  for ext in ('tkm','png'):
+                      path='assets/models/'+m+'.'+ext
+                      assert path in names and z.getinfo(path).file_size>10000,path
+              print('TAKS NATIVE ANDROID REAL-3D TEST APK VERIFIED:',f.stat().st_size,'bytes')
+          PY
+      - name: Prepare named test APK for phone
+        run: cp app/build/outputs/apk/debug/app-debug.apk TAKS_World_0_9_VALODI_3D_ANDROID_TESZT.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-0.9-Realistic-Native-Android-TEST-APK
+          path: TAKS_World_0_9_VALODI_3D_ANDROID_TESZT.apk
+          if-no-files-found: error
+          retention-days: 14
