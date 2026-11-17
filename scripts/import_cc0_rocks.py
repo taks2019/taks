@@ -29,6 +29,10 @@ SELECTION = {
     },
 }
 MAX_MB = 96
+PBR_MATERIALS = {
+    "sandy_gravel_02": "ground_sandy_gravel",
+    "cliff_side": "wall_cliff_side"
+}
 MAX_TRIANGLES = 180000
 
 def download(url: str, dest: Path, session: requests.Session, md5=None):
@@ -161,17 +165,48 @@ def convert_model(gltf: Path, slug: str, settings: dict):
             "texture_px":[image.width,image.height],"model_sha256":hashlib.sha256(data).hexdigest(),
             "texture_sha256":hashlib.sha256(png.read_bytes()).hexdigest()}
 
+def fetch_terrain_material(slug: str, name: str, session: requests.Session, base: Path):
+    """Import an actually tileable photograph-based PBR albedo, not a color fill."""
+    r=session.get(f"{API}/files/{slug}",timeout=50)
+    r.raise_for_status()
+    info=r.json()
+    diffuse=next((k for k in info if k.lower() in ("diffuse","diff","albedo","basecolor")),None)
+    if diffuse is None:
+        raise RuntimeError(f"{slug}: no diffuse PBR map available: {list(info)}")
+    detail=info[diffuse]
+    variant=detail.get("1k") or detail.get("2k")
+    if not isinstance(variant,dict):
+        raise RuntimeError(f"{slug}: no 1k/2k ground material map")
+    entry=variant.get("jpg") or variant.get("png")
+    if not isinstance(entry,dict) or not entry.get("url"):
+        raise RuntimeError(f"{slug}: no photographic JPG/PNG texture URL")
+    target=base/(name+"_origin"+Path(urlparse(entry["url"]).path).suffix)
+    download(entry["url"],target,session,entry.get("md5"))
+    image=Image.open(target).convert("RGB")
+    image.thumbnail((1024,1024),Image.Resampling.LANCZOS)
+    namefile=OUT/f"{name}.png"
+    image.save(namefile,"PNG",optimize=True)
+    if image.width<500 or image.height<500:
+        raise RuntimeError(f"{slug}: real terrain texture quality too low")
+    print(f"True CC0 terrain photograph: {slug}, {image.width}x{image.height}",flush=True)
+    return {"name":name,"source":f"https://polyhaven.com/a/{slug}","license":"CC0",
+            "image_px":[image.width,image.height],
+            "texture_sha256":hashlib.sha256(namefile.read_bytes()).hexdigest()}
+
 def main():
     OUT.mkdir(parents=True,exist_ok=True)
     session=requests.Session()
     session.headers.update({"User-Agent":"TAKSWorld-OfflineAssets/0.8 (GitHub Actions; non-commercial research prototype)"})
-    manifest={"version":1,"purpose":"authentic scanned mobile geology props, NOT authentic Wonderwerk survey","models":[]}
+    manifest={"version":2,"purpose":"authentic scanned mobile geology props, NOT authentic Wonderwerk survey","models":[],"materials":[]}
     with TemporaryDirectory() as scratch:
         for slug,settings in SELECTION.items():
             model=collect_asset(slug,settings,session,Path(scratch))
             manifest["models"].append(convert_model(model,slug,settings))
+        for slug,name in PBR_MATERIALS.items():
+            manifest["materials"].append(fetch_terrain_material(slug,name,session,Path(scratch)))
     (OUT/"manifest.json").write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding="utf-8")
     assert len(manifest["models"])==2
+    assert len(manifest["materials"])==2
     print("TAKS REAL CC0 SCANNED 3D MODEL IMPORT PASSED",flush=True)
 
 if __name__=="__main__":
