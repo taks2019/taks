@@ -264,7 +264,9 @@ int main(){
     // A saved 0.8 / v5 world loads without creating animals or losing inventory.
     auto oldV5Fields=oldFields;
     {
-        std::istringstream stream(current);
+        // Use a valid v5 world with matching build sites, unlike the intentionally
+        // inconsistent old-v4 migration fixture above.
+        std::istringstream stream(allSites);
         oldV5Fields.clear();
         while(stream>>token){
             if(token=="ECO1")break;
