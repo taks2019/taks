@@ -85,6 +85,16 @@ workerArray=(cf*16)(*[value for worker in workers for value in worker])
 workerLoc=gl.glGetUniformLocation(program,b"u_npcs[0]")
 assert workerLoc>=0, "NPC uniforms optimized out - markers would not follow workers."
 gl.glUniform4fv(workerLoc,4,workerArray)
+siteLoc=gl.glGetUniformLocation(program,b"u_sites[0]")
+assert siteLoc>=0, "Placed building uniform must be present in real shader."
+def sites(pos1,stage1,pos2=(-3.0,-1.4),stage2=-1):
+    data=[
+        (pos1[0],pos1[1],stage1,1.0),
+        (pos2[0],pos2[1],stage2,0.7),
+        (0.,0.,-1.,1.0)
+    ]
+    buffer=(cf*12)(*[v for item in data for v in item])
+    gl.glUniform4fv(siteLoc,3,buffer)
 
 def scalar(name,value):
     idx=gl.glGetUniformLocation(program,name.encode())
@@ -100,7 +110,8 @@ def save_png(path,pixels):
     png=b"\x89PNG\r\n\x1a\n"+chunk(b"IHDR",struct.pack(">IIBBBBB",W,H,8,6,0,0,0))+chunk(b"IDAT",zlib.compress(scanlines,6))+chunk(b"IEND",b"")
     pathlib.Path(path).write_bytes(png)
 
-def render(name,px,pz,stage):
+def render(name,px,pz,stage,sitePosition=(3.1,-1.55),secondStage=-1):
+    sites(sitePosition,stage,stage2=secondStage)
     pair("u_resolution",W,H);pair("u_player",px,pz)
     for n,v in {"u_orbit":0.0,"u_zoom":14.,"u_clock":9.2,"u_rain":0.0,
                 "u_moisture":.15,"u_hearth":0.,"u_fire":0.,
@@ -117,7 +128,11 @@ def render(name,px,pz,stage):
     print("Saved",outputDir/name,"min",min(output),"max",max(output))
     return output
 
-initial=render("01-kezdo-terulet-negy-munkassal.png",0.,-5.2,0.)
-moved=render("02-menedek-fazis3.png",3.1,-1.55,3.)
-assert initial!=moved, "Player movement and shelter construction did not change the image"
-print("TAKS GLES3 SPATIAL RENDER TEST PASSED")
+initial=render("01-szabad-epitesi-hely.png",0.,-5.2,0)
+partial=render("02-oszlopos-hely.png",0.,-5.2,1)
+finished=render("03-foszerkezet-fedes.png",0.,-5.2,3)
+other=render("04-ket-kulon-epitesi-hely.png",0.,-5.2,3,secondStage=2)
+assert initial!=partial, "Placed pillars did not change the GPU scene"
+assert partial!=finished, "Roof stage did not change the GPU scene"
+assert other!=finished, "Second independent building did not change the GPU scene"
+print("TAKS GLES3 MULTI-SITE RENDER TEST PASSED")
