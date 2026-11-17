@@ -1,8 +1,20 @@
 # TAKS WORLD · natív Android / C++ TAKS Engine
 
-**Jelenlegi mérföldkő: 0.4.0-community — autonóm NPC munkaciklus és közös készlet.**
+**Jelenlegi mérföldkő: 0.5.0-free-building — különálló, gyalogos helyválasztású építés, kopás és javítás.**
 
 Ez a felhasználó saját játékmotorjának **valódi natív Android** fejlesztése, nem HTML/Canvas, Unity vagy Godot.
+
+## 0.5.0 – Szabad helyválasztású, különálló építmények
+- **Új HELY KIJELÖLÉSE** művelet: a játékos gyalog elmegy a kívánt, szabad területre, és 1 követ elhasználva kijelöli a menedék helyét.
+- **Három különálló építési hely** lehet a próbaszektorban. Nem fix világpozíción épülnek; minden kijelölt hely megőrzi saját koordinátáját, munkafázisát és állapotát.
+- **Valódi előfeltételek:** 2 cölöp + 2 kő = oszlopok; +3 cölöp = tetőváz; +6 leveles ág = fedés. A munkafázis az adott építési helyet módosítja, nem az összeset.
+- **Környezeti kopás és javítás:** a fedés állapota az időjárás és az eltelt idő miatt romlik; javításhoz 1 cölöp és 2 leveles ág, munka és állóképesség kell. A végletekig sérült fedés nem ad megbízható esővédelmet.
+- A játékos csak akkor kap fedést, ha **a ténylegesen felépített és ép menedék alatt áll**; a fedés nem hat távolról.
+- Az Androidos ÉPÍTÉS panel az adott helyen végrehajtható munkafázist mutatja, és kezeli az új hely kijelölését és a javítást.
+- **TAKS_NATIVE_5** mentés: mindhárom hely külön állapota megmarad; a v1–v4 régi mentések olvashatók, és a korábbi rögzített helyszínen tényleg meglévő menedék v5 térbeli építményként folytatható.
+- GitHub Actions: C++ regressziók + valós GLES3 képtesztek, 4 renderkockával (hely, oszlop, fedés, két hely) + natív Android APK.
+
+**Korlátok:** a maximálisan 3 építési hely és az előre meghatározott menedékrecept még nem teljes alkatrészszintű szabad szerkesztő. Az OpenGL ES-ben programozott geometria nem élethű Wonderwerk-felmérés, és továbbra sincs részletes animált embermodell. A telefonos futás és vezérlés kizárólag valódi készüléken igazolható.
 
 ## 0.4.0 – Élő közösség és ok-okozati munkavégzés
 - Négy autonóm NPC jelenik meg külön világpozícióval és négy eltérő feladattal: fa, kő, levél, gyújtós.
