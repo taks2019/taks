@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Try to import actual CC0 MakeHuman rigged model, NO Blender or generated primitive.
+"""Try to import actual CC0 MakeHuman neutral base-body model, NO Blender or generated primitive.
 
-Source: vsim bundled human.glb, MakeHuman CC0 system assets.
+Source: CharacterCreator neutral base_body.glb, MakeHuman CC0 system assets.
 The existing TAKS offline TKM1 renderer currently bakes a static pose; this
 import does NOT imply prehistoric anatomical authentication or rig playback.
 """
@@ -14,7 +14,7 @@ from urllib3.util.retry import Retry
 
 from import_cc0_foliage import bake
 
-URL="https://raw.githubusercontent.com/kunalkushwaha/vsim/main/packages/assets/library/human.glb"
+URL="https://raw.githubusercontent.com/kblood/CharacterCreator/master/output/base_body.glb"
 
 def main():
     s=requests.Session()
