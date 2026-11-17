@@ -12,6 +12,7 @@ struct FastFrame {
 };
 namespace FastScene {
     bool init();
+    bool uploadTerrainTexture(int slot,const std::uint32_t* argb,int width,int height);
     void shutdown();
     void render(int width,int height,const FastFrame& scene);
     const std::string& lastError();
