@@ -36,5 +36,5 @@ def convert(ppm: pathlib.Path):
     print(f"Validated raster image: {output} ({w} x {h})")
 
 frames=sorted(pathlib.Path("build-previews").glob("*.ppm"))
-if len(frames)!=4:raise RuntimeError(f"Expected 4 GPU frames, found {len(frames)}")
+if len(frames)!=6:raise RuntimeError(f"Expected 6 GPU frames with real photogrammetry rocks, found {len(frames)}")
 for path in frames:convert(path)
