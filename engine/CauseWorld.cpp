@@ -190,7 +190,7 @@ std::string World::move(double dx,double dz){
     if(requested<0.00001)return "A karakter helyben maradt.";
     if(stamina<0.5)return "A karakter kimerült: pihennie kell.";
     // Az érintéses mozgás egy-egy kicsi világkoordináta-lépés; nem teleport.
-    const double factor=std::min(1.0,0.75/requested);
+    double factor=std::min(1.0,0.75/requested);
     factor*=ecology.walkSpeedFactor();
     dx*=factor;dz*=factor;
     const double nx=playerX+dx,nz=playerZ+dz;
