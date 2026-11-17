@@ -116,7 +116,7 @@ int main(){
     loadRealModel(2,"namaqualand_cliff_01");
     loadRealModel(3,"grass_bermuda_01");
     loadRealModel(4,"fern_02");
-    loadRealModel(5,"tree_small_02");
+    // Tree candidate awaits true mobile LOD; not silently replaced.
     loadActualTerrainPhoto(0,"ground_sandy_gravel");
     loadActualTerrainPhoto(1,"wall_cliff_side");
     check(taks::RealModels::complete(),"all three photo-scanned models must be uploaded to GPU");
@@ -190,10 +190,14 @@ int main(){
     const auto bareGround=render("08-legelt-fu-nelkul.ppm");
     check(aliveGrass!=bareGround,
           "real grass mesh must disappear after biomass was eaten");
-    for(int i=0;i<3;++i)frame.trees[i*4+3]=0.f;
-    const auto treeDead=render("09-fa-elhalt.ppm");
-    check(treeDead!=bareGround,
-          "the real tree mesh must stop rendering when tree dies");
+    // Fern stays hidden unless the ecology explicitly approves this plant.
+    frame.grass[2]=.62f;
+    frame.verifiedFerns=true;
+    const auto fernKnown=render("09-hitelesitett-pafrany.ppm");
+    frame.verifiedFerns=false;
+    const auto fernUnknown=render("10-nincs-megismert-pafrany.ppm");
+    check(fernKnown!=fernUnknown,
+          "fern geometry must be gated by world botanical approval");
     taks::FastScene::shutdown();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroyContext(display,context);eglDestroySurface(display,surface);
