@@ -14,6 +14,7 @@ uniform float u_quality;
 uniform vec2 u_player;
 uniform float u_walkPhase;
 uniform vec4 u_nodes[12];
+uniform vec4 u_npcs[4];
 
 float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
 float n3(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
@@ -92,6 +93,20 @@ vec2 geo(vec3 p){
   if(ring<d){d=ring;mat=9.;}
  }
 
+ // Fejlesztői helyzetjelölők: a négy önálló NPC tényleges világkoordinátája.
+ // Nem embermodell, nem tekinthető végleges 3D szereplőábrázolásnak.
+ if(p.y>-1.0 && p.y<1.0){
+  for(int worker=0;worker<4;worker++){
+    vec4 n=u_npcs[worker];
+    if(dot(p.xz-n.xy,p.xz-n.xy)>0.9)continue;
+    vec3 local=p-vec3(n.x,terrain(n.xy),n.y);
+    float badge=abs(length(local.xz)-.23)-.033;
+    badge=max(badge,abs(local.y-.045)-.045);
+    float pointer=sdSegment(local,vec3(0.,.08,0.),vec3(0.,.45,0.),.043);
+    float mark=min(badge,pointer);
+    if(mark<d){d=mark;mat=10.+n.z;}
+  }
+ }
  if(u_hearth>.5){
   float h=terrain(vec2(-1.15,-1.8));
   for(int j=0;j<7;j++){
@@ -166,7 +181,11 @@ vec3 material(vec3 p,vec3 norm,float id){
  if(id<6.5)return mix(vec3(.22,.27,.10),vec3(.46,.40,.15),fb(p*4.5))*(1.-wet*.3);
  if(id<7.5)return vec3(.45,.29,.19);
  if(id<8.5)return vec3(.24,.17,.115);
- return vec3(.8,.64,.28);
+ if(id<9.5)return vec3(.8,.64,.28);
+ if(id<10.5)return vec3(.50,.75,.51);
+ if(id<11.5)return vec3(.60,.77,.92);
+ if(id<12.5)return vec3(.89,.68,.36);
+ return vec3(.93,.53,.43);
 }
 vec3 sky(vec3 d,vec3 sun){float h=clamp(d.y*.6+.45,0.,1.);vec3 c=mix(vec3(.81,.76,.65),vec3(.29,.50,.67),h);float solar=pow(max(dot(d,sun),0.),330.);c+=vec3(1.,.70,.35)*solar*1.9;float haze=pow(1.-max(d.y,0.),6.);c+=vec3(.22,.16,.09)*haze;return c;}
 void main(){
