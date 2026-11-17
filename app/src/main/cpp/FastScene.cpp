@@ -17,7 +17,7 @@ struct Vertex { float x,y,z,nx,ny,nz,kind; };
 struct Mat4 { float a[16]{}; };
 std::string error;
 GLuint program=0,staticVAO=0,staticVBO=0,dynamicVAO=0,dynamicVBO=0;
-GLint uVP=-1,uRain=-1,uClock=-1,uEye=-1,uGround=-1,uCliff=-1;
+GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uEye=-1,uGround=-1,uCliff=-1;
 GLuint terrainTexture[2]={0,0};
 std::vector<Vertex> terrainMesh,objectsMesh;
 Vec3 add(Vec3 a,Vec3 b){return {a.x+b.x,a.y+b.y,a.z+b.z};}
@@ -289,7 +289,7 @@ void main(){
 const char* FRAG=R"GLSL(#version 300 es
 precision mediump float;
 in vec3 wPos;in vec3 wNorm;flat in int matId;
-uniform float u_rain;uniform float u_clock;
+uniform float u_rain;uniform float u_mud;uniform float u_clock;
 uniform sampler2D u_groundTexture;
 uniform sampler2D u_cliffTexture;
 out vec4 fragColor;
@@ -300,6 +300,8 @@ void main(){
     vec3 base;
     if(matId==0){
         base=texture(u_groundTexture,wPos.xz*.45).rgb * (0.85+0.15*grain);
+        // Wet/sticky soil from ecology, not an arbitrary decorative overlay.
+        base*=1.0-0.46*clamp(u_mud,0.0,1.0);
     }else if(matId==1){
         base=texture(u_cliffTexture,vec2(wPos.x*.25,wPos.y*.34)).rgb * (0.88+0.12*lines);
     }else if(matId==2){
@@ -358,6 +360,7 @@ bool init(){
     if(!linked){error="A gyors 3D motor shaderprogramja nem kapcsolódott.";shutdown();return false;}
     uVP=glGetUniformLocation(program,"u_viewProjection");
     uRain=glGetUniformLocation(program,"u_rain");
+    uMud=glGetUniformLocation(program,"u_mud");
     uClock=glGetUniformLocation(program,"u_clock");
     uGround=glGetUniformLocation(program,"u_groundTexture");
     uCliff=glGetUniformLocation(program,"u_cliffTexture");
@@ -430,6 +433,7 @@ void render(int width,int height,const FastFrame& f){
     glUseProgram(program);
     glUniformMatrix4fv(uVP,1,GL_FALSE,vp.a);
     if(uRain>=0)glUniform1f(uRain,f.rain);
+    if(uMud>=0)glUniform1f(uMud,f.mud);
     if(uClock>=0)glUniform1f(uClock,f.clock);
     glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,terrainTexture[0]);
     if(uGround>=0)glUniform1i(uGround,0);
