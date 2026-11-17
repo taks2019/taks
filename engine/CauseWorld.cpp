@@ -21,8 +21,12 @@ void World::syncGroundCounts(){
 }
 std::string World::nextObjective() const {
     if(shelterStage==0){
+        if(chippedEdgeWear<=0 && preparedPoles<2 && carriedStone<2 && campStock[1]>0)
+            return "CÉL: A társak követ tettek le a táborba. Vedd át, és készíts kőeszközt.";
         if(chippedEdgeWear<=0 && preparedPoles<2)
             return carriedStone<2?"CÉL: Gyűjts két követ, és készíts belőlük kőélt.":"CÉL: Készíts kőélt a begyűjtött kövekből.";
+        if(preparedPoles<2 && carriedWood==0 && campStock[0]>0)
+            return "CÉL: A társak faágat hoztak a táborba. Menj érte, majd munkáld meg.";
         if(preparedPoles<2)return "CÉL: Munkálj meg két faágat, hogy tartóoszlopok készülhessenek.";
         if(carriedStone<2)return "CÉL: Gyűjts két támasztókövet az oszlopokhoz.";
         return "CÉL: Menj az építés helyére, és állítsd fel az oszlopokat.";
@@ -32,6 +36,8 @@ std::string World::nextObjective() const {
         return "CÉL: Menj a menedékhez és építsd meg a tetővázat.";
     }
     if(shelterStage==2){
+        if(carriedLeaves<6 && campStock[2]>0)
+            return "CÉL: A társak levélanyagot szállítottak a táborba. Vedd át a fedéshez.";
         if(carriedLeaves<6)return "CÉL: Gyűjts hat leveles ágat a fedéshez.";
         return "CÉL: Készíts tetőfedést a menedéknél.";
     }
