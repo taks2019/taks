@@ -168,7 +168,7 @@ int main(){
     std::string rawToken;
     // A V3-migráció kódútját a korábbi 27+12 mezővel is ellenőrizzük.
     std::string v3="TAKS_NATIVE_3";
-    for(int i=0;i<40;++i){
+    for(int i=0;i<39;++i){
         assert(fields>>rawToken);
         v3+=" "+rawToken;
     }
