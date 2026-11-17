@@ -103,6 +103,15 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetView(
 }
 // Upload a genuine triangulated CC0 photogrammetry model and its decoded photographic
 // albedo texture from Android assets. All data remains offline in the APK.
+extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUploadTerrainTexture(
+    JNIEnv* env,jobject,jint id,jintArray pixels,jint width,jint height){
+    if(!pixels||width<1||height<1||width>2048||height>2048)return JNI_FALSE;
+    if(env->GetArrayLength(pixels)!=width*height)return JNI_FALSE;
+    std::vector<std::uint32_t> data(static_cast<std::size_t>(width)*height);
+    env->GetIntArrayRegion(pixels,0,width*height,reinterpret_cast<jint*>(data.data()));
+    if(env->ExceptionCheck())return JNI_FALSE;
+    return taks::FastScene::uploadTerrainTexture(id,data.data(),width,height)?JNI_TRUE:JNI_FALSE;
+}
 extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUploadRealModel(
     JNIEnv* env,jobject,jint id,jbyteArray geometry,jintArray pixels,jint width,jint height){
     if(!geometry||!pixels||width<1||height<1)return JNI_FALSE;
