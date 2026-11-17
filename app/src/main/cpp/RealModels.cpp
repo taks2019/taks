@@ -203,13 +203,12 @@ void render(const float* viewProjection,const float* worldNodes,
  }
  // Three non-collectible geological outcrops, not part of inventory.
  // A later geology system must give the static rock formation physical identity.
- draw(models[1],-6.8f,1.9f,2.2f,.6f);
- draw(models[1],5.9f,2.4f,1.7f,2.1f);
- draw(models[1],6.8f,-2.8f,1.55f,-.25f);
- // Large real-photo cliff mesh from South Africa. Kept behind the interactive
- // resource field; it is geological landscape, not an invented cave survey.
- draw(models[2],-5.6f,4.9f,1.2f,.45f);
- draw(models[2],5.8f,5.1f,1.2f,-.64f);
+ // Photo-scanned stones stay grounded and human-scaled. The old free-
+ // standing giant cliff props looked suspended above the cave entrance:
+ // remove them until a physically registered geological scene is available.
+ draw(models[1],-6.8f,1.9f,.88f,.6f);
+ draw(models[1],5.9f,2.4f,.82f,2.1f);
+ draw(models[1],6.8f,-2.8f,.95f,-.25f);
  // Genuine published botanical geometry; no generated tube/ball foliage.
  if(models[3].vao && models[3].texture){
     glUniform1f(uCutoff,.42f);
