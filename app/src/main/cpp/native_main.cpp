@@ -72,6 +72,10 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeAdvance(
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeState(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);return toJava(env,world.summary());
 }
+extern "C" JNIEXPORT jint JNICALL Java_hu_taks_world_MainActivity_nativeSiteStage(JNIEnv*,jobject){
+    std::lock_guard<std::mutex> guard(worldLock);
+    return world.nearbySiteStage();
+}
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeBuildState(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);return toJava(env,world.shelterStatus());
 }
@@ -138,7 +142,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         return;
     }
     float angle,dist,hours,rain,wet,hearth,fire,shelterStage;
-    float px,pz,walkPhase,nodes[4*taks::World::resourceCount],npcs[4*taks::World::npcCount];
+    float px,pz,walkPhase,nodes[4*taks::World::resourceCount],npcs[4*taks::World::npcCount],sites[4*taks::World::maxBuildSites];
     {
         std::lock_guard<std::mutex> guard(worldLock);
         angle=orbit;dist=zoom;
@@ -160,6 +164,12 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
             npcs[4*i+1]=static_cast<float>(world.npcs[i].z);
             npcs[4*i+2]=static_cast<float>(world.npcs[i].role);
             npcs[4*i+3]=static_cast<float>(world.npcs[i].carrying);
+        }
+        for(int i=0;i<taks::World::maxBuildSites;++i){
+            sites[4*i]=static_cast<float>(world.sites[i].x);
+            sites[4*i+1]=static_cast<float>(world.sites[i].z);
+            sites[4*i+2]=static_cast<float>(world.sites[i].stage);
+            sites[4*i+3]=i<world.siteCount?1.0f:0.0f;
         }
     }
     GLint vp[4]={0,0,1,1};
@@ -183,6 +193,8 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
     if(nodeLoc>=0)glUniform4fv(nodeLoc,taks::World::resourceCount,nodes);
     const GLint npcLoc=glGetUniformLocation(program,"u_npcs[0]");
     if(npcLoc>=0)glUniform4fv(npcLoc,taks::World::npcCount,npcs);
+    const GLint siteLoc=glGetUniformLocation(program,"u_sites[0]");
+    if(siteLoc>=0)glUniform4fv(siteLoc,taks::World::maxBuildSites,sites);
     u1("u_quality",1.f);
     glDrawArrays(GL_TRIANGLES,0,3);
     glBindVertexArray(0);
