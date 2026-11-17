@@ -26,8 +26,6 @@ SELECTION = {
                          "role":"living grazing biomass"},
     "fern_02": {"target_span_m": 1.4, "source":"https://polyhaven.com/a/fern_02",
                 "role":"ferns (render only when species verified)"},
-    "tree_small_02": {"target_span_m": 2.4, "target_height_m": 2.0, "source":"https://polyhaven.com/a/tree_small_02",
-                      "role":"living growing tree; species identification pending"},
 }
 MAX_TRIANGLES = 180_000
 MAX_PARTS = 256
@@ -134,14 +132,18 @@ def main():
     session=requests.Session()
     session.headers["User-Agent"]="TAKSWorld-Causal3D/0.9 (+https://github.com/taks2019/taks)"
     report={"version":1,"type":"native visual ecology, NOT historical botanical proof",
-            "license":"CC0","models":[]}
+            "license":"CC0","models":[],
+            "deferred":[{"name":"tree_small_02",
+                         "reason":"2,062,487 authored triangles require UV-preserving LOD before mobile import",
+                         "source":"https://polyhaven.com/a/tree_small_02",
+                         "not_substituted_with_primitives":True}]}
     with TemporaryDirectory() as working:
         for slug,spec in SELECTION.items():
             path=collect_asset(slug,spec,session,Path(working))
             report["models"].append(bake(path,slug,spec))
     output=OUT/"foliage_manifest.json"
     output.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding="utf-8")
-    assert len(report["models"])==3
+    assert len(report["models"])==2
     print("AUTHENTIC CC0 FOLIAGE ASSET BAKING PASSED",flush=True)
 
 
