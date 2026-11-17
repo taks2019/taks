@@ -113,9 +113,10 @@ int main(){
     check(taks::FastScene::init(),taks::FastScene::lastError());
     loadRealModel(0,"rock_07");
     loadRealModel(1,"namaqualand_boulders_01");
+    loadRealModel(2,"namaqualand_cliff_02");
     loadActualTerrainPhoto(0,"ground_sandy_gravel");
     loadActualTerrainPhoto(1,"wall_cliff_side");
-    check(taks::RealModels::complete(),"the two authentic scanned 3D models must both be on GPU");
+    check(taks::RealModels::complete(),"all three photo-scanned models must be uploaded to GPU");
 
     taks::FastFrame frame;
     frame.playerX=0.f;frame.playerZ=-5.2f;frame.yaw=.785398f;frame.pitch=.615480f;
