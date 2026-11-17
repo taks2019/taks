@@ -27,6 +27,7 @@ public final class MainActivity extends Activity {
     private native void nativeAdvance();
     private native String nativeState();
     private native String nativeBuildState();
+    private native int nativeSiteStage();
     private native String nativeMove(float dx,float dz);
     private native String nativeNearby();
     private native String nativeGoal();
@@ -145,16 +146,20 @@ public final class MainActivity extends Activity {
             content.addView(caption("2 · MEGMUNKÁLÁS",12,0xFF9EC9B9));
             addVertical(content,"Kőél készítése · 2 kő",()->act("knap"));
             addVertical(content,"Cölöp megmunkálása · 1 faág + kopó kőél",()->act("pole"));
-            content.addView(caption("3 · AKTUÁLIS ÉPÍTÉSI MUNKA",12,0xFF9EC9B9));
-            String stage=nativeBuildState();
-            if(stage.contains("Nincs alap.")){
+            content.addView(caption("3 · SAJÁT ÉPÍTÉSI HELY",12,0xFF9EC9B9));
+            addVertical(content,"Új építési hely kijelölése · 1 kő",()->act("site"));
+            int stage=nativeSiteStage();
+            if(stage<0){
+                content.addView(caption("Nincs közel kijelölt hely. Menj egy alkalmas pontra, és jelöld ki, vagy lépj egy korábbi menedékhez.",12,0xFFDDCDAF));
+            }else if(stage==0){
                 addVertical(content,"Oszlopok állítása · 2 cölöp + 2 kő",()->act("base"));
-            }else if(stage.contains("Oszlopok állnak.")){
+            }else if(stage==1){
                 addVertical(content,"Tetőváz építése · 3 cölöp",()->act("frame"));
-            }else if(stage.contains("tetőváznak nincs fedése.")||stage.contains("A tetőváznak nincs fedése.")){
+            }else if(stage==2){
                 addVertical(content,"Tetőfedés · 6 leveles ág",()->act("roof"));
             }else{
-                content.addView(caption("A menedék elkészült. Használni is kell, hogy védjen.",12,0xFFDDCDAF));
+                content.addView(caption("Ez a menedék fedett. Az anyaga időjárásban kopik; ellenőrizd az ép szerkezetet.",12,0xFFDDCDAF));
+                addVertical(content,"Szerkezet javítása · 1 cölöp + 2 leveles ág",()->act("repair"));
             }
             content.addView(caption("4 · TŰZ ÉS MELEG",12,0xFF9EC9B9));
             addVertical(content,"Tűzhely építése · 3 faág + 2 kő",()->act("hearth"));
@@ -328,7 +333,7 @@ public final class MainActivity extends Activity {
         header.setPadding(dp(15),dp(10),dp(10),dp(10));
         header.setBackground(panelBackground(0xB8101A1A,13));
         header.addView(caption("TAKS WORLD",22,0xFFE6D6B5));
-        header.addView(caption("JÁTSZHATÓ OK-OKOZATI ALAP · 0.3",10,0xFFC3D1C5));
+        header.addView(caption("NATÍV VILÁG · TÉRBELI ÉPÍTÉS · 0.5",10,0xFFC3D1C5));
         FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
         hp.setMargins(dp(12),dp(12),0,0);root.addView(header,hp);
 
