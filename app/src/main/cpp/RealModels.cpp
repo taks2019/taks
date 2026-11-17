@@ -12,9 +12,9 @@ namespace taks::RealModels {
 namespace {
 struct Vertex { float pos[3], normal[3], uv[2]; };
 struct Model { GLuint vao=0,vbo=0,texture=0; GLsizei count=0; };
-std::array<Model,3> models;
+std::array<Model,6> models;
 GLuint shader=0;
-GLint uVP=-1,uModel=-1,uTexture=-1;
+GLint uVP=-1,uModel=-1,uTexture=-1,uCutoff=-1,uDaylight=-1,uRain=-1;
 std::string error;
 constexpr float PI=3.14159265358979323846f;
 const char* VS=R"GLSL(#version 300 es
@@ -41,15 +41,21 @@ in highp vec3 vNormal;
 in highp vec3 vWorld;
 in highp vec2 vUV;
 uniform sampler2D uBaseColor;
+uniform float uAlphaCutoff;
+uniform float uDaylight;
+uniform float uRain;
 out vec4 fragColor;
 void main(){
   // True photographic diffuse texture sampled at model UV coordinates.
-  vec3 albedo=texture(uBaseColor,vUV).rgb;
+  vec4 texel=texture(uBaseColor,vUV);
+  // Alpha-masked photographic leaf/frond geometry, no solid billboard cards.
+  if(texel.a<uAlphaCutoff)discard;
+  vec3 albedo=texel.rgb;
   vec3 n=normalize(vNormal);
   vec3 sun=normalize(vec3(-0.55,1.10,-0.7));
   float diffuse=max(dot(n,sun),0.0);
   // Energy-conserving-looking diffuse, no invented shiny metallic rocks.
-  vec3 color=albedo*(0.30+0.90*diffuse);
+  vec3 color=albedo*(0.18+0.92*diffuse*(0.20+0.80*uDaylight))*(1.0-0.28*uRain);
   color=color/(color+vec3(0.45));
   fragColor=vec4(pow(max(color,vec3(0.0)),vec3(1.0/2.2)),1.0);
 }
@@ -115,13 +121,16 @@ bool init(){
  uVP=glGetUniformLocation(shader,"uViewProjection");
  uModel=glGetUniformLocation(shader,"uModel");
  uTexture=glGetUniformLocation(shader,"uBaseColor");
- if(uVP<0||uModel<0||uTexture<0){error="3D modellshader uniform hiány";shutdown();return false;}
+ uCutoff=glGetUniformLocation(shader,"uAlphaCutoff");
+ uDaylight=glGetUniformLocation(shader,"uDaylight");
+ uRain=glGetUniformLocation(shader,"uRain");
+ if(uVP<0||uModel<0||uTexture<0||uCutoff<0||uDaylight<0||uRain<0){error="3D modellshader uniform hiány";shutdown();return false;}
  return true;
 }
 bool upload(int id,const std::uint8_t* bytes,std::size_t size,
             const std::uint32_t* argb,int width,int height){
  if(id<0||id>=static_cast<int>(models.size())||!shader||!bytes||!argb){
-    error="Hiányzó vagy hibás valódi sziklamodell.";return false;
+    error="Hiányzó vagy hibás valódi 3D hálómodell.";return false;
  }
  if(size<8 || std::memcmp(bytes,"TKM1",4)!=0){
     error="A 3D modellek TKM1 formátuma sérült.";return false;
@@ -155,8 +164,8 @@ bool upload(int id,const std::uint8_t* bytes,std::size_t size,
               GL_UNSIGNED_BYTE,rgba.data());
  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
  glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
- glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
- glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
+ glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,id>=3?GL_CLAMP_TO_EDGE:GL_REPEAT);
+ glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,id>=3?GL_CLAMP_TO_EDGE:GL_REPEAT);
  glGenerateMipmap(GL_TEXTURE_2D);
  glBindTexture(GL_TEXTURE_2D,0);
  m.count=GLsizei(count);
@@ -168,11 +177,18 @@ bool upload(int id,const std::uint8_t* bytes,std::size_t size,
 }
 bool complete(){return models[0].vao&&models[0].texture&&models[1].vao&&models[1].texture;}
 const char* errorMessage(){return error.c_str();}
-void render(const float* viewProjection,const float* worldNodes){
- if(!shader||!viewProjection||!worldNodes||!complete())return;
+void render(const float* viewProjection,const float* worldNodes,
+            const float* grass,const float* trees,bool fernApproved,
+            float worldClock,float rain){
+ if(!shader||!viewProjection||!worldNodes||!grass||!trees||!complete())return;
  glUseProgram(shader);
  glUniformMatrix4fv(uVP,1,GL_FALSE,viewProjection);
  glUniform1i(uTexture,0);
+ const float hour=std::fmod(std::fmod(worldClock,24.f)+24.f,24.f);
+ const float sunlight=std::clamp(1.f-std::abs(hour-13.f)/12.f,0.f,1.f);
+ glUniform1f(uDaylight,sunlight);
+ glUniform1f(uRain,std::clamp(rain,0.f,1.f));
+ glUniform1f(uCutoff,0.f);
  glActiveTexture(GL_TEXTURE0);
  // Smaller rocks follow real, finite, collectible world inventory.
  for(int i=0;i<12;++i){
@@ -189,6 +205,33 @@ void render(const float* viewProjection,const float* worldNodes){
  // resource field; it is geological landscape, not an invented cave survey.
  draw(models[2],-5.6f,4.9f,1.2f,.45f);
  draw(models[2],5.8f,5.1f,1.2f,-.64f);
+ // Genuine published botanical geometry; no generated tube/ball foliage.
+ if(models[3].vao && models[3].texture){
+    glUniform1f(uCutoff,.42f);
+    for(int i=0;i<4;++i){
+        const float* g=grass+4*i;
+        const float biomass=std::clamp(g[2],0.f,1.f);
+        const float health=std::clamp(g[3],0.f,1.f);
+        if(biomass<.02f||health<=0.f)continue;
+        // Grazer consumption and regrowth affect the exact model scale.
+        draw(models[3],g[0],g[1],.30f+1.05f*biomass,float(i)*1.7f);
+    }
+ }
+ if(models[5].vao && models[5].texture){
+    glUniform1f(uCutoff,.42f);
+    for(int i=0;i<3;++i){
+        const float* t=trees+4*i;
+        if(t[3]<.5f||t[2]<.05f)continue;
+        // Mesh normalized to 2 m height in build-time importer.
+        draw(models[5],t[0],t[1],t[2]/2.f,.40f+float(i)*1.9f);
+    }
+ }
+ if(fernApproved && models[4].vao && models[4].texture){
+    glUniform1f(uCutoff,.42f);
+    // This biome plant is only visible when ecological verification is explicit.
+    if(grass[2]>.12f)draw(models[4],grass[0]+.72f,grass[1]-.25f,.85f,.6f);
+ }
+ glUniform1f(uCutoff,0.f);
  glBindVertexArray(0);
  glBindTexture(GL_TEXTURE_2D,0);
 }
