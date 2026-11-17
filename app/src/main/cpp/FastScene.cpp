@@ -307,9 +307,9 @@ void main(){
         // old coarse diagonal tile pattern. Fine grit stays visible near feet.
         vec3 micro=texture(u_groundTexture,wPos.xz*1.41).rgb;
         vec3 macro=texture(u_groundTexture,vec2(wPos.z*.19,wPos.x*.23)).rgb;
-        float patch=clamp(.45+.25*sin(wPos.x*.38+wPos.z*.27)*
+        float blendWeight=clamp(.45+.25*sin(wPos.x*.38+wPos.z*.27)*
                                         sin(wPos.z*.51-wPos.x*.16),0.,1.);
-        base=mix(macro,micro,patch)*(.90+.10*grain);
+        base=mix(macro,micro,blendWeight)*(.90+.10*grain);
         // Soil dampness/mud follows saved ecological simulation and darkens
         // the photographic surface instead of painting a new brown slab.
         base*=1.0-0.36*clamp(u_mud,0.0,1.0);
