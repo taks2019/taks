@@ -1,4 +1,6 @@
 #include "../app/src/main/cpp/FastScene.h"
+#include "../app/src/main/cpp/RealModels.h"
+#include <png.h>
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
 #include <algorithm>
@@ -38,6 +40,33 @@ std::uint64_t pixelSum(const std::vector<std::uint8_t>& p) {
 }
 }
 
+void loadRealModel(int id,const std::string& name){
+    const std::string base="app/src/main/assets/models/"+name;
+    std::ifstream stream(base+".tkm",std::ios::binary);
+    check(bool(stream),"missing real 3D model: "+name);
+    std::vector<std::uint8_t> data((std::istreambuf_iterator<char>(stream)),std::istreambuf_iterator<char>());
+    check(data.size()>50000,"the model must contain genuine detailed 3D triangles, not primitives: "+name);
+    png_image picture{};
+    picture.version=PNG_IMAGE_VERSION;
+    check(png_image_begin_read_from_file(&picture,(base+".png").c_str())!=0,
+          "missing photogrammetry texture for "+name);
+    picture.format=PNG_FORMAT_RGBA;
+    std::vector<std::uint8_t> rgba(PNG_IMAGE_SIZE(picture));
+    check(png_image_finish_read(&picture,nullptr,rgba.data(),0,nullptr)!=0,
+          "could not decode scanned texture for "+name);
+    std::vector<std::uint32_t> argb(std::size_t(picture.width)*picture.height);
+    for(std::size_t i=0;i<argb.size();++i){
+        argb[i]=std::uint32_t(rgba[4*i+3])<<24|
+                std::uint32_t(rgba[4*i])<<16|
+                std::uint32_t(rgba[4*i+1])<<8|rgba[4*i+2];
+    }
+    check(taks::RealModels::upload(id,data.data(),data.size(),argb.data(),
+                                   int(picture.width),int(picture.height)),
+          std::string("real model import failed: ")+taks::RealModels::errorMessage());
+    std::cout<<"Loaded actual CC0 textured scanned mesh: "<<name
+             <<" (texture "<<picture.width<<"x"<<picture.height<<")\n";
+    png_image_free(&picture);
+}
 int main(){
     setenv("EGL_PLATFORM","surfaceless",1);
     const EGLDisplay display=eglGetDisplay(EGL_DEFAULT_DISPLAY);
@@ -61,6 +90,9 @@ int main(){
     check(context!=EGL_NO_CONTEXT,"eglCreateContext");
     check(eglMakeCurrent(display,surface,surface,context)==EGL_TRUE,"eglMakeCurrent");
     check(taks::FastScene::init(),taks::FastScene::lastError());
+    loadRealModel(0,"rock_07");
+    loadRealModel(1,"namaqualand_boulders_01");
+    check(taks::RealModels::complete(),"the two authentic scanned 3D models must both be on GPU");
 
     taks::FastFrame frame;
     frame.playerX=0.f;frame.playerZ=-5.2f;frame.yaw=.785398f;frame.pitch=.615480f;
@@ -105,6 +137,13 @@ int main(){
     frame.pitch=.45f;
     const auto low=render("04-alacsony-3d-kamera.ppm");
     check(low!=overhead,"low 3D camera angle did not change the actual image");
+    frame.pitch=.615480f;
+    frame.yaw=.785398f;
+    const auto scans=render("05-valodi-cc0-fotoalapu-kovek.ppm");
+    check(scans!=0,"photogrammetry image rendered no pixels");
+    for(int i=0;i<12;++i)if(int(frame.nodes[4*i+2]+.5f)==1)frame.nodes[4*i+3]=0;
+    const auto mined=render("06-kitermelt-kovek.ppm");
+    check(mined!=scans,"collecting rocks did not change photographic 3D mesh rendering");
     taks::FastScene::shutdown();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroyContext(display,context);eglDestroySurface(display,surface);
