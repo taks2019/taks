@@ -366,7 +366,7 @@ std::string World::summary() const {
 }
 std::string World::save() const {
     std::ostringstream o;o<<std::setprecision(17);
-    o<<"TAKS_NATIVE_3 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
+    o<<"TAKS_NATIVE_4 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
      <<carriedWood<<' '<<carriedStone<<' '<<carriedTinder<<' '
      <<hours<<' '<<humidity<<' '<<rainIntensity<<' '<<woodMoisture<<' '
      <<groundMoisture<<' '<<stamina<<' '<<fireFuel<<' '
@@ -375,12 +375,17 @@ std::string World::save() const {
      <<preparedPoles<<' '<<shelterStage<<' '<<playerWetness<<' '<<(underShelter?1:0)
      <<' '<<playerX<<' '<<playerZ<<' '<<walkPhase;
     for(const auto& node:nodes)o<<' '<<node.amount;
+    for(int amount:campStock)o<<' '<<amount;
+    o<<' '<<npcSimulatedHours;
+    for(const auto& n:npcs)
+        o<<' '<<n.x<<' '<<n.z<<' '<<n.energy<<' '<<n.hunger<<' '<<n.wetness
+         <<' '<<n.role<<' '<<n.carrying<<' '<<n.task<<' '<<n.delivered<<' '<<n.walkPhase;
     return o.str();
 }
 bool World::load(const std::string& data) {
     std::istringstream is(data);std::string header;World tmp;int hearth=0,fire=0,covered=0;
     if(!(is>>header) ||
-       (header!="TAKS_NATIVE_1" && header!="TAKS_NATIVE_2" && header!="TAKS_NATIVE_3"))return false;
+       (header!="TAKS_NATIVE_1" && header!="TAKS_NATIVE_2" && header!="TAKS_NATIVE_3" && header!="TAKS_NATIVE_4"))return false;
     if(!(is>>tmp.groundWood>>tmp.groundStone>>tmp.groundTinder
       >>tmp.carriedWood>>tmp.carriedStone>>tmp.carriedTinder
       >>tmp.hours>>tmp.humidity>>tmp.rainIntensity>>tmp.woodMoisture
@@ -389,9 +394,17 @@ bool World::load(const std::string& data) {
         if(!(is>>tmp.groundLeaves>>tmp.carriedLeaves>>tmp.chippedEdgeWear>>tmp.stoneDebris
               >>tmp.preparedPoles>>tmp.shelterStage>>tmp.playerWetness>>covered))return false;
     }
-    if(header=="TAKS_NATIVE_3"){
+    if(header=="TAKS_NATIVE_3"||header=="TAKS_NATIVE_4"){
         if(!(is>>tmp.playerX>>tmp.playerZ>>tmp.walkPhase))return false;
         for(auto& node:tmp.nodes){if(!(is>>node.amount))return false;}
+    }
+    if(header=="TAKS_NATIVE_4"){
+        for(int& amount:tmp.campStock)if(!(is>>amount))return false;
+        if(!(is>>tmp.npcSimulatedHours))return false;
+        for(auto& n:tmp.npcs) {
+            if(!(is>>n.x>>n.z>>n.energy>>n.hunger>>n.wetness
+                   >>n.role>>n.carrying>>n.task>>n.delivered>>n.walkPhase))return false;
+        }
     }
     std::string trailing;
     if(is>>trailing)return false;
@@ -414,7 +427,22 @@ bool World::load(const std::string& data) {
     if(covered && tmp.shelterStage!=3)return false;
     if(fire && !hearth)return false;
 
-    if(header=="TAKS_NATIVE_3"){
+    if(header=="TAKS_NATIVE_4"){
+        if(!std::isfinite(tmp.npcSimulatedHours)||tmp.npcSimulatedHours<0||tmp.npcSimulatedHours>=0.0400001)return false;
+        for(int amount:tmp.campStock)if(amount<0||amount>100000)return false;
+        for(int i=0;i<npcCount;++i){
+            const auto& n=tmp.npcs[i];
+            if(n.role!=i||n.carrying<0||n.carrying>1||n.delivered<0||n.delivered>100000||
+               n.task<0||n.task>4||
+               !std::isfinite(n.x)||n.x<-7.5||n.x>7.5||
+               !std::isfinite(n.z)||n.z<-7.5||n.z>13.0||
+               !std::isfinite(n.energy)||n.energy<0||n.energy>100||
+               !std::isfinite(n.hunger)||n.hunger<0||n.hunger>100||
+               !std::isfinite(n.wetness)||n.wetness<0||n.wetness>1||
+               !std::isfinite(n.walkPhase)||n.walkPhase<0||n.walkPhase>1e9)return false;
+        }
+    }
+    if(header=="TAKS_NATIVE_3"||header=="TAKS_NATIVE_4"){
         // Sérült/túlírt mentésből nem szabad nyersanyagot teremteni.
         for(const auto& node:tmp.nodes)if(node.amount<0 || node.amount>100000)return false;
         const int expected[4]={tmp.groundWood,tmp.groundStone,tmp.groundTinder,tmp.groundLeaves};
