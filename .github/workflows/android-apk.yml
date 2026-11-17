@@ -47,13 +47,13 @@ jobs:
       - name: Mesa GLES3 és EGL natív fejlécek
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libegl-dev libgles-dev libgl1-mesa-dri
+          sudo apt-get install -y -qq libegl-dev libgles-dev libgl1-mesa-dri libpng-dev
       - name: Ugyanannak a háromszög-alapú GLES3 megjelenítőnek a fordítása, mint az APK-ban
         run: |
           mkdir -p build-previews
           g++ -std=c++17 -O2 -Wall -Wextra -Iapp/src/main/cpp \
-            tests/fast_scene_preview.cpp app/src/main/cpp/FastScene.cpp \
-            -o build-previews/fast_scene_test -lEGL -lGLESv2
+            tests/fast_scene_preview.cpp app/src/main/cpp/FastScene.cpp app/src/main/cpp/RealModels.cpp \
+            -o build-previews/fast_scene_test -lEGL -lGLESv2 -lpng
       - name: GPU alapú izometrikus és 3D kameraforgatási teszt, valódi képekkel
         env:
           EGL_PLATFORM: surfaceless
