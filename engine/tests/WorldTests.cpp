@@ -1,5 +1,6 @@
 #include "../CauseWorld.h"
 #include <cassert>
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <string>
@@ -116,7 +117,7 @@ int main(){
     taks::World old1,old2;
     assert(old1.load("TAKS_NATIVE_1 14 8 5 0 0 0 6 0.4 0 0.13 0.13 100 0 0 0 0"));
     assert(old2.load("TAKS_NATIVE_2 12 7 4 1 1 1 8 0.4 0 0.13 0.13 88 0 0 0 3 15 2 6 1 0 1 0.12 0"));
-    assert(old1.save().find("TAKS_NATIVE_5")==0);
+    assert(old1.save().find("TAKS_NATIVE_6")==0);
     assert(old2.groundWood==12 && old2.groundStone==7 && old2.groundLeaves==15);
     assert(old2.nodes[0].amount<=3);
     const auto stable=old2.save();
@@ -171,7 +172,7 @@ int main(){
     taks::World legacy3;
     const auto v4Save=taks::World().save();
     // V3-ból induló mentés új NPC mezők nélkül is migrál.
-    const auto suffix=v4Save.substr(v4Save.find("TAKS_NATIVE_5")+13);
+    const auto suffix=v4Save.substr(v4Save.find("TAKS_NATIVE_6")+13);
     std::istringstream fields(suffix);
     std::string rawToken;
     // A V3-migráció kódútját a korábbi 27+12 mezővel is ellenőrizzük.
@@ -182,7 +183,7 @@ int main(){
     }
     assert(legacy3.load(v3));
     assert(legacy3.npcs[0].role==0);
-    assert(legacy3.save().find("TAKS_NATIVE_5")==0);
+    assert(legacy3.save().find("TAKS_NATIVE_6")==0);
     // A társakkal helyben lehet beszélni, távolról nincs mágikus kommunikáció.
     taks::World talk;
     assert(talk.act("npc_talk").find("Nincs beszélgetési")!=std::string::npos);
@@ -232,7 +233,7 @@ int main(){
     assert(loadedSites.load(allSites) && loadedSites.save()==allSites);
     assert(loadedSites.siteCount==2 && loadedSites.sites[1].stage==3);
     assert(std::abs(loadedSites.sites[0].x-loadedSites.sites[1].x)>5.0);
-    assert(!loadedSites.load("TAKS_NATIVE_5 missing sites"));
+    assert(!loadedSites.load("TAKS_NATIVE_6 missing sites"));
     assert(loadedSites.save()==allSites);
     // A 0.4-es APK rögzített helyű menedéke valóban a régi helyén marad.
     taks::World preV5;
@@ -243,8 +244,12 @@ int main(){
     std::string token;
     while(savedParts>>token)oldFields.push_back(token);
     assert(oldFields.size()>15);
+    // v6 appends complete animal/plant ecology after the old v5 build sites.
+    const auto ecoBegin=std::find(oldFields.begin(),oldFields.end(),"ECO1");
+    assert(ecoBegin!=oldFields.end());
+    oldFields.erase(ecoBegin,oldFields.end());
     oldFields[0]="TAKS_NATIVE_4";
-    oldFields.resize(oldFields.size()-13); // v5 only: 1 siteCount + 3 × 4 site fields
+    oldFields.resize(oldFields.size()-13); // v5 build sites -> old v4 save
     std::ostringstream oldText;
     for(size_t i=0;i<oldFields.size();++i){
         if(i)oldText<<' ';
@@ -255,6 +260,27 @@ int main(){
     assert(migratedOld.siteCount==1 && migratedOld.sites[0].stage==3);
     assert(std::abs(migratedOld.sites[0].x-3.1)<1e-6);
     assert(std::abs(migratedOld.sites[0].z+1.55)<1e-6);
-    assert(migratedOld.save().find("TAKS_NATIVE_5")==0);
+    assert(migratedOld.save().find("TAKS_NATIVE_6")==0);
+    // A saved 0.8 / v5 world loads without creating animals or losing inventory.
+    auto oldV5Fields=oldFields;
+    {
+        std::istringstream stream(current);
+        oldV5Fields.clear();
+        while(stream>>token){
+            if(token=="ECO1")break;
+            oldV5Fields.push_back(token);
+        }
+    }
+    assert(oldV5Fields.size()>13);
+    oldV5Fields[0]="TAKS_NATIVE_5";
+    std::ostringstream oldV5Text;
+    for(std::size_t i=0;i<oldV5Fields.size();++i){
+        if(i)oldV5Text<<' ';
+        oldV5Text<<oldV5Fields[i];
+    }
+    taks::World upgraded;
+    assert(upgraded.load(oldV5Text.str()));
+    assert(upgraded.save().find("TAKS_NATIVE_6")==0);
+    assert(upgraded.ecology.aliveAnimals()==4);
     std::cout<<"TAKS spatial game, construction and save migration tests PASSED\n";
 }
