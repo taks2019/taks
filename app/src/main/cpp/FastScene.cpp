@@ -17,7 +17,8 @@ struct Vertex { float x,y,z,nx,ny,nz,kind; };
 struct Mat4 { float a[16]{}; };
 std::string error;
 GLuint program=0,staticVAO=0,staticVBO=0,dynamicVAO=0,dynamicVBO=0;
-GLint uVP=-1,uRain=-1,uClock=-1,uEye=-1;
+GLint uVP=-1,uRain=-1,uClock=-1,uEye=-1,uGround=-1,uCliff=-1;
+GLuint terrainTexture[2]={0,0};
 std::vector<Vertex> terrainMesh,objectsMesh;
 Vec3 add(Vec3 a,Vec3 b){return {a.x+b.x,a.y+b.y,a.z+b.z};}
 Vec3 sub(Vec3 a,Vec3 b){return {a.x-b.x,a.y-b.y,a.z-b.z};}
@@ -292,6 +293,8 @@ const char* FRAG=R"GLSL(#version 300 es
 precision mediump float;
 in vec3 wPos;in vec3 wNorm;flat in int matId;
 uniform float u_rain;uniform float u_clock;
+uniform sampler2D u_groundTexture;
+uniform sampler2D u_cliffTexture;
 out vec4 fragColor;
 float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
 void main(){
@@ -299,10 +302,9 @@ void main(){
     float lines=.5+.5*sin(wPos.y*8.5+sin(wPos.x*.69+wPos.z*.21)*1.8);
     vec3 base;
     if(matId==0){
-        float a=hash(floor(wPos*3.));
-        base=mix(vec3(.39,.31,.22),vec3(.65,.51,.33),a*.46+grain*.28);
+        base=texture(u_groundTexture,wPos.xz*.45).rgb * (0.85+0.15*grain);
     }else if(matId==1){
-        base=mix(vec3(.36,.28,.21),vec3(.66,.54,.41),lines*.57+grain*.13);
+        base=texture(u_cliffTexture,vec2(wPos.x*.25,wPos.y*.34)).rgb * (0.88+0.12*lines);
     }else if(matId==2){
         base=mix(vec3(.32,.30,.27),vec3(.59,.53,.46),grain*.7);
     }else if(matId==3){
@@ -333,6 +335,8 @@ void main(){
 }
 const std::string& lastError(){return error;}
 void shutdown(){
+    if(terrainTexture[0]||terrainTexture[1])glDeleteTextures(2,terrainTexture);
+    terrainTexture[0]=terrainTexture[1]=0;
     if(staticVBO)glDeleteBuffers(1,&staticVBO);
     if(dynamicVBO)glDeleteBuffers(1,&dynamicVBO);
     if(staticVAO)glDeleteVertexArrays(1,&staticVAO);
@@ -358,6 +362,8 @@ bool init(){
     uVP=glGetUniformLocation(program,"u_viewProjection");
     uRain=glGetUniformLocation(program,"u_rain");
     uClock=glGetUniformLocation(program,"u_clock");
+    uGround=glGetUniformLocation(program,"u_groundTexture");
+    uCliff=glGetUniformLocation(program,"u_cliffTexture");
     buildStatic();
     setupBuffer(staticVAO,staticVBO,GL_STATIC_DRAW,terrainMesh);
     setupBuffer(dynamicVAO,dynamicVBO,GL_STREAM_DRAW,objectsMesh);
@@ -366,6 +372,34 @@ bool init(){
     glDisable(GL_CULL_FACE);
     if(!taks::RealModels::init()){error=taks::RealModels::errorMessage();return false;}
     return glGetError()==GL_NO_ERROR;
+}
+bool uploadTerrainTexture(int slot,const std::uint32_t* argb,int width,int height){
+    if(slot<0||slot>1||!argb||width<128||height<128||width>2048||height>2048){
+        error="A természetes talaj- vagy sziklafaltextúra hibás.";return false;
+    }
+    if(terrainTexture[slot])glDeleteTextures(1,&terrainTexture[slot]);
+    std::vector<std::uint8_t> rgba(std::size_t(width)*height*4);
+    for(std::size_t i=0;i<std::size_t(width)*height;++i){
+        const std::uint32_t color=argb[i];
+        rgba[i*4]=std::uint8_t(color>>16);
+        rgba[i*4+1]=std::uint8_t(color>>8);
+        rgba[i*4+2]=std::uint8_t(color);
+        rgba[i*4+3]=std::uint8_t(color>>24);
+    }
+    glGenTextures(1,&terrainTexture[slot]);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D,terrainTexture[slot]);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_SRGB8_ALPHA8,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE,rgba.data());
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D,0);
+    if(glGetError()!=GL_NO_ERROR){
+        error="A telefon GPU-ja nem tudta feltölteni a valódi PBR alapanyagtextúrát.";return false;
+    }
+    return true;
 }
 void render(int width,int height,const FastFrame& f){
     if(!program)return;
@@ -389,6 +423,10 @@ void render(int width,int height,const FastFrame& f){
     glUniformMatrix4fv(uVP,1,GL_FALSE,vp.a);
     if(uRain>=0)glUniform1f(uRain,f.rain);
     if(uClock>=0)glUniform1f(uClock,f.clock);
+    glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,terrainTexture[0]);
+    if(uGround>=0)glUniform1i(uGround,0);
+    glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,terrainTexture[1]);
+    if(uCliff>=0)glUniform1i(uCliff,1);
     glBindVertexArray(staticVAO);
     glDrawArrays(GL_TRIANGLES,0,(GLsizei)terrainMesh.size());
     glBindVertexArray(dynamicVAO);
