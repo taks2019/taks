@@ -45,6 +45,7 @@ public final class MainActivity extends Activity {
     private native void nativeRender();
     private native void nativeSetView(float angle,float pitch,float zoom);
     private native String nativeRendererError();
+    private native float[] nativeMenuCues();
     private native boolean nativeUploadRealModel(int slot,byte[] model,int[] argb,int width,int height);
     private native boolean nativeUploadTerrainTexture(int slot,int[] pixels,int width,int height);
 
@@ -141,7 +142,7 @@ public final class MainActivity extends Activity {
         GradientDrawable d=new GradientDrawable();
         d.setColor(color);
         d.setCornerRadius(dp(radius));
-        d.setStroke(dp(1),0x668E998B);
+        d.setStroke(dp(1),0x886F6244);
         return d;
     }
     private TextView caption(String content,int size,int color){
@@ -152,9 +153,9 @@ public final class MainActivity extends Activity {
     private Button button(String text,Runnable action,boolean bright){
         Button b=new Button(this);
         b.setText(text);b.setAllCaps(false);
-        b.setTextColor(bright?0xFF25291F:0xFFECE8DF);
+        b.setTextColor(bright?0xFF2D2115:0xFFF2E4CB);
         b.setTextSize(13);b.setPadding(dp(10),0,dp(10),0);
-        b.setBackground(panelBackground(bright?0xFFE5CE9C:0xDA202D29,12));
+        b.setBackground(panelBackground(bright?0xFFE4C38A:0xDA30251B,12));
         b.setOnClickListener(v->{action.run();refreshScene();});
         return b;
     }
@@ -469,7 +470,13 @@ public final class MainActivity extends Activity {
         if(menuCover!=null)root.removeView(menuCover);
 
         menuCover=new FrameLayout(this);
-        menuCover.setBackgroundColor(0xD5091411);
+        final PrehistoricMenuTheme.Look natural=PrehistoricMenuTheme.fromCues(nativeMenuCues());
+        // A background is a translucent veil over the ACTUAL game world.
+        // Only earth, bark, soot and ochre; world daylight/rain drive its tones.
+        GradientDrawable earthenVeil=new GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{natural.veilTop,natural.veilBottom});
+        menuCover.setBackground(earthenVeil);
         LinearLayout stack=new LinearLayout(this);
         stack.setOrientation(LinearLayout.VERTICAL);
         stack.setGravity(Gravity.CENTER);
@@ -481,6 +488,11 @@ public final class MainActivity extends Activity {
         LinearLayout.LayoutParams logoSize=new LinearLayout.LayoutParams(-1,menuLogoHeight);
         logoSize.bottomMargin=dp(5);
         stack.addView(logo,logoSize);
+        // Reflect only actual discoveries from the saved World, never a fake level.
+        TextView discoveries=caption(natural.discoveryLine,11,natural.accent);
+        discoveries.setGravity(Gravity.CENTER);
+        discoveries.setPadding(dp(2),0,dp(2),dp(5));
+        stack.addView(discoveries,new LinearLayout.LayoutParams(-1,dp(22)));
         String[] labels={"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐK","KILÉPÉS"};
         Runnable[] actions={this::newWorldFromMenu,this::showSettings,this::showCredits,
                 ()->new AlertDialog.Builder(this).setTitle("Kilépés")
@@ -491,6 +503,14 @@ public final class MainActivity extends Activity {
             Button menuButton=button(labels[i],actions[i],i==0);
             menuButton.setTextSize(16);
             menuButton.setLetterSpacing(.035f);
+            // Four distinct hit targets, shared prehistoric visual materials.
+            GradientDrawable physicalButton=new GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{natural.buttonTop,natural.buttonBottom});
+            physicalButton.setCornerRadius(dp(10));
+            physicalButton.setStroke(dp(1),natural.accent);
+            menuButton.setBackground(physicalButton);
+            menuButton.setTextColor(natural.text);
             LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,menuButtonHeight);
             bp.bottomMargin=dp(5);
             stack.addView(menuButton,bp);
@@ -556,7 +576,7 @@ public final class MainActivity extends Activity {
 
         LinearLayout header=new LinearLayout(this);header.setOrientation(LinearLayout.VERTICAL);
         header.setPadding(dp(15),dp(10),dp(10),dp(10));
-        header.setBackground(panelBackground(0xB8101A1A,13));
+        header.setBackground(panelBackground(0xB8251C14,13));
         header.addView(caption("TAKS WORLD",22,0xFFE6D6B5));
         header.addView(caption("TAKS ENGINE 0.7 · FŐMENÜ",10,0xFFC3D1C5));
         FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
