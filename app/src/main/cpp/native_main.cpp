@@ -137,16 +137,15 @@ extern "C" JNIEXPORT jfloatArray JNICALL Java_hu_taks_world_MainActivity_nativeM
         snapshot[1]=static_cast<jfloat>(world.rainIntensity);
         snapshot[2]=static_cast<jfloat>(world.groundMoisture);
         snapshot[3]=world.fireLit?1.f:0.f;
-        bool vegetation=false;
-        for(const auto& node:world.nodes){
-            if(node.type==3 && node.amount>0){vegetation=true;break;}
-        }
-        snapshot[4]=vegetation?1.f:0.f;
+        // Real ecological biomass and verified plant knowledge, not fake unlocks.
+        snapshot[4]=world.ecology.grassCover()>.15f?1.f:0.f;
         snapshot[5]=world.stoneDebris>0?1.f:0.f;
         snapshot[6]=(world.preparedPoles>0||world.shelterStage>0)?1.f:0.f;
         snapshot[7]=world.shelterStage>0?1.f:0.f;
         // The current World does not yet have a real fern, vine or rope system.
-        snapshot[8]=0.f; snapshot[9]=0.f; snapshot[10]=0.f;
+        snapshot[8]=world.ecology.verifiedFerns?1.f:0.f;
+        snapshot[9]=world.ecology.verifiedVines?1.f:0.f;
+        snapshot[10]=0.f; // Rope craft not yet implemented in this milestone.
     }
     jfloatArray arr=env->NewFloatArray(11);
     if(arr)env->SetFloatArrayRegion(arr,0,11,snapshot);
