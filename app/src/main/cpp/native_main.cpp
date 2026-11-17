@@ -13,7 +13,7 @@ namespace {
 taks::World world;
 std::mutex worldLock;
 GLuint program=0, vertexArray=0;
-float orbit=0.785398f, pitch=0.615480f, zoom=14.0f;
+float orbit=0.785398f, pitch=0.615480f, zoom=10.0f;
 std::string rendererError;
 jstring toJava(JNIEnv* env,const std::string& s){return env->NewStringUTF(s.c_str());}
 GLuint compile(GLenum type,const char* source){
