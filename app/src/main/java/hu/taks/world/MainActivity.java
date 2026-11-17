@@ -30,6 +30,9 @@ public final class MainActivity extends Activity {
     private native String nativeMove(float dx,float dz);
     private native String nativeNearby();
     private native String nativeGoal();
+    private native String nativeNpcStatus();
+    private native String nativeCampStatus();
+    private native void nativeTick();
     private native String nativeSave();
     private native boolean nativeLoad(String saved);
     private native void nativeReset();
@@ -47,6 +50,16 @@ public final class MainActivity extends Activity {
     private String shaderSource;
     private float orbit=0f,zoom=14f,lastX=0,lastY=0,lastSpan=0;
     private int activePanel=0;
+    private final Handler worldHandler=new Handler(Looper.getMainLooper());
+    private int worldTickNumber=0;
+    private final Runnable worldLoop=new Runnable(){
+        @Override public void run(){
+            nativeTick();
+            if(surface!=null)surface.requestRender();
+            if(activePanel==3 && ++worldTickNumber%7==0)showPanel(3);
+            worldHandler.postDelayed(this,1800);
+        }
+    };
     private TextView proximity;
     private boolean moving=false,moveIntent=false;
     private float anchorX,anchorY,axisX=0,axisY=0;
@@ -114,7 +127,7 @@ public final class MainActivity extends Activity {
         sheet=new LinearLayout(this);sheet.setOrientation(LinearLayout.VERTICAL);
         sheet.setPadding(dp(12),dp(9),dp(12),dp(7));
         sheet.setBackground(panelBackground(0xF1101B19,16));
-        TextView title=caption(which==1?"ÉPÍTÉS ÉS ANYAGOK":"KÖRNYEZET ÉS ÁLLAPOT",15,0xFFE4D6B6);
+        TextView title=caption(which==1?"ÉPÍTÉS ÉS ANYAGOK":which==3?"KÖZÖSSÉG ÉS TÁBOR":"KÖRNYEZET ÉS ÁLLAPOT",15,0xFFE4D6B6);
         title.setPadding(0,0,0,4);sheet.addView(title);
         ScrollView scroll=new ScrollView(this);
         scroll.setVerticalScrollBarEnabled(false);
@@ -146,6 +159,18 @@ public final class MainActivity extends Activity {
             content.addView(caption("4 · TŰZ ÉS MELEG",12,0xFF9EC9B9));
             addVertical(content,"Tűzhely építése · 3 faág + 2 kő",()->act("hearth"));
             addVertical(content,"Tűzgyújtás · 2 faág + gyújtós",()->act("ignite"));
+        }else if(which==3){
+            content.addView(caption("A társak véges lelőhelyekről, önállóan szállítanak a táborba.",12,0xFFDDCBAC));
+            TextView camp=caption(nativeCampStatus(),12,0xFFE2D9BD);
+            camp.setPadding(0,dp(7),0,dp(8));content.addView(camp);
+            addVertical(content,"Tábori faág átvétele",()->act("camp_wood"));
+            addVertical(content,"Tábori kő átvétele",()->act("camp_stone"));
+            addVertical(content,"Tábori levél átvétele",()->act("camp_leaves"));
+            addVertical(content,"Tábori gyújtós átvétele",()->act("camp_tinder"));
+            addVertical(content,"Beszélgetés a közeli társaddal",()->act("npc_talk"));
+            content.addView(caption("NÉGY KÜLÖN DOLGOZÓ NPC",12,0xFF9EC9B9));
+            TextView npc=caption(nativeNpcStatus(),12,0xFFECE4D5);
+            npc.setLineSpacing(dp(4),1f);content.addView(npc);
         }else{
             content.addView(caption(nativeGoal(),12,0xFFF4D59B));
             TextView status=caption(nativeState(),12,0xFFEEE7DB);
@@ -341,9 +366,10 @@ public final class MainActivity extends Activity {
         bottom.setBackground(panelBackground(0xC7101B19,15));
         Button pick=button("FELVESZ",()->act("gather"),true);
         Button build=button("ÉPÍTÉS",()->togglePanel(1),false);
+        Button npc=button("TÁRSAK",()->togglePanel(3),false);
         Button info=button("TÁSKA",()->togglePanel(2),false);
         Button menu=button("MENÜ",this::openGameMenu,false);
-        for(Button b:new Button[]{pick,build,info,menu}){
+        for(Button b:new Button[]{pick,build,npc,info,menu}){
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,Math.max(45,bottomBarPx()-10),1);
             lp.setMargins(dp(3),0,dp(3),0);bottom.addView(b,lp);
         }
@@ -351,9 +377,15 @@ public final class MainActivity extends Activity {
         bp.setMargins(dp(6),0,dp(6),dp(6));root.addView(bottom,bp);
         setContentView(root);
     }
-    @Override protected void onResume(){super.onResume();if(surface!=null)surface.onResume();}
+    @Override protected void onResume(){
+        super.onResume();
+        if(surface!=null)surface.onResume();
+        worldHandler.removeCallbacks(worldLoop);
+        worldHandler.postDelayed(worldLoop,1800);
+    }
     @Override protected void onPause(){
         moving=false;movementHandler.removeCallbacks(movementLoop);
+        worldHandler.removeCallbacks(worldLoop);
         saves.edit().putString("state",nativeSave()).apply();
         if(surface!=null)surface.onPause();
         super.onPause();
