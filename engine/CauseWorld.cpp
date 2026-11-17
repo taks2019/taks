@@ -128,7 +128,7 @@ void World::updateNpcs(double dt){
                     npc.task=0;
                     ++eventCounter;
                 }else{
-                    const double step=std::min(length,.25*(npc.wetness>.6?.65:1.));
+                    const double step=std::min(length,.25*(npc.wetness>.6?.65:1.)*ecology.walkSpeedFactor());
                     npc.x+=dx/length*step;npc.z+=dz/length*step;
                     npc.walkPhase+=step*5;
                     npc.energy=clamp(npc.energy-step*.42,0,100);
@@ -157,7 +157,7 @@ void World::updateNpcs(double dt){
                 syncGroundCounts();
                 ++eventCounter;
             }else{
-                const double step=std::min(length,.22*(npc.wetness>.6?.65:1.));
+                const double step=std::min(length,.22*(npc.wetness>.6?.65:1.)*ecology.walkSpeedFactor());
                 npc.x+=dx/length*step;npc.z+=dz/length*step;
                 npc.walkPhase+=step*5;
                 npc.energy=clamp(npc.energy-step*.44,0,100);
@@ -191,6 +191,7 @@ std::string World::move(double dx,double dz){
     if(stamina<0.5)return "A karakter kimerült: pihennie kell.";
     // Az érintéses mozgás egy-egy kicsi világkoordináta-lépés; nem teleport.
     const double factor=std::min(1.0,0.75/requested);
+    factor*=ecology.walkSpeedFactor();
     dx*=factor;dz*=factor;
     const double nx=playerX+dx,nz=playerZ+dz;
     if(nx< -7.5||nx>7.5||nz< -7.5||nz>13.0)return "A világ jelenlegi bejárható határához értél.";
@@ -199,7 +200,8 @@ std::string World::move(double dx,double dz){
         return "A sziklafal elállja az utat. A barlangnyílás középen található.";
     const double length=std::sqrt(dx*dx+dz*dz);
     playerX=nx;playerZ=nz;walkPhase+=length*5.5;
-    stamina=clamp(stamina-length*(0.50+groundMoisture*0.65),0.0,100.0);
+    stamina=clamp(stamina-length*(0.50+groundMoisture*0.65+ecology.mud*.8+
+            ecology.snowDepth*.35+ecology.slipRisk()*.4),0.0,100.0);
     step(length*.013);
     // A menedék nem véd, ha elhagytuk a valódi fedett területet.
     if(underShelter && !protectedAtPlayer())underShelter=false;
@@ -392,6 +394,13 @@ void World::step(double hoursElapsed) {
     if(!testWeather) rainIntensity=clamp((humidity-0.62)*2.8,0.0,1.0);
     groundMoisture=clamp(groundMoisture+rainIntensity*0.25*hoursElapsed-(1-rainIntensity)*0.035*hoursElapsed,0,1);
     woodMoisture=clamp(woodMoisture+rainIntensity*0.23*hoursElapsed-(1-rainIntensity)*0.07*hoursElapsed,0,1);
+    // This first Wonderwerk climate profile is explicitly provisional: seasonal
+    // gameplay temperature, not a reconstruction of local Pleistocene weather.
+    constexpr double twoPi=6.2831853071795864769;
+    const double temperature=22.+4.*std::sin((hours/(24.*365.))*twoPi)
+                            +2.*std::sin((std::fmod(hours,24.)/24.)*twoPi);
+    const double sunlight=clamp(1.-std::abs(std::fmod(hours,24.)-13.)/12.,0.,1.);
+    ecology.step(hoursElapsed,rainIntensity,groundMoisture,sunlight,temperature);
     // A tető NEM teleportálja szárazra a játékost. Csak fedett menedékbe húzódva véd.
     const double exposure=(underShelter && protectedAtPlayer())?0.07:1.0;
     playerWetness=clamp(playerWetness+rainIntensity*0.34*exposure*hoursElapsed
@@ -439,12 +448,13 @@ std::string World::summary() const {
       <<"TŰZHELY: "<<(hearthBuilt?"felépült":"hiányzik")<<" | TŰZ: "<<(fireLit?"ég":"nem ég")<<"\n"
       <<"TÁBOR: "<<campStatus()<<"\n"
       <<"KÖZÖSSÉG: 4 társ · önálló munkavégzés\n"
-      <<"OKOZATI ESEMÉNYEK: "<<eventCounter;
+      <<"OKOZATI ESEMÉNYEK: "<<eventCounter<<"\n"
+      <<ecology.status();
     return os.str();
 }
 std::string World::save() const {
     std::ostringstream o;o<<std::setprecision(17);
-    o<<"TAKS_NATIVE_5 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
+    o<<"TAKS_NATIVE_6 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
      <<carriedWood<<' '<<carriedStone<<' '<<carriedTinder<<' '
      <<hours<<' '<<humidity<<' '<<rainIntensity<<' '<<woodMoisture<<' '
      <<groundMoisture<<' '<<stamina<<' '<<fireFuel<<' '
@@ -461,12 +471,13 @@ std::string World::save() const {
     o<<' '<<siteCount;
     for(const auto& site:sites)
         o<<' '<<site.x<<' '<<site.z<<' '<<site.stage<<' '<<site.condition;
+    ecology.write(o);
     return o.str();
 }
 bool World::load(const std::string& data) {
     std::istringstream is(data);std::string header;World tmp;int hearth=0,fire=0,covered=0;
     if(!(is>>header) ||
-       (header!="TAKS_NATIVE_1" && header!="TAKS_NATIVE_2" && header!="TAKS_NATIVE_3" && header!="TAKS_NATIVE_4" && header!="TAKS_NATIVE_5"))return false;
+       (header!="TAKS_NATIVE_1" && header!="TAKS_NATIVE_2" && header!="TAKS_NATIVE_3" && header!="TAKS_NATIVE_4" && header!="TAKS_NATIVE_5" && header!="TAKS_NATIVE_6"))return false;
     if(!(is>>tmp.groundWood>>tmp.groundStone>>tmp.groundTinder
       >>tmp.carriedWood>>tmp.carriedStone>>tmp.carriedTinder
       >>tmp.hours>>tmp.humidity>>tmp.rainIntensity>>tmp.woodMoisture
@@ -475,11 +486,11 @@ bool World::load(const std::string& data) {
         if(!(is>>tmp.groundLeaves>>tmp.carriedLeaves>>tmp.chippedEdgeWear>>tmp.stoneDebris
               >>tmp.preparedPoles>>tmp.shelterStage>>tmp.playerWetness>>covered))return false;
     }
-    if(header=="TAKS_NATIVE_3"||header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"){
+    if(header=="TAKS_NATIVE_3"||header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"||header=="TAKS_NATIVE_6"){
         if(!(is>>tmp.playerX>>tmp.playerZ>>tmp.walkPhase))return false;
         for(auto& node:tmp.nodes){if(!(is>>node.amount))return false;}
     }
-    if(header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"){
+    if(header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"||header=="TAKS_NATIVE_6"){
         for(int& amount:tmp.campStock)if(!(is>>amount))return false;
         if(!(is>>tmp.npcSimulatedHours))return false;
         for(auto& n:tmp.npcs) {
@@ -487,11 +498,12 @@ bool World::load(const std::string& data) {
                    >>n.role>>n.carrying>>n.task>>n.delivered>>n.walkPhase))return false;
         }
     }
-    if(header=="TAKS_NATIVE_5"){
+    if(header=="TAKS_NATIVE_5"||header=="TAKS_NATIVE_6"){
         if(!(is>>tmp.siteCount))return false;
         for(auto& site:tmp.sites)
             if(!(is>>site.x>>site.z>>site.stage>>site.condition))return false;
     }
+    if(header=="TAKS_NATIVE_6" && !tmp.ecology.read(is))return false;
     std::string trailing;
     if(is>>trailing)return false;
     if(tmp.groundWood<0||tmp.groundStone<0||tmp.groundTinder<0||
@@ -513,7 +525,7 @@ bool World::load(const std::string& data) {
     if(covered && tmp.shelterStage!=3)return false;
     if(fire && !hearth)return false;
 
-    if(header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"){
+    if(header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"||header=="TAKS_NATIVE_6"){
         if(!std::isfinite(tmp.npcSimulatedHours)||tmp.npcSimulatedHours<0||tmp.npcSimulatedHours>=0.0400001)return false;
         for(int amount:tmp.campStock)if(amount<0||amount>100000)return false;
         for(int i=0;i<npcCount;++i){
@@ -528,7 +540,7 @@ bool World::load(const std::string& data) {
                !std::isfinite(n.walkPhase)||n.walkPhase<0||n.walkPhase>1e9)return false;
         }
     }
-    if(header=="TAKS_NATIVE_3"||header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"){
+    if(header=="TAKS_NATIVE_3"||header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"||header=="TAKS_NATIVE_6"){
         // Sérült/túlírt mentésből nem szabad nyersanyagot teremteni.
         for(const auto& node:tmp.nodes)if(node.amount<0 || node.amount>100000)return false;
         const int expected[4]={tmp.groundWood,tmp.groundStone,tmp.groundTinder,tmp.groundLeaves};
@@ -552,7 +564,7 @@ bool World::load(const std::string& data) {
         }
         tmp.syncGroundCounts();
     }
-    if(header!="TAKS_NATIVE_5"){
+    if(header!="TAKS_NATIVE_5" && header!="TAKS_NATIVE_6"){
         // Régi APK-kban a menedék egy rögzített helyen állt.
         // Csak a már megépített szerkezetet migráljuk, ingyen építési helyet nem hozunk létre.
         if(tmp.shelterStage>0){
