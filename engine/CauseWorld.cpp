@@ -134,6 +134,7 @@ void World::updateNpcs(double dt){
             }
         }
     }
+    if(npcSimulatedHours<0.0)npcSimulatedHours=0.0;
 }
 std::string World::nearby() const{
     const ResourceNode* best=nullptr;
