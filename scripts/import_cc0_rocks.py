@@ -156,7 +156,9 @@ def convert_model(gltf: Path, slug: str, settings: dict):
     model_path=OUT/f"{slug}.tkm"
     model_path.write_bytes(data)
 
-    image=Image.fromarray(np.asarray(image)).convert("RGB")
+    # Keep RGBA cutouts intact for photographic leaves and fronds. Flattening
+    # to RGB created opaque rectangular cards, unacceptable in this project.
+    image=Image.fromarray(np.asarray(image)).convert("RGBA")
     image.thumbnail((1024,1024),Image.Resampling.LANCZOS)
     # Pack a real UV-dependent diffuse map for offline Android use.
     png=OUT/f"{slug}.png"
