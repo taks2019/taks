@@ -67,6 +67,27 @@ void loadRealModel(int id,const std::string& name){
              <<" (texture "<<picture.width<<"x"<<picture.height<<")\n";
     png_image_free(&picture);
 }
+void loadActualTerrainPhoto(int slot,const std::string& slug){
+    const std::string filename="app/src/main/assets/models/"+slug+".png";
+    png_image picture{};picture.version=PNG_IMAGE_VERSION;
+    check(png_image_begin_read_from_file(&picture,filename.c_str())!=0,
+          "missing actual CC0 terrain photo: "+filename);
+    picture.format=PNG_FORMAT_RGBA;
+    std::vector<std::uint8_t> rgba(PNG_IMAGE_SIZE(picture));
+    check(png_image_finish_read(&picture,nullptr,rgba.data(),0,nullptr)!=0,
+          "invalid actual terrain PBR photo: "+filename);
+    std::vector<std::uint32_t> argb(std::size_t(picture.width)*picture.height);
+    for(std::size_t i=0;i<argb.size();++i){
+        argb[i]=std::uint32_t(rgba[4*i+3])<<24|
+                std::uint32_t(rgba[4*i])<<16|
+                std::uint32_t(rgba[4*i+1])<<8|rgba[4*i+2];
+    }
+    check(taks::FastScene::uploadTerrainTexture(slot,argb.data(),int(picture.width),int(picture.height)),
+          "real ground or cliff photograph GPU upload failed");
+    std::cout<<"Verified photographic CC0 terrain material: "<<slug
+             <<" ("<<picture.width<<"x"<<picture.height<<")\n";
+    png_image_free(&picture);
+}
 int main(){
     setenv("EGL_PLATFORM","surfaceless",1);
     const EGLDisplay display=eglGetDisplay(EGL_DEFAULT_DISPLAY);
@@ -92,6 +113,8 @@ int main(){
     check(taks::FastScene::init(),taks::FastScene::lastError());
     loadRealModel(0,"rock_07");
     loadRealModel(1,"namaqualand_boulders_01");
+    loadActualTerrainPhoto(0,"ground_sandy_gravel");
+    loadActualTerrainPhoto(1,"wall_cliff_side");
     check(taks::RealModels::complete(),"the two authentic scanned 3D models must both be on GPU");
 
     taks::FastFrame frame;
