@@ -26,7 +26,7 @@ SELECTION = {
                          "role":"living grazing biomass"},
     "fern_02": {"target_span_m": 1.4, "source":"https://polyhaven.com/a/fern_02",
                 "role":"ferns (render only when species verified)"},
-    "tree_small_02": {"target_span_m": 2.4, "source":"https://polyhaven.com/a/tree_small_02",
+    "tree_small_02": {"target_span_m": 2.4, "target_height_m": 2.0, "source":"https://polyhaven.com/a/tree_small_02",
                       "role":"living growing tree; species identification pending"},
 }
 MAX_TRIANGLES = 180_000
@@ -85,7 +85,8 @@ def bake(gltf: Path, slug: str, spec: dict):
     bbox_max = all_positions.max(axis=0)
     span = np.maximum(bbox_max-bbox_min,1e-6)
     # Leaf-bearing models typically have Y-up, just like the existing TKM model path.
-    scale = spec["target_span_m"]/float(max(span[0],span[2]))
+    scale = (spec["target_height_m"]/float(span[1]) if "target_height_m" in spec
+             else spec["target_span_m"]/float(max(span[0],span[2])))
     anchor=(bbox_min+bbox_max)*0.5
     vertex_bytes = []
     alpha_present = False
@@ -121,6 +122,7 @@ def bake(gltf: Path, slug: str, spec: dict):
         "real_meshes":len(parts),"triangles":total,
         "material_images":len(unique),"texture_alpha":alpha_present,
         "texture_px":[atlas.width,atlas.height],
+        "normalized_height_m":round(float(span[1]*scale),4),
         "material":"Photo-based authored multi-mesh RGBA atlas",
         "historical_species_authenticity":"UNVERIFIED",
         "model_sha256":hashlib.sha256(data).hexdigest(),
