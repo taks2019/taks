@@ -560,12 +560,13 @@ public final class MainActivity extends Activity {
                 // None is replaced with placeholder tubes, boxes or billboard graphics.
                 boolean grassOk=loadAuthenticRockAsset(3,"grass_bermuda_01");
                 boolean fernOk=loadAuthenticRockAsset(4,"fern_02");
-                boolean treeOk=loadAuthenticRockAsset(5,"tree_small_02");
+                // The 2M-triangle tree awaits a genuine UV-preserving mobile LOD.
+                // No fake tree model is substituted.
                 boolean groundOk=loadRealPbrSurface(0,"ground_sandy_gravel");
                 boolean cliffOk=loadRealPbrSurface(1,"wall_cliff_side");
                 runOnUiThread(()->{
                     String err=nativeRendererError();
-                    if(!rockOk||!bouldersOk||!cliffModelOk||!grassOk||!fernOk||!treeOk||!groundOk||!cliffOk||err!=null&&!err.isEmpty()){
+                    if(!rockOk||!bouldersOk||!cliffModelOk||!grassOk||!fernOk||!groundOk||!cliffOk||err!=null&&!err.isEmpty()){
                         say("Valódi 3D modellhiba: "+(err==null?"":err)+
                             " · Az APK modellcsomagja sérült vagy hiányzik.");
                     }
