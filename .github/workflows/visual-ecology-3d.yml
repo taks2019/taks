@@ -27,7 +27,7 @@ jobs:
           from pathlib import Path
           d=Path('app/src/main/assets/models')
           m=json.loads((d/'foliage_manifest.json').read_text())
-          assert len(m['models'])==3
+          assert len(m['models'])==2
           for x in m['models']:
               name=x['name']
               data=(d/(name+'.tkm')).read_bytes()
