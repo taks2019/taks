@@ -116,6 +116,8 @@ int main(){
     loadRealModel(2,"namaqualand_cliff_01");
     loadRealModel(3,"grass_bermuda_01");
     loadRealModel(4,"fern_02");
+    loadRealModel(6,"makehuman_cc0");
+    check(taks::RealModels::hasRealHuman(),"genuine anatomical mesh must replace stick-figure scene markers");
     // Tree candidate awaits true mobile LOD; not silently replaced.
     loadActualTerrainPhoto(0,"ground_sandy_gravel");
     loadActualTerrainPhoto(1,"wall_cliff_side");
@@ -198,6 +200,10 @@ int main(){
     const auto fernUnknown=render("10-nincs-megismert-pafrany.ppm");
     check(fernKnown!=fernUnknown,
           "fern geometry must be gated by world botanical approval");
+    // Camera close-up confirms the actual MakeHuman mesh is on the same GPU path.
+    frame.playerX=0.f;frame.playerZ=-5.2f;frame.zoom=6.5f;
+    frame.pitch=.48f;frame.yaw=.785398f;
+    render("11-valodi-texturazott-embermodellek.ppm");
     taks::FastScene::shutdown();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroyContext(display,context);eglDestroySurface(display,surface);
