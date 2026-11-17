@@ -35,7 +35,7 @@ SELECTION = {
 MAX_MB = 96
 PBR_MATERIALS = {
     "sandy_gravel_02": "ground_sandy_gravel",
-    "cliff_side": "wall_cliff_side"
+    "rock_face_03": "wall_cliff_side"
 }
 MAX_TRIANGLES = 180000
 
