@@ -535,11 +535,12 @@ public final class MainActivity extends Activity {
                 // és saját fénykép-textúráik közvetlenül az Android APK assetjeiből töltődnek.
                 boolean rockOk=loadAuthenticRockAsset(0,"rock_07");
                 boolean bouldersOk=loadAuthenticRockAsset(1,"namaqualand_boulders_01");
+                boolean cliffModelOk=loadAuthenticRockAsset(2,"namaqualand_cliff_02");
                 boolean groundOk=loadRealPbrSurface(0,"ground_sandy_gravel");
                 boolean cliffOk=loadRealPbrSurface(1,"wall_cliff_side");
                 runOnUiThread(()->{
                     String err=nativeRendererError();
-                    if(!rockOk||!bouldersOk||!groundOk||!cliffOk||err!=null&&!err.isEmpty()){
+                    if(!rockOk||!bouldersOk||!cliffModelOk||!groundOk||!cliffOk||err!=null&&!err.isEmpty()){
                         say("Valódi 3D modellhiba: "+(err==null?"":err)+
                             " · Az APK modellcsomagja sérült vagy hiányzik.");
                     }
