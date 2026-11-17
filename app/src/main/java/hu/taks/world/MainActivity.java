@@ -46,6 +46,7 @@ public final class MainActivity extends Activity {
     private native void nativeSetView(float angle,float pitch,float zoom);
     private native String nativeRendererError();
     private native boolean nativeUploadRealModel(int slot,byte[] model,int[] argb,int width,int height);
+    private native boolean nativeUploadTerrainTexture(int slot,int[] pixels,int width,int height);
 
     private GLSurfaceView surface;
     private SharedPreferences saves;
@@ -95,6 +96,22 @@ public final class MainActivity extends Activity {
     };
 
 
+    private boolean loadRealPbrSurface(int slot,String name){
+        try(InputStream data=getAssets().open("models/"+name+".png")){
+            Bitmap bitmap=BitmapFactory.decodeStream(data);
+            if(bitmap==null)throw new java.io.IOException("PBR image decoding failed: "+name);
+            int width=bitmap.getWidth(),height=bitmap.getHeight();
+            int[] pixels=new int[width*height];
+            bitmap.getPixels(pixels,0,width,0,0,width,height);
+            bitmap.recycle();
+            boolean ok=nativeUploadTerrainTexture(slot,pixels,width,height);
+            if(!ok)throw new java.io.IOException("GPU refused photographic surface: "+name);
+            return true;
+        }catch(Exception e){
+            android.util.Log.e("TAKS_SURFACE","Missing real PBR material: "+name,e);
+            return false;
+        }
+    }
     private boolean loadAuthenticRockAsset(int slot,String name){
         // The compressed PNG and mesh are bundled into the APK by the CI import job.
         try(InputStream meshStream=getAssets().open("models/"+name+".tkm");
@@ -518,9 +535,11 @@ public final class MainActivity extends Activity {
                 // és saját fénykép-textúráik közvetlenül az Android APK assetjeiből töltődnek.
                 boolean rockOk=loadAuthenticRockAsset(0,"rock_07");
                 boolean bouldersOk=loadAuthenticRockAsset(1,"namaqualand_boulders_01");
+                boolean groundOk=loadRealPbrSurface(0,"ground_sandy_gravel");
+                boolean cliffOk=loadRealPbrSurface(1,"wall_cliff_side");
                 runOnUiThread(()->{
                     String err=nativeRendererError();
-                    if(!rockOk||!bouldersOk||err!=null&&!err.isEmpty()){
+                    if(!rockOk||!bouldersOk||!groundOk||!cliffOk||err!=null&&!err.isEmpty()){
                         say("Valódi 3D modellhiba: "+(err==null?"":err)+
                             " · Az APK modellcsomagja sérült vagy hiányzik.");
                     }
