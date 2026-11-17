@@ -15,6 +15,7 @@ uniform vec2 u_player;
 uniform float u_walkPhase;
 uniform vec4 u_nodes[12];
 uniform vec4 u_npcs[4];
+uniform vec4 u_sites[3];
 
 float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
 float n3(vec3 x){vec3 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
@@ -120,41 +121,52 @@ vec2 geo(vec3 p){
  }
  // A készültségi fázisokat nem egy készre kapcsolt objektum, hanem szerkezeti részek rajzolják.
  // 0: üres; 1: két cölöp + kőlábazat; 2: gerenda és szarufák; 3: átlapolt növényi tető.
- if(u_shelterStage>0.5 && p.x>0.5 && p.x<5.7 && p.z>-3.4 && p.z<2.3 && p.y<3.5){
-  float zFront=-1.55;
-  float h=terrain(vec2(3.1,zFront));
-  for(int k=0;k<2;k++){
-   float x=2.03+float(k)*2.12;
-   float fy=terrain(vec2(x,zFront));
-   float pole=sdSegment(p,vec3(x,fy+.07,zFront),vec3(x,h+2.34,zFront),.105);
-   pole+=.014*(n3(p*14.)-.5);
-   if(pole<d){d=pole;mat=5.;}
-   // A cölöpök tövében két ténylegesen felhasznált rögzítőkő.
-   float footing=sdOcta((p-vec3(x,fy+.13,zFront)) *vec3(1.,1.2,1.),.34);
-   if(footing<d){d=footing;mat=4.;}
-  }
-  if(u_shelterStage>1.5){
-   float beam=sdSegment(p,vec3(1.98,h+2.30,zFront),vec3(4.20,h+2.30,zFront),.13);
-   if(beam<d){d=beam;mat=5.;}
-   // A harmadik, negyedik és ötödik cölöp gerenda és két ferde tetőtartó.
+ // Minden kijelölt hely saját állapotból rajzolódik, nem fix tereppontból.
+ for(int build=0;build<3;build++){
+  vec4 site=u_sites[build]; // x, z, stage, integrity 0..1; -1 = nem létezik
+  if(site.z<-.5)continue;
+  vec2 local=p.xz-site.xy;
+  if(abs(local.x)>2.35 || local.y<-.85 || local.y>3.0 || p.y<-1.0 || p.y>3.45)continue;
+  float level=terrain(site.xy);
+  if(site.z<.5){
+   vec3 stake=p-vec3(site.x,level+.11,site.y);
+   float mark=sdOcta(stake*vec3(1.2,1.8,1.2),.23);
+   if(mark<d){d=mark;mat=4.;}
+  }else{
    for(int k=0;k<2;k++){
-    float x=2.04+2.10*float(k);
-    vec3 a=vec3(x,h+2.32,zFront);
-    vec3 b=vec3(x,terrain(vec2(x,.95))+.42,.95);
-    float rafter=sdSegment(p,a,b,.10);
-    if(rafter<d){d=rafter;mat=5.;}
+    float localX=-1.07+float(k)*2.12;
+    float x=site.x+localX;
+    float fy=terrain(vec2(x,site.y));
+    float pole=sdSegment(p,vec3(x,fy+.07,site.y),vec3(x,level+2.34,site.y),.105);
+    pole+=.014*(n3(p*14.)-.5);
+    if(pole<d){d=pole;mat=5.;}
+    float footing=sdOcta((p-vec3(x,fy+.13,site.y))*vec3(1.,1.2,1.),.34);
+    if(footing<d){d=footing;mat=4.;}
    }
-  }
-  if(u_shelterStage>2.5){
-   // Hat, egymásra fektetett levélköteg: megmarad a tető ferde rétegszerkezete.
-   for(int k=0;k<6;k++){
-    float zz=-1.33+float(k)*.37;
-    float yy=h+2.26-(zz-zFront)*.69;
-    vec3 v=p-vec3(3.09,yy,zz);
-    v.y+=v.z*.69;
-    float leafSheet=sdBox(v,vec3(1.12,.038,.31));
-    leafSheet+=.008*(n3(p*18.)-.5);
-    if(leafSheet<d){d=leafSheet;mat=6.;}
+   if(site.z>1.5){
+    float beam=sdSegment(p,vec3(site.x-1.12,level+2.30,site.y),vec3(site.x+1.1,level+2.30,site.y),.13);
+    if(beam<d){d=beam;mat=5.;}
+    for(int k=0;k<2;k++){
+     float x=site.x-1.06+2.10*float(k);
+     vec3 a=vec3(x,level+2.32,site.y);
+     vec3 b=vec3(x,terrain(vec2(x,site.y+2.5))+.42,site.y+2.5);
+     float rafter=sdSegment(p,a,b,.10);
+     if(rafter<d){d=rafter;mat=5.;}
+    }
+   }
+   if(site.z>2.5){
+    // Az eső által koptatott fedés szabálytalanabb, a javítás ezt csökkenti.
+    for(int k=0;k<6;k++){
+     float localZ=.22+float(k)*.37;
+     float zz=site.y+localZ;
+     float yy=level+2.26-localZ*.69;
+     vec3 v=p-vec3(site.x-.01,yy,zz);
+     v.y+=v.z*.69;
+     float irregularity=(1.-site.w)*.075*(n3(p*7.5)-.5);
+     float leafSheet=sdBox(v,vec3(1.12, .038+irregularity, .31));
+     leafSheet+=.008*(n3(p*18.)-.5);
+     if(leafSheet<d){d=leafSheet;mat=6.;}
+    }
    }
   }
  }
