@@ -20,19 +20,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install headless EGL / Mesa renderer
+      - name: Mesa GLES3 és EGL natív fejlécek
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libegl1 libgl1 libgl1-mesa-dri libgles2
-      - name: Headless OpenGL ES 3 render test with actual shader
+          sudo apt-get install -y -qq libegl-dev libgles-dev libgl1-mesa-dri
+      - name: Ugyanannak a háromszög-alapú GLES3 megjelenítőnek a fordítása, mint az APK-ban
+        run: |
+          mkdir -p build-previews
+          g++ -std=c++17 -O2 -Wall -Wextra -Iapp/src/main/cpp \
+            tests/fast_scene_preview.cpp app/src/main/cpp/FastScene.cpp \
+            -o build-previews/fast_scene_test -lEGL -lGLESv2
+      - name: GPU alapú izometrikus és 3D kameraforgatási teszt, valódi képekkel
         env:
           EGL_PLATFORM: surfaceless
           LIBGL_ALWAYS_SOFTWARE: '1'
-        run: python3 tests/render_scene.py
+        run: |
+          build-previews/fast_scene_test
+          python3 tests/ppm_to_png.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: TAKS-World-3D-screenshots
+          name: TAKS-World-isometric-3D-camera-screenshots
           path: build-previews/*.png
           if-no-files-found: warn
   android-debug-apk:
