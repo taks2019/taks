@@ -414,7 +414,18 @@ void render(int width,int height,const FastFrame& f){
     objectsMesh.clear();
     addResources(f);addBuildings(f);addPlayerAndNpcs(f);
     glViewport(0,0,width,height);
-    glClearColor(.56f,.63f,.67f,1.f);
+    // Stone Age menu/game atmosphere derives from the actual clock and weather.
+    // Never use a fixed blue/neon backdrop: nighttime charcoal, daylight dust,
+    // and rain-darkened limestone are natural environmental consequences.
+    const float timeOfDay=std::fmod(std::fmod(f.clock,24.f)+24.f,24.f);
+    const float daylight=std::clamp(1.f-std::abs(timeOfDay-13.f)/9.f,0.f,1.f);
+    const float rainfall=std::clamp(f.rain,0.f,1.f);
+    const float duskR=.085f, duskG=.074f, duskB=.058f;
+    const float dayR=.56f, dayG=.46f, dayB=.34f;
+    const float skyR=(duskR+(dayR-duskR)*daylight)*(1.f-.35f*rainfall);
+    const float skyG=(duskG+(dayG-duskG)*daylight)*(1.f-.29f*rainfall);
+    const float skyB=(duskB+(dayB-duskB)*daylight)*(1.f-.24f*rainfall);
+    glClearColor(skyR,skyG,skyB,1.f);
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
     glUseProgram(program);
     glUniformMatrix4fv(uVP,1,GL_FALSE,vp.a);
