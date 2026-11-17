@@ -12,7 +12,9 @@ namespace taks::RealModels {
     // Offline authored photo-textured geometry, positioned by the saved ecology.
     void render(const float* viewProjection,const float* worldNodes,
                 const float* grass, const float* trees, bool fernApproved,
-                float worldClock, float rain);
+                float worldClock, float rain, float playerX, float playerZ,
+                const float* npcPositions);
+    bool hasRealHuman();
     bool complete();
     const char* errorMessage();
 }
