@@ -114,6 +114,9 @@ int main(){
     loadRealModel(0,"rock_07");
     loadRealModel(1,"namaqualand_boulders_01");
     loadRealModel(2,"namaqualand_cliff_01");
+    loadRealModel(3,"grass_bermuda_01");
+    loadRealModel(4,"fern_02");
+    loadRealModel(5,"tree_small_02");
     loadActualTerrainPhoto(0,"ground_sandy_gravel");
     loadActualTerrainPhoto(1,"wall_cliff_side");
     check(taks::RealModels::complete(),"all three photo-scanned models must be uploaded to GPU");
@@ -133,6 +136,17 @@ int main(){
         4.4f,-2.0f,2.f,0.f,-1.8f,-2.4f,3.f,0.f
     };
     std::copy(npc,npc+16,frame.npcs);
+    const float grass[16]={
+       -5.2f,-1.7f,.62f,.95f,4.1f,-4.2f,.57f,.90f,
+       -3.8f,1.2f,.45f,.94f,5.4f,1.8f,.53f,.91f
+    };
+    const float trees[12]={
+       -6.4f,-1.3f,2.0f,1.0f,5.7f,3.1f,1.6f,1.0f,
+       -5.8f,5.7f,.7f,1.0f
+    };
+    std::copy(grass,grass+16,frame.grass);
+    std::copy(trees,trees+12,frame.trees);
+    frame.verifiedFerns=false; // never show historically unverified plants
     for(int i=0;i<3;++i){frame.sites[4*i+2]=-1.f;frame.sites[4*i+3]=1.f;}
     frame.sites[0]=3.1f;frame.sites[1]=-1.55f;frame.sites[2]=3.f;
     frame.sites[4]=-3.1f;frame.sites[5]=-1.3f;frame.sites[6]=1.f;
@@ -168,6 +182,18 @@ int main(){
     for(int i=0;i<12;++i)if(int(frame.nodes[4*i+2]+.5f)==1)frame.nodes[4*i+3]=0;
     const auto mined=render("06-kitermelt-kovek.ppm");
     check(mined!=scans,"collecting rocks did not change photographic 3D mesh rendering");
+    // Real saved ecological biomass must alter actual GPU pixels.
+    frame.playerX=-5.2f;frame.playerZ=-1.7f;frame.zoom=8.2f;
+    frame.yaw=.785398f;frame.pitch=.615480f;
+    const auto aliveGrass=render("07-elo-fu-es-fa.ppm");
+    for(int i=0;i<4;++i)frame.grass[i*4+2]=0.f;
+    const auto bareGround=render("08-legelt-fu-nelkul.ppm");
+    check(aliveGrass!=bareGround,
+          "real grass mesh must disappear after biomass was eaten");
+    for(int i=0;i<3;++i)frame.trees[i*4+3]=0.f;
+    const auto treeDead=render("09-fa-elhalt.ppm");
+    check(treeDead!=bareGround,
+          "the real tree mesh must stop rendering when tree dies");
     taks::FastScene::shutdown();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroyContext(display,context);eglDestroySurface(display,surface);
