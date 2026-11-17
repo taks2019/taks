@@ -444,7 +444,7 @@ std::string World::summary() const {
 }
 std::string World::save() const {
     std::ostringstream o;o<<std::setprecision(17);
-    o<<"TAKS_NATIVE_4 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
+    o<<"TAKS_NATIVE_5 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
      <<carriedWood<<' '<<carriedStone<<' '<<carriedTinder<<' '
      <<hours<<' '<<humidity<<' '<<rainIntensity<<' '<<woodMoisture<<' '
      <<groundMoisture<<' '<<stamina<<' '<<fireFuel<<' '
@@ -458,12 +458,15 @@ std::string World::save() const {
     for(const auto& n:npcs)
         o<<' '<<n.x<<' '<<n.z<<' '<<n.energy<<' '<<n.hunger<<' '<<n.wetness
          <<' '<<n.role<<' '<<n.carrying<<' '<<n.task<<' '<<n.delivered<<' '<<n.walkPhase;
+    o<<' '<<siteCount;
+    for(const auto& site:sites)
+        o<<' '<<site.x<<' '<<site.z<<' '<<site.stage<<' '<<site.condition;
     return o.str();
 }
 bool World::load(const std::string& data) {
     std::istringstream is(data);std::string header;World tmp;int hearth=0,fire=0,covered=0;
     if(!(is>>header) ||
-       (header!="TAKS_NATIVE_1" && header!="TAKS_NATIVE_2" && header!="TAKS_NATIVE_3" && header!="TAKS_NATIVE_4"))return false;
+       (header!="TAKS_NATIVE_1" && header!="TAKS_NATIVE_2" && header!="TAKS_NATIVE_3" && header!="TAKS_NATIVE_4" && header!="TAKS_NATIVE_5"))return false;
     if(!(is>>tmp.groundWood>>tmp.groundStone>>tmp.groundTinder
       >>tmp.carriedWood>>tmp.carriedStone>>tmp.carriedTinder
       >>tmp.hours>>tmp.humidity>>tmp.rainIntensity>>tmp.woodMoisture
@@ -472,17 +475,22 @@ bool World::load(const std::string& data) {
         if(!(is>>tmp.groundLeaves>>tmp.carriedLeaves>>tmp.chippedEdgeWear>>tmp.stoneDebris
               >>tmp.preparedPoles>>tmp.shelterStage>>tmp.playerWetness>>covered))return false;
     }
-    if(header=="TAKS_NATIVE_3"||header=="TAKS_NATIVE_4"){
+    if(header=="TAKS_NATIVE_3"||header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"){
         if(!(is>>tmp.playerX>>tmp.playerZ>>tmp.walkPhase))return false;
         for(auto& node:tmp.nodes){if(!(is>>node.amount))return false;}
     }
-    if(header=="TAKS_NATIVE_4"){
+    if(header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"){
         for(int& amount:tmp.campStock)if(!(is>>amount))return false;
         if(!(is>>tmp.npcSimulatedHours))return false;
         for(auto& n:tmp.npcs) {
             if(!(is>>n.x>>n.z>>n.energy>>n.hunger>>n.wetness
                    >>n.role>>n.carrying>>n.task>>n.delivered>>n.walkPhase))return false;
         }
+    }
+    if(header=="TAKS_NATIVE_5"){
+        if(!(is>>tmp.siteCount))return false;
+        for(auto& site:tmp.sites)
+            if(!(is>>site.x>>site.z>>site.stage>>site.condition))return false;
     }
     std::string trailing;
     if(is>>trailing)return false;
@@ -505,7 +513,7 @@ bool World::load(const std::string& data) {
     if(covered && tmp.shelterStage!=3)return false;
     if(fire && !hearth)return false;
 
-    if(header=="TAKS_NATIVE_4"){
+    if(header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"){
         if(!std::isfinite(tmp.npcSimulatedHours)||tmp.npcSimulatedHours<0||tmp.npcSimulatedHours>=0.0400001)return false;
         for(int amount:tmp.campStock)if(amount<0||amount>100000)return false;
         for(int i=0;i<npcCount;++i){
@@ -520,7 +528,7 @@ bool World::load(const std::string& data) {
                !std::isfinite(n.walkPhase)||n.walkPhase<0||n.walkPhase>1e9)return false;
         }
     }
-    if(header=="TAKS_NATIVE_3"||header=="TAKS_NATIVE_4"){
+    if(header=="TAKS_NATIVE_3"||header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"){
         // Sérült/túlírt mentésből nem szabad nyersanyagot teremteni.
         for(const auto& node:tmp.nodes)if(node.amount<0 || node.amount>100000)return false;
         const int expected[4]={tmp.groundWood,tmp.groundStone,tmp.groundTinder,tmp.groundLeaves};
@@ -544,7 +552,34 @@ bool World::load(const std::string& data) {
         }
         tmp.syncGroundCounts();
     }
+    if(header!="TAKS_NATIVE_5"){
+        // Régi APK-kban a menedék egy rögzített helyen állt.
+        // Csak a már megépített szerkezetet migráljuk, ingyen építési helyet nem hozunk létre.
+        if(tmp.shelterStage>0){
+            tmp.siteCount=1;
+            tmp.sites[0]={3.1,-1.55,tmp.shelterStage,100.0};
+        }
+    }else{
+        if(tmp.siteCount<0||tmp.siteCount>World::maxBuildSites)return false;
+        int maxStage=0;
+        for(int i=0;i<World::maxBuildSites;++i){
+            const auto& site=tmp.sites[i];
+            if(!std::isfinite(site.x)||!std::isfinite(site.z)||!std::isfinite(site.condition)
+                ||site.condition<0||site.condition>100||site.stage<0||site.stage>3)return false;
+            if(i<tmp.siteCount){
+                if(site.x<-5.7||site.x>5.7||site.z<-6.0||site.z>1.3)return false;
+                maxStage=std::max(maxStage,site.stage);
+                for(int j=0;j<i;++j){
+                    const double dx=site.x-tmp.sites[j].x,dz=site.z-tmp.sites[j].z;
+                    if(dx*dx+dz*dz<3.6*3.6)return false;
+                }
+            }else if(site.stage!=0||site.x!=0||site.z!=0||site.condition!=100)return false;
+        }
+        if(maxStage!=tmp.shelterStage)return false;
+    }
     tmp.hearthBuilt=hearth!=0;tmp.fireLit=fire!=0;tmp.underShelter=covered!=0;
+    // Sérült mentésben a fedés nem védhet a távolból.
+    if(tmp.underShelter&&!tmp.protectedAtPlayer())tmp.underShelter=false;
     *this=tmp;return true;
 }
 }
