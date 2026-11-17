@@ -84,7 +84,7 @@ jobs:
           g++ -std=c++17 -O2 -Wall -Wextra -Iapp/src/main/cpp \
             tests/fast_scene_preview.cpp app/src/main/cpp/FastScene.cpp app/src/main/cpp/RealModels.cpp \
             -o build-previews/fast_scene_test -lEGL -lGLESv2 -lpng
-      - name: Real pixels: grazing, fern gating, anatomical 3D bodies
+      - name: GPU image verification of grazing, fern discovery and anatomical 3D bodies
         env:
           EGL_PLATFORM: surfaceless
           LIBGL_ALWAYS_SOFTWARE: '1'
