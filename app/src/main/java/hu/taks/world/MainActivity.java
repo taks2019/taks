@@ -656,19 +656,23 @@ public final class MainActivity extends Activity {
         });
     }
     private View originalLogoOrTitle(){
-        // A Biblia név szerint ezt az EREDETI assetet rögzíti. Nem generálunk helyette másik logót.
-        try(InputStream stream=getAssets().open("logo/TAKS_WORLD_LOGO.png")){
-            Bitmap bitmap=BitmapFactory.decodeStream(stream);
-            if(bitmap!=null){
-                ImageView logo=new ImageView(this);
-                logo.setImageBitmap(bitmap);
-                logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                return logo;
-            }
-        }catch(Exception missing){}
-        TextView title=caption("TAKS WORLD",29,0xFFE7D5B4);
-        title.setGravity(Gravity.CENTER);
-        title.setLetterSpacing(.13f);
+        // This is an actual downscaled copy of the user's blue/silver TAKS
+        // globe/tree logo, not a substitute image or invented design.
+        for(String path:new String[]{"logo/TAKS_WORLD_LOGO.webp",
+                                     "logo/TAKS_WORLD_LOGO.png"}){
+            try(InputStream stream=getAssets().open(path)){
+                Bitmap bitmap=BitmapFactory.decodeStream(stream);
+                if(bitmap!=null){
+                    ImageView logo=new ImageView(this);
+                    logo.setImageBitmap(bitmap);
+                    logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                    logo.setContentDescription("Az eredeti TAKS WORLD logó – élő környezeti fénykerettel");
+                    return logo;
+                }
+            }catch(Exception missing){/* Try the other original format. */}
+        }
+        TextView title=caption("TAKS WORLD",25,0xFFE7D5B4);
+        title.setGravity(Gravity.CENTER);title.setLetterSpacing(.12f);
         return title;
     }
     private void showMainMenu(){
@@ -676,7 +680,7 @@ public final class MainActivity extends Activity {
         worldHandler.removeCallbacks(worldLoop);
         padActive=false;moveIntent=false;sprinting=false;
         stopMovement();
-        closePanel();
+        closeModal();closePanel();
         setHudVisibility(false);
         if(menuCover!=null)root.removeView(menuCover);
 
@@ -694,34 +698,36 @@ public final class MainActivity extends Activity {
         stack.setPadding(dp(12),dp(8),dp(12),dp(8));
         final int usableHeight=getResources().getDisplayMetrics().heightPixels;
         final int menuButtonHeight=Math.min(dp(43),Math.max(dp(33),(usableHeight-dp(90))/5));
-        final int menuLogoHeight=Math.min(dp(73),Math.max(dp(44),usableHeight-4*menuButtonHeight-dp(65)));
-        View logo=originalLogoOrTitle();
+        final int menuLogoHeight=Math.min(dp(134),Math.max(dp(65),usableHeight-4*menuButtonHeight-dp(78)));
+        FrameLayout logoFrame=new FrameLayout(this);
+        logoFrame.setPadding(dp(7),dp(4),dp(7),dp(4));
+        skin(logoFrame,"LOGO");
+        logoFrame.addView(originalLogoOrTitle(),new FrameLayout.LayoutParams(-1,-1));
         LinearLayout.LayoutParams logoSize=new LinearLayout.LayoutParams(-1,menuLogoHeight);
         logoSize.bottomMargin=dp(5);
-        stack.addView(logo,logoSize);
+        stack.addView(logoFrame,logoSize);
         // Reflect only actual discoveries from the saved World, never a fake level.
         TextView discoveries=caption(natural.discoveryLine,11,natural.accent);
         discoveries.setGravity(Gravity.CENTER);
         discoveries.setPadding(dp(2),0,dp(2),dp(5));
+        skin(discoveries,"DISCOVERY");
         stack.addView(discoveries,new LinearLayout.LayoutParams(-1,dp(22)));
+        TextView causal=caption(currentSkin().cause,11,0xFFD2C5AA);
+        causal.setGravity(Gravity.CENTER);
+        causal.setMaxLines(2);
+        causal.setPadding(dp(3),0,dp(3),dp(4));
+        skin(causal,"CAUSE");
+        stack.addView(causal,new LinearLayout.LayoutParams(-1,dp(33)));
         String[] labels={"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐK","KILÉPÉS"};
         Runnable[] actions={this::newWorldFromMenu,this::showSettings,this::showCredits,
-                ()->new AlertDialog.Builder(this).setTitle("Kilépés")
-                    .setMessage("Biztosan kilépsz? A világállapot mentésre kerül.")
-                    .setPositiveButton("Kilépés",(dialog,choice)->{save();finish();})
-                    .setNegativeButton("Vissza",null).show()};
+                this::confirmExit};
         for(int i=0;i<labels.length;++i){
             Button menuButton=button(labels[i],actions[i],i==0);
             menuButton.setTextSize(16);
             menuButton.setLetterSpacing(.035f);
-            // Four distinct hit targets, shared prehistoric visual materials.
-            GradientDrawable physicalButton=new GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                new int[]{natural.buttonTop,natural.buttonBottom});
-            physicalButton.setCornerRadius(dp(10));
-            physicalButton.setStroke(dp(1),natural.accent);
-            menuButton.setBackground(physicalButton);
-            menuButton.setTextColor(natural.text);
+            // All four physical-looking buttons share the SAME live skin as
+            // gameplay menus, settings, HUD and their "X" close controls.
+            skin(menuButton,"BUTTON");
             LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,menuButtonHeight);
             bp.bottomMargin=dp(5);
             stack.addView(menuButton,bp);
@@ -731,12 +737,12 @@ public final class MainActivity extends Activity {
             -2,Gravity.CENTER);
         menuCover.addView(stack,p);
         root.addView(menuCover,new FrameLayout.LayoutParams(-1,-1));
+        refreshLivingSkin();
     }
     @Override public void onBackPressed(){
-        if(!inMainMenu){showMainMenu();return;}
-        new AlertDialog.Builder(this).setTitle("TAKS WORLD").setMessage("Kilépsz a játékból?")
-            .setPositiveButton("Kilépés",(d,w)->{save();finish();})
-            .setNegativeButton("Vissza",null).show();
+        if(modalOverlay!=null){closeModal();return;}
+        if(sheet!=null){closePanel();return;}
+        confirmExit();
     }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
@@ -803,22 +809,22 @@ public final class MainActivity extends Activity {
 
         LinearLayout header=new LinearLayout(this);header.setOrientation(LinearLayout.VERTICAL);
         header.setPadding(dp(15),dp(10),dp(10),dp(10));
-        header.setBackground(panelBackground(0xB8251C14,13));
+        skin(header,"CARD");
         header.addView(caption("TAKS WORLD",22,0xFFE6D6B5));
-        header.addView(caption("TAKS ENGINE 0.7 · FŐMENÜ",10,0xFFC3D1C5));
+        header.addView(caption("TAKS ENGINE · ÉLŐ VILÁG",10,0xFFC3D1C5));
         FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
         hp.setMargins(dp(12),dp(12),0,0);root.addView(header,hp);gameHud.add(header);
 
         hint=caption("Bal: analóg mozgás · FUTÁS: nyomva tartva · Jobb: kamera · Két ujjal: zoom",12,0xFFECE9DC);
         hint.setPadding(dp(10),dp(7),dp(10),dp(7));
-        hint.setBackground(panelBackground(0xA5101A18,10));
+        skin(hint,"CARD");
         FrameLayout.LayoutParams hintParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
         hintParams.topMargin=dp(16);root.addView(hint,hintParams);gameHud.add(hint);
         hint.postDelayed(()->hint.setVisibility(View.GONE),6500);
 
         notice=caption(nativeGoal(),12,0xFFF1E3C9);
         notice.setPadding(dp(12),dp(9),dp(12),dp(9));
-        notice.setBackground(panelBackground(0xE0192420,12));
+        skin(notice,"CARD");
         FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
         np.setMargins(dp(12),0,dp(12),bottomBarPx()+7);root.addView(notice,np);gameHud.add(notice);
         notice.postDelayed(()->{
@@ -827,7 +833,7 @@ public final class MainActivity extends Activity {
 
         proximity=caption(nativeNearby(),12,0xFFE8E0CC);
         proximity.setPadding(dp(9),dp(6),dp(9),dp(6));
-        proximity.setBackground(panelBackground(0xBE162821,10));
+        skin(proximity,"CARD");
         FrameLayout.LayoutParams proxParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.RIGHT);
         proxParams.topMargin=dp(49);proxParams.rightMargin=dp(12);root.addView(proximity,proxParams);gameHud.add(proximity);
 
@@ -859,12 +865,14 @@ public final class MainActivity extends Activity {
         // Kompakt, jobb alsó kezelősáv. A világ képernyőjét nem takarja 5 óriásgomb.
         LinearLayout bottom=new LinearLayout(this);bottom.setGravity(Gravity.CENTER);
         bottom.setPadding(dp(2),dp(2),dp(2),dp(2));
-        bottom.setBackground(panelBackground(0xC9101B19,11));
+        skin(bottom,"CARD");
         Button build=button("ÉPÍTÉS",()->togglePanel(1),false);
         Button npc=button("TÁRSAK",()->togglePanel(3),false);
         Button info=button("TÁSKA",()->togglePanel(2),false);
+        Button settings=button("⚙",this::showSettings,false);
+        settings.setContentDescription("Beállítások: elérhető minden játékoldalon");
         Button menu=button("MENÜ",this::openGameMenu,false);
-        for(Button b:new Button[]{build,npc,info,menu}){
+        for(Button b:new Button[]{build,npc,info,settings,menu}){
             b.setTextSize(11);
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(43),1);
             lp.setMargins(dp(2),0,dp(2),0);bottom.addView(b,lp);
@@ -876,17 +884,22 @@ public final class MainActivity extends Activity {
         gameHud.add(bottom);
         setContentView(root);
         showMainMenu();
+        skinHandler.removeCallbacks(skinLoop);
+        skinHandler.post(skinLoop);
     }
     @Override protected void onResume(){
         super.onResume();
         if(surface!=null)surface.onResume();
         worldHandler.removeCallbacks(worldLoop);
         if(!inMainMenu)worldHandler.postDelayed(worldLoop,1800);
+        skinHandler.removeCallbacks(skinLoop);
+        skinHandler.post(skinLoop);
     }
     @Override protected void onPause(){
         padActive=false;moveIntent=false;sprinting=false;
         stopMovement();
         worldHandler.removeCallbacks(worldLoop);
+        skinHandler.removeCallbacks(skinLoop);
         saves.edit().putString("state",nativeSave()).apply();
         if(surface!=null)surface.onPause();
         super.onPause();
