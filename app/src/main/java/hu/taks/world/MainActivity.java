@@ -59,6 +59,7 @@ public final class MainActivity extends Activity {
     private TextView hint;
     private String shaderSource;
     private FrameLayout menuCover,modalOverlay;
+    private Bitmap sharedStonePhoto;
     // Keep the original logo pixels untouched. Only its physical frame and
     // every other menu skin respond to actual native World causality.
     private final Handler skinHandler=new Handler(Looper.getMainLooper());
@@ -181,6 +182,34 @@ public final class MainActivity extends Activity {
         d.setStroke(dp(1),0x886F6244);
         return d;
     }
+    private Bitmap originalStonePhoto(){
+        if(sharedStonePhoto!=null && !sharedStonePhoto.isRecycled())return sharedStonePhoto;
+        // The same real rock photograph is already bundled offline for 3D.
+        // Share one bitmap across every menu surface, no repeated decodes.
+        try(InputStream source=getAssets().open("models/wall_cliff_side.png")){
+            Bitmap image=BitmapFactory.decodeStream(source);
+            if(image==null)return null;
+            if(image.getWidth()>600){
+                sharedStonePhoto=Bitmap.createScaledBitmap(image,512,512,true);
+                image.recycle();
+            }else sharedStonePhoto=image;
+            return sharedStonePhoto;
+        }catch(Exception error){
+            android.util.Log.w("TAKS_UI","Scanned-rock GUI skin unavailable",error);
+            return null;
+        }
+    }
+    private static int opacity(int color,int alpha){
+        return (color&0x00FFFFFF)|((alpha&0xFF)<<24);
+    }
+    private void setNaturalStone(View view,int upper,int lower,int border,int radius){
+        if(view.getBackground() instanceof LivingStoneDrawable){
+            ((LivingStoneDrawable)view.getBackground()).palette(upper,lower,border);
+        }else{
+            view.setBackground(new LivingStoneDrawable(originalStonePhoto(),
+                         upper,lower,border,dp(radius),dp(1)));
+        }
+    }
     private GradientDrawable naturalGradient(int top,int bottom,int stroke,int radius){
         GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                                                new int[]{top,bottom});
@@ -200,14 +229,16 @@ public final class MainActivity extends Activity {
         if(tag instanceof String){
             String role=(String)tag;
             if("TAKS_SKIN_BUTTON".equals(role)){
-                v.setBackground(naturalGradient(state.buttonTop,state.buttonBottom,state.border,10));
+                setNaturalStone(v,opacity(state.buttonTop,190),
+                        opacity(state.buttonBottom,220),state.border,10);
                 if(v instanceof TextView)((TextView)v).setTextColor(state.text);
             }else if("TAKS_SKIN_CARD".equals(role)){
-                v.setBackground(naturalGradient(state.panelTop,state.panelBottom,state.border,17));
+                setNaturalStone(v,opacity(state.panelTop,208),
+                        opacity(state.panelBottom,234),state.border,17);
             }else if("TAKS_SKIN_LOGO".equals(role)){
                 int glow=state.animatedLogoGlow(now);
-                v.setBackground(naturalGradient((glow&0x00FFFFFF)|0x26000000,
-                         state.panelBottom,glow,19));
+                setNaturalStone(v,opacity(glow,44),
+                         opacity(state.panelBottom,180),glow,19);
             }else if("TAKS_SKIN_CAUSE".equals(role) && v instanceof TextView){
                 ((TextView)v).setText(state.cause);
                 ((TextView)v).setTextColor(state.mutedText);
@@ -228,8 +259,8 @@ public final class MainActivity extends Activity {
         LivingUiSkin.State state=currentSkin();
         if(menuCover!=null){
             menuCover.setBackground(naturalGradient(
-                    (state.panelTop&0x00FFFFFF)|0xC0000000,
-                    (state.panelBottom&0x00FFFFFF)|0xE6000000,
+                    (state.panelTop&0x00FFFFFF)|0x9A000000,
+                    (state.panelBottom&0x00FFFFFF)|0xC2000000,
                     state.border,0));
         }
         applySkin(root,state,android.os.SystemClock.uptimeMillis());
