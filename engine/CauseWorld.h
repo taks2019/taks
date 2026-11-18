@@ -1,7 +1,10 @@
 #pragma once
 #include <string>
 #include "LivingWorld.h"
+#include "Structure.h"
+#include "Era.h"
 #include <array>
+#include <vector>
 namespace taks {
 // 3D lelőhely: egyediség, anyagtípus, világkoordináta és megmaradó készlet.
 struct ResourceNode { int type; double x,z; int amount; };
@@ -17,7 +20,11 @@ struct BuildSite {
     int stage=0;             // 0 kijelölt, 1 oszlop, 2 tetőváz, 3 fedés
     double condition=100.0; // eső okozta kopás, javítással helyreállítható
 };
+// Egyedi, nyomon követhető tárgy (F1): minden kő és faág saját azonosítót kap.
+// where: 0 lelőhelyen, 1 játékosnál, 2 tábori készletben, 4 társ kezében. Elfogyott tárgy kikerül a főkönyvből.
+struct Item { unsigned id=0; int type=0; /*0 faág, 1 kő*/ int where=0; int node=-1; int by=-1; };
 struct World {
+    World(){ rebuildLedgerFromCounts(); } // minden induló kő/faág azonnal egyedi azonosítót kap
     LivingWorld ecology; // canonical living ground, plants and animals
     int groundWood=14, groundStone=8, groundTinder=5;
     int carriedWood=0, carriedStone=0, carriedTinder=0;
@@ -31,6 +38,7 @@ struct World {
     static constexpr int maxBuildSites=3;
     std::array<BuildSite,maxBuildSites> sites{};
     int siteCount=0;
+    Structure structure; // F2: alkatrészes szerkezetek (cölöp, gerenda, kő, deszka)
     double playerWetness=0.10;
     bool underShelter=false;
     double playerX=0.0,playerZ=-5.2,walkPhase=0.0;
@@ -51,6 +59,19 @@ struct World {
     std::array<int,4> campStock{{0,0,0,0}};
     double npcSimulatedHours=0.0;
     unsigned long eventCounter=0;
+    // --- Egyedi tárgyak főkönyve (EntityID) ---
+    std::vector<Item> items;
+    unsigned nextItemId=1;
+    unsigned consumedItems[2]={0,0};      // elhasznált faág, kő (története a naplóban)
+    std::vector<std::string> causeLog;    // utolsó 64 ok-okozati bejegyzés (nem mentett)
+    void ensureLedger();
+    bool ledgerConsistent() const;
+    unsigned countItems(int type,int where,int node=-1,int by=-1) const;
+    // Korszak: a bizonyítékot a világ állapota adja. A mai világban nincs modellezett közösség, gyártási lánc vagy
+    // űripar, ezért a bizonyíték nulla: őskor, és a logó rejtett. Az F6 lánc kapcsolja be ténylegesen.
+    EraEvidence eraEvidence() const { return EraEvidence(); }
+    int currentEra() const { return eraFor(eraEvidence()); }
+    bool logoUnlocked() const { return logoUnlockedFor(currentEra()); }
     std::string act(const std::string& action);
     std::string move(double dx,double dz);
     std::string nearby() const;
@@ -69,7 +90,13 @@ struct World {
     std::string save() const;
     bool load(const std::string& data);
     void forceRainForTest(double intensity);
+    void grantCarriedForTest(int type,int count); // csak tesztelésre: azonosítót is létrehoz
 private:
     bool testWeather=false;
+    bool ledgerReady=false;
+    void rebuildLedgerFromCounts();
+    void moveItem(int type,int fromWhere,int fromNode,int fromBy,int toWhere,int toNode,int toBy,const char* cause);
+    void consumeItems(int type,int count,const char* cause);
+    void logCause(const std::string& line);
 };
 }
