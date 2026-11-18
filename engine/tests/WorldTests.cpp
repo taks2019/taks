@@ -284,5 +284,31 @@ int main(){
     assert(upgraded.load(oldV5Text.str()));
     assert(upgraded.save().find("TAKS_NATIVE_6")==0);
     assert(upgraded.ecology.aliveAnimals()==4);
+    // A character has radius: diagonal wall contact must slide, never teleport.
+    taks::World wall;
+    wall.playerX=2.30;wall.playerZ=2.60;
+    const double wallStamina=wall.stamina;
+    wall.move(0.0,.70);
+    assert(wall.playerZ<=2.671 && wall.playerZ>=2.59);
+    assert(wall.stamina<wallStamina);
+    const double prevX=wall.playerX;
+    wall.move(-.50,.30);
+    assert(wall.playerX<prevX-.15);
+    assert(wall.playerZ<=2.671);
+    // The world's outer border permits movement along it.
+    taks::World edge;
+    edge.playerX=7.49;edge.playerZ=-4.0;
+    const auto beforeEdge=edge.playerZ;
+    edge.move(.5,.5);
+    assert(edge.playerZ>beforeEdge+.05 && edge.playerX<=7.5);
+    // Live tree trunks cannot be walked through; a dead tree is traversable.
+    taks::World trunk;
+    trunk.playerX=-6.40;trunk.playerZ=-2.05;
+    trunk.move(0.0,.75);
+    assert(trunk.playerZ< -1.65);
+    trunk.ecology.trees[0].alive=false;
+    trunk.move(0.0,.75);
+    assert(trunk.playerZ> -1.65);
+    std::cout<<"PASS: swept wall/trunk collisions and diagonal wall sliding\\n";
     std::cout<<"TAKS spatial game, construction and save migration tests PASSED\n";
 }
