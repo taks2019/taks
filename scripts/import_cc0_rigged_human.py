@@ -283,6 +283,7 @@ def main():
         OUT.mkdir(parents=True, exist_ok=True)
         destination = OUT / "makehuman_rigged.tks"
         texture_path = OUT / "makehuman_rigged.png"
+        serialized_roots = []
         with destination.open("wb") as stream:
             stream.write(struct.pack("<4sIII", b"TKS1", vertex_count, len(joint_names), len(CLIPS)))
             vertex_struct = struct.Struct("<8f4H4f")
@@ -319,7 +320,9 @@ def main():
                 root = np.asarray(clip.get("root", [[0., 0., 0.]] * frames), dtype=np.float32)
                 if root.shape != (frames, 3):
                     raise RuntimeError(f"Malformed root track: {clip_name}")
+                serialized_roots.append((clip_name, root.copy()))
                 stream.write(struct.pack("<16sIf", clip_name.encode("ascii"), frames, fps))
+                rotation_frames = []
                 for frame_index in range(frames):
                     rotations = np.zeros((len(joint_names), 4), dtype=np.float32)
                     rotations[:, 3] = 1.
@@ -327,9 +330,32 @@ def main():
                         if track.shape[0] < frames or track.shape[1] != 4:
                             raise RuntimeError(f"Malformed animation track: {clip_name}")
                         rotations[bone_index] = track[frame_index]
-                    stream.write(rotations.astype("<f4").tobytes())
-                    stream.write(np.asarray(root[frame_index], dtype="<f4").tobytes())
+                    rotation_frames.append(rotations)
+                # TKS1 stores each clip as one contiguous quaternion block,
+                # followed by its root-motion block. The GLES reader uses
+                # those offsets to decode every frame on the CPU.
+                stream.write(np.asarray(rotation_frames, dtype="<f4").tobytes())
+                stream.write(root.astype("<f4").tobytes())
         atlas.save(texture_path, "PNG", optimize=True)
+
+        # Verify the serialized offsets against the source data before the
+        # asset is allowed into an Android build. This catches interleaving a
+        # root sample between quaternion frames, which scrambles skinning.
+        encoded = destination.read_bytes()
+        cursor = 16 + vertex_count * 56 + len(joint_names) * 96
+        for expected_name, expected_root in serialized_roots:
+            name, frame_count, _fps = struct.unpack_from("<16sIf", encoded, cursor)
+            cursor += struct.calcsize("<16sIf")
+            if name.rstrip(b"\0").decode("ascii") != expected_name or frame_count != len(expected_root):
+                raise RuntimeError(f"Serialized animation header mismatch: {expected_name}")
+            cursor += frame_count * len(joint_names) * 4 * 4
+            actual_root = np.frombuffer(encoded, dtype="<f4", count=frame_count * 3,
+                                        offset=cursor).reshape(frame_count, 3)
+            if not np.array_equal(actual_root, expected_root):
+                raise RuntimeError(f"Serialized root-motion offsets are corrupt: {expected_name}")
+            cursor += frame_count * 3 * 4
+        if cursor != len(encoded):
+            raise RuntimeError("TKS1 output has unexpected trailing animation data")
 
         # Pin attribution + the remaining human-history uncertainty in the build.
         (OUT / "makehuman_rigged_source.json").write_text(json.dumps({

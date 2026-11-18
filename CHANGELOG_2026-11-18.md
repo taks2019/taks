@@ -4,6 +4,7 @@
 
 - A régi TKM1 statikus emberimportot TKS1 bőrsúlyozott formátum váltja fel. A csomag 121 422 hálócsúcsot, 53 csontot és hét forrásból származó animációt tartalmaz.
 - A GLES3 vertex shader a négy csontbefolyást súlyozva keveri. Az idle, walk és run állapotok közti átmenet 280 ms; a négy NPC szimulált pozícióját a renderelés a szimulációs lépések között simítja.
+- Javítva az animációs asset bináris elrendezése: a teljes csontforgatás-blokkot külön követi a gyökérmozgás-blokk; az importáló most az eredeti gyökérmintákkal is ellenőrzi az eltolt adatokat.
 - A hiányzó modell esetére rajzolt fehér rúd- és bábualakok eltávolítva. Hibás humanoid asset esetén a renderer naplóz, nem rajzol hamis figurát.
 - A pályaszélekre valós CC0 fotogrammetriai sziklák kerültek; a már importált nagyobb kőzetmodellt is használja a terep.
 - A felhasználó eredeti logója a teljes átadási ZIP-ben változatlan PNG-ként megmarad. Az APK-ba a képarányt megtartó, 512×341-es WebP másolat kerül, és a HUD is ezt mutatja.
