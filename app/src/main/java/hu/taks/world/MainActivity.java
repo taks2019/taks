@@ -74,27 +74,48 @@ public final class MainActivity extends Activity {
         }
     };
     private TextView proximity;
-    private boolean moving=false,moveIntent=false;
+    private boolean moving=false,moveIntent=false,padActive=false,sprinting=false;
     private float anchorX,anchorY,axisX=0,axisY=0;
+    private long lastMovementNs=0L;
+    private final TouchMovement touchMovement=new TouchMovement();
     private int movementTicks=0;
     private final Handler movementHandler=new Handler(Looper.getMainLooper());
     private final Runnable movementLoop=new Runnable(){
         @Override public void run(){
-            if(!moving)return;
-            if(Math.abs(axisX)+Math.abs(axisY)>.12f){
-                float wx=(float)(-Math.cos(orbit)*axisX-Math.sin(orbit)*axisY);
-                float wz=(float)(-Math.sin(orbit)*axisX+Math.cos(orbit)*axisY);
-                String result=nativeMove(wx*.065f,wz*.065f);
-                if(result.contains("kimerült")||result.contains("elállja")||result.contains("határához")){
-                    if(movementTicks%6==0)say(result);
+            if(!moving||inMainMenu)return;
+            long now=System.nanoTime();
+            float dt=lastMovementNs==0L?.025f:
+                    Math.max(.001f,Math.min(.06f,(now-lastMovementNs)*1.e-9f));
+            lastMovementNs=now;
+            float[] delta=touchMovement.step(axisX,axisY,orbit,dt,sprinting);
+            if(Math.abs(delta[0])+Math.abs(delta[1])>.00005f){
+                String result=nativeMove(delta[0],delta[1]);
+                if((result.contains("kimerült")||result.contains("elállja")||
+                    result.contains("határához")||result.contains("ütközöl"))&&movementTicks%12==0){
+                    say(result);
                 }
                 refreshScene();
-                if(proximity!=null && movementTicks%2==0)refreshNearby();
+                if(proximity!=null&&movementTicks%4==0)refreshNearby();
                 movementTicks++;
             }
-            movementHandler.postDelayed(this,33);
+            movementHandler.postDelayed(this,25);
         }
     };
+    private void startMovement(){
+        moving=true;
+        movementTicks=0;
+        lastMovementNs=0L;
+        touchMovement.reset();
+        movementHandler.removeCallbacks(movementLoop);
+        movementHandler.post(movementLoop);
+    }
+    private void stopMovement(){
+        moving=false;
+        axisX=axisY=0;
+        touchMovement.reset();
+        lastMovementNs=0L;
+        movementHandler.removeCallbacks(movementLoop);
+    }
 
 
     private boolean loadRealPbrSurface(int slot,String name){
@@ -260,62 +281,89 @@ public final class MainActivity extends Activity {
         root.addView(sheet,ps);
     }
     private void togglePanel(int which){if(activePanel==which)closePanel();else showPanel(which);}
+
     private float dist(MotionEvent e){
         if(e.getPointerCount()<2)return 0f;
         float x=e.getX(1)-e.getX(0),y=e.getY(1)-e.getY(0);
         return (float)Math.sqrt(x*x+y*y);
     }
+    private void setMovementAxes(float dx,float dy,float radius){
+        float length=(float)Math.hypot(dx,dy);
+        if(length<dp(5)){axisX=axisY=0f;return;}
+        float factor=Math.min(1f,length/radius)/length;
+        axisX=dx*factor;
+        axisY=-dy*factor;
+    }
     private boolean touch(MotionEvent e,boolean fromMovementPad){
         final int action=e.getActionMasked();
+        // The left physical control and right-hand camera can be held by
+        // different fingers simultaneously. Surface gestures never reset pad.
+        if(fromMovementPad){
+            if(action==MotionEvent.ACTION_DOWN){
+                padActive=true;moveIntent=false;
+                setMovementAxes(e.getX()-dp(48),e.getY()-dp(48),dp(38));
+                startMovement();
+            }else if(action==MotionEvent.ACTION_MOVE && padActive){
+                setMovementAxes(e.getX()-dp(48),e.getY()-dp(48),dp(38));
+            }else if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL){
+                padActive=false;
+                stopMovement();
+                refreshNearby();refreshScene();
+            }
+            return true;
+        }
         if(action==MotionEvent.ACTION_DOWN){
-            lastX=e.getX();lastY=e.getY();lastSpan=0;
-            moveIntent=fromMovementPad ||
+            lastX=e.getX();lastY=e.getY();lastSpan=0f;
+            moveIntent=!padActive &&
                 (e.getX()<surface.getWidth()*.38f && e.getY()>surface.getHeight()*.30f);
             if(moveIntent){
-                moving=true;anchorX=e.getX();anchorY=e.getY();
-                axisX=axisY=0f;movementTicks=0;
-                movementHandler.removeCallbacks(movementLoop);
-                movementHandler.post(movementLoop);
+                anchorX=e.getX();anchorY=e.getY();
+                axisX=axisY=0f;startMovement();
             }
             return true;
         }
         if(action==MotionEvent.ACTION_POINTER_DOWN){
-            moving=false;moveIntent=false;
-            movementHandler.removeCallbacks(movementLoop);
+            if(moveIntent&&!padActive)stopMovement();
+            moveIntent=false;
             lastSpan=dist(e);return true;
         }
         if(action==MotionEvent.ACTION_MOVE){
             if(e.getPointerCount()>=2){
                 float span=dist(e);
-                if(lastSpan>4)zoom=Math.min(26,Math.max(6,zoom*lastSpan/span));
+                if(lastSpan>4&&span>4){
+                    zoom=Math.min(26,Math.max(6,zoom*lastSpan/span));
+                }
                 lastSpan=span;
                 nativeSetView(orbit,cameraPitch,zoom);
                 refreshScene();return true;
             }
-            if(moveIntent){
-                float dx=e.getX()-anchorX;
-                float dy=e.getY()-anchorY;
-                float length=(float)Math.sqrt(dx*dx+dy*dy);
-                float factor=length<8?0:Math.min(1f,length/66f)/length;
-                axisX=dx*factor;
-                axisY=-dy*factor;
+            if(moveIntent&&!padActive){
+                setMovementAxes(e.getX()-anchorX,e.getY()-anchorY,dp(62));
             }else{
-                float dx=e.getX()-lastX;
-                float dy=e.getY()-lastY;
-                orbit+=dx*.0075f;
-                cameraPitch=Math.min(1.396263f,Math.max(.349066f,cameraPitch-dy*.006f));
+                float dx=e.getX()-lastX,dy=e.getY()-lastY;
+                orbit+=dx*.006f;
+                cameraPitch=Math.min(1.396263f,Math.max(.349066f,cameraPitch-dy*.0045f));
                 lastX=e.getX();lastY=e.getY();
-                nativeSetView(orbit,cameraPitch,zoom);refreshScene();
+                nativeSetView(orbit,cameraPitch,zoom);
+                refreshScene();
+            }
+            return true;
+        }
+        if(action==MotionEvent.ACTION_POINTER_UP){
+            lastSpan=0f;
+            // Carry on with the remaining camera finger without a sudden jump.
+            int remain=e.getActionIndex()==0?1:0;
+            if(remain<e.getPointerCount()){
+                lastX=e.getX(remain);lastY=e.getY(remain);
             }
             return true;
         }
         if(action==MotionEvent.ACTION_CANCEL||action==MotionEvent.ACTION_UP){
-            moving=false;moveIntent=false;axisX=axisY=0;
-            movementHandler.removeCallbacks(movementLoop);
-            refreshNearby();
-            refreshScene();return true;
+            if(moveIntent&&!padActive)stopMovement();
+            moveIntent=false;
+            lastSpan=0f;
+            refreshNearby();refreshScene();return true;
         }
-        if(action==MotionEvent.ACTION_POINTER_UP){lastSpan=0;return true;}
         return true;
     }
     private void chooseGraphicsResolution(){
@@ -463,8 +511,8 @@ public final class MainActivity extends Activity {
     private void showMainMenu(){
         inMainMenu=true;
         worldHandler.removeCallbacks(worldLoop);
-        moving=false;moveIntent=false;axisX=axisY=0;
-        movementHandler.removeCallbacks(movementLoop);
+        padActive=false;moveIntent=false;sprinting=false;
+        stopMovement();
         closePanel();
         setHudVisibility(false);
         if(menuCover!=null)root.removeView(menuCover);
@@ -622,10 +670,21 @@ public final class MainActivity extends Activity {
 
         TextView movePad=caption("MOZGÁS\n  ◉",13,0xFFF4E8D2);
         movePad.setGravity(Gravity.CENTER);
-        movePad.setBackground(panelBackground(0x9713211D,40));
+        movePad.setBackground(panelBackground(0x9713211D,48));
         movePad.setOnTouchListener((v,e)->touch(e,true));
-        FrameLayout.LayoutParams moveParams=new FrameLayout.LayoutParams(dp(82),dp(82),Gravity.LEFT|Gravity.BOTTOM);
+        FrameLayout.LayoutParams moveParams=new FrameLayout.LayoutParams(dp(96),dp(96),Gravity.LEFT|Gravity.BOTTOM);
         moveParams.setMargins(dp(11),0,0,dp(18));root.addView(movePad,moveParams);gameHud.add(movePad);
+        TextView sprint=caption("FUTÁS",12,0xFFF4E8D2);
+        sprint.setGravity(Gravity.CENTER);
+        sprint.setBackground(panelBackground(0xC02B3B2D,16));
+        sprint.setOnTouchListener((v,e)->{
+            int action=e.getActionMasked();
+            if(action==MotionEvent.ACTION_DOWN)sprinting=true;
+            if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL)sprinting=false;
+            return true;
+        });
+        FrameLayout.LayoutParams runParams=new FrameLayout.LayoutParams(dp(67),dp(48),Gravity.LEFT|Gravity.BOTTOM);
+        runParams.setMargins(dp(116),0,0,dp(37));root.addView(sprint,runParams);gameHud.add(sprint);
 
         // Kontextuális FELVESZ – csak akkor van a képernyőn, ha tényleg van elérhető tárgy.
         pickupButton=button("FELVESZ",()->act("gather"),true);
