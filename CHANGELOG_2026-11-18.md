@@ -7,6 +7,8 @@
 - Javítva az animációs asset bináris elrendezése: a teljes csontforgatás-blokkot külön követi a gyökérmozgás-blokk; az importáló most az eredeti gyökérmintákkal is ellenőrzi az eltolt adatokat.
 - A hiányzó modell esetére rajzolt fehér rúd- és bábualakok eltávolítva. Hibás humanoid asset esetén a renderer naplóz, nem rajzol hamis figurát.
 - A pályaszélekre valós CC0 fotogrammetriai sziklák kerültek; a már importált nagyobb kőzetmodellt is használja a terep.
+- A GPU-s jelenetben több méretben és eltérő forgatással jelennek meg a valódi sziklamodellek; a fűfoltok sűrűsége és kiterjedése a mentett biomasszához igazodik.
+- A MakeHuman diffúz bőrtextúráján melegebb színkorrekció jelenik meg, így az alakok nem hófehér bábuként tűnnek fel.
 - A felhasználó eredeti logója a teljes átadási ZIP-ben változatlan PNG-ként megmarad. Az APK-ba a képarányt megtartó, 512×341-es WebP másolat kerül, és a HUD is ezt mutatja.
 - A játék 25 FPS-es renderfrissítést kap, hogy a csontozott idle és járás ne csak ritka szimulációs frissítéseknél lépjen tovább.
 - Az Android UI ellenőrzése kiegészült a 53 csontos modell betöltésének logjával, az érintőpadról indított mozgás koordináta-változásával és a SharedPreferences mentés meglétével. Az XML hierarchia olvasása `adb pull` helyett shellen keresztül történik.

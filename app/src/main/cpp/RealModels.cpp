@@ -402,21 +402,27 @@ void render(const float* viewProjection,const float* worldNodes,
  // of the explored ground. These remain visual geology; resource nodes are
  // still the only stones with collectible inventory state.
  if(models[2].vao&&models[2].texture){
+    // Layer several scanned rock faces around the explored basin so the
+    // walkable region reads as a cave clearing, not a lone wall prop.
     draw(models[2],-8.25f,2.15f,.48f,-.48f);
     draw(models[2],8.10f,2.45f,.44f,2.45f);
+    draw(models[2],-8.30f,-5.70f,.31f,1.30f);
+    draw(models[2],8.25f,-5.25f,.29f,-1.55f);
+    draw(models[2],-7.90f,.10f,.26f,2.10f);
+    draw(models[2],7.85f,-.45f,.28f,-.85f);
  }
  draw(models[1],-6.8f,1.9f,.88f,.6f);
  draw(models[1],5.9f,2.4f,.82f,2.1f);
  draw(models[1],6.8f,-2.8f,.95f,-.25f);
- for(int i=0;i<24;++i){
+ for(int i=0;i<36;++i){
     const float phase=float(i)*2.39996323f;
-    const float radius=3.5f+float((i*7)%8)*.60f;
+    const float radius=3.7f+float((i*7)%11)*.48f;
     const float x=std::cos(phase)*radius;
-    const float z=std::sin(phase)*(4.0f+float((i*3)%5)*.42f)-1.0f;
+    const float z=std::sin(phase)*(4.2f+float((i*3)%7)*.38f)-.8f;
     if(std::abs(x)<1.45f&&z>1.2f)continue;
     const float dx=x-playerX,dz=z-playerZ;
     if(dx*dx+dz*dz<1.8f)continue;
-    const float scale=.48f+.20f*(.5f+.5f*std::sin(float(i)*1.73f));
+    const float scale=.62f+.26f*(.5f+.5f*std::sin(float(i)*1.73f));
     draw(models[0],x,z,scale,phase*.7f);
  }
  // Genuine published botanical geometry; no generated tube/ball foliage.
@@ -430,15 +436,15 @@ void render(const float* viewProjection,const float* worldNodes,
         // An ecological clump is a distributed PATCH of the real scanned
         // plant, never an invented fifth or infinite independent resource.
         // Grazing shrinks the whole patch, drought reduces visual density.
-        const int count=std::max(1,int(30.f*biomass*health));
+        const int count=std::max(1,int(48.f*biomass*health));
         for(int j=0;j<count;++j){
             const float phase=float(j)*2.39996323f+float(i)*.87f;
-            const float radial=std::sqrt((float(j)+.5f)/30.f);
-            const float localR=1.5f*radial;
+            const float radial=std::sqrt((float(j)+.5f)/48.f);
+            const float localR=2.05f*radial;
             const float x=g[0]+std::cos(phase)*localR;
             const float z=g[1]+std::sin(phase)*localR;
-            const float scale=(.23f+.12f*std::sin(float(j)*1.23f+float(i)*2.1f)
-                              +.22f*biomass);
+            const float scale=(.29f+.15f*std::sin(float(j)*1.23f+float(i)*2.1f)
+                              +.24f*biomass);
             draw(models[3],x,z,std::max(.10f,scale),phase+.42f);
         }
     }
@@ -462,7 +468,9 @@ void render(const float* viewProjection,const float* worldNodes,
  // claimed archaeological reconstruction of Homo erectus.
  if(hasRealHuman()){
     glUniform1f(uCutoff,.34f);
-    glUniform3f(uTint,1.f,1.f,1.f);
+    // Warm the extremely pale source diffuse map so exposed skin and hide
+    // follow a more natural daylight range on phone displays.
+    glUniform3f(uTint,1.02f,.90f,.77f);
     const int playerClip=playerRunning?4:(playerMoving?3:0);
     drawHuman(playerX,playerZ,1.f,playerHeading,0,playerClip,now);
     for(int i=0;i<4;++i){
@@ -483,7 +491,7 @@ void render(const float* viewProjection,const float* worldNodes,
         }
         const float heading=std::atan2(targetX-n[0],targetZ-n[1]);
         const int clip=(task==1||task==2)?3:(task==3?1:0);
-        glUniform3f(uTint,1.f,1.f,1.f);
+        glUniform3f(uTint,1.02f,.90f,.77f);
         drawHuman(n[0],n[1],scale,heading,i+1,clip,now);
     }
  }
