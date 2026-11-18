@@ -432,6 +432,9 @@ void render(const float* viewProjection,const float* worldNodes,
  // Genuine published botanical geometry; no generated tube/ball foliage.
  if(models[3].vao && models[3].texture){
     glUniform1f(uCutoff,.42f);
+    // The source atlas was photographed under dark studio lighting; lift its
+    // leaf greens slightly so real blades remain visible against gravel.
+    glUniform3f(uTint,1.20f,1.70f,1.10f);
     for(int i=0;i<4;++i){
         const float* g=grass+4*i;
         const float biomass=std::clamp(g[2],0.f,1.f);
@@ -453,6 +456,7 @@ void render(const float* viewProjection,const float* worldNodes,
         }
     }
  }
+ glUniform3f(uTint,1.f,1.f,1.f);
  if(models[5].vao && models[5].texture){
     glUniform1f(uCutoff,.42f);
     for(int i=0;i<3;++i){
@@ -464,8 +468,10 @@ void render(const float* viewProjection,const float* worldNodes,
  }
  if(fernApproved && models[4].vao && models[4].texture){
     glUniform1f(uCutoff,.42f);
+    glUniform3f(uTint,1.20f,1.70f,1.10f);
     // This biome plant is only visible when ecological verification is explicit.
     if(grass[2]>.12f)draw(models[4],grass[0]+.72f,grass[1]-.25f,.85f,.6f);
+    glUniform3f(uTint,1.f,1.f,1.f);
  }
  // Real source skin weights and the 53-bone rig drive every person on the GPU.
  // Clip changes blend over 280 ms; the source remains a general humanoid, not a
