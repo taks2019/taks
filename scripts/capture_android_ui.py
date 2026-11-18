@@ -81,11 +81,21 @@ adb("install","-r",APK)
 # emulator. Android-shell may mark the user confirmation as acknowledged.
 adb("shell","settings","put","secure","immersive_mode_confirmations","confirmed",check=False)
 adb("shell","am","start","-n",PACKAGE+"/hu.taks.world.MainActivity")
-time.sleep(10)
+time.sleep(4)
 assert adb("shell","pidof",PACKAGE).strip(), "App process crashed on launch"
-runtime_log=adb("logcat","-d","-t","1200")
-assert b"Loaded skinned humanoid: 53-bone rig, 7 animation clips" in runtime_log, \
-    "The Android GPU thread did not load the verified rigged character asset"
+runtime_log=b""
+human_loaded=b"Loaded skinned humanoid: 53-bone rig, 7 animation clips"
+for _ in range(24):
+    runtime_log=adb("logcat","-d","-s","TAKS_HUMAN:I","TAKS_RENDER:E",
+                    "TAKS_MODEL:E","TAKS_SURFACE:E")
+    if human_loaded in runtime_log or b"Rigged skinned humanoid asset unavailable" in runtime_log:
+        break
+    time.sleep(2)
+if human_loaded not in runtime_log:
+    print("Android render-thread diagnostics:\n"+
+          runtime_log.decode(errors="replace")[-8000:],flush=True)
+assert human_loaded in runtime_log, \
+    "The Android GPU thread did not load the rigged character asset within 48 seconds"
 assert b"Rigged skinned humanoid asset unavailable" not in runtime_log, \
     "Android could not decode the skinned humanoid model"
 
