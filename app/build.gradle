@@ -7,7 +7,7 @@ android {
         applicationId 'hu.taks.world'
         minSdk 26
         targetSdk 35
-        versionCode 9
+        versionCode 10
         versionName '0.9.0-visual-test'
         externalNativeBuild { cmake { cppFlags '-std=c++17'; arguments '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON' } }
     }
