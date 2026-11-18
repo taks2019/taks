@@ -35,6 +35,7 @@ public final class MainActivity extends Activity {
     private native String nativeBuildState();
     private native int nativeSiteStage();
     private native String nativeMove(float dx,float dz);
+    private native boolean nativeLogoUnlocked();
     private native String nativeNearby();
     private native String nativeGoal();
     private native String nativeNpcStatus();
@@ -59,15 +60,17 @@ public final class MainActivity extends Activity {
     private TextView hint;
     private String shaderSource;
     private FrameLayout menuCover,modalOverlay;
+    private View menuScrim;
     private Bitmap sharedStonePhoto;
-    private boolean uiRegressionMode=false;
+    private Bitmap menuBackgroundBitmap;
+    private int menuScrimState=-1;
     // Keep the original logo pixels untouched. Only its physical frame and
     // every other menu skin respond to actual native World causality.
     private final Handler skinHandler=new Handler(Looper.getMainLooper());
     private final Runnable skinLoop=new Runnable(){
         @Override public void run(){
-            if(root!=null&&!uiRegressionMode)refreshLivingSkin();
-            if(!uiRegressionMode)skinHandler.postDelayed(this,650);
+            if(root!=null)refreshLivingSkin();
+            skinHandler.postDelayed(this,650);
         }
     };
     private final ArrayList<View> gameHud=new ArrayList<>();
@@ -230,6 +233,20 @@ public final class MainActivity extends Activity {
             return null;
         }
     }
+    private Bitmap menuBackground(){
+        if(menuBackgroundBitmap!=null&&!menuBackgroundBitmap.isRecycled())return menuBackgroundBitmap;
+        try(InputStream source=getAssets().open("menu/wonderwerk_main_menu.webp")){
+            BitmapFactory.Options options=new BitmapFactory.Options();
+            options.inPreferredConfig=Bitmap.Config.RGB_565;
+            options.inScaled=false;
+            menuBackgroundBitmap=BitmapFactory.decodeStream(source,null,options);
+            if(menuBackgroundBitmap==null)throw new java.io.IOException("Menu background decode failed");
+            return menuBackgroundBitmap;
+        }catch(Exception error){
+            android.util.Log.e("TAKS_MENU","Wonderwerk menu artwork is missing",error);
+            return null;
+        }
+    }
     private static int opacity(int color,int alpha){
         return (color&0x00FFFFFF)|((alpha&0xFF)<<24);
     }
@@ -288,13 +305,26 @@ public final class MainActivity extends Activity {
     private void refreshLivingSkin(){
         if(root==null)return;
         LivingUiSkin.State state=currentSkin();
-        if(menuCover!=null){
-            menuCover.setBackground(naturalGradient(
-                    (state.panelTop&0x00FFFFFF)|0x9A000000,
-                    (state.panelBottom&0x00FFFFFF)|0xC2000000,
-                    state.border,0));
-        }
+        applyMenuScrim(state);
         applySkin(root,state,android.os.SystemClock.uptimeMillis());
+    }
+    private void applyMenuScrim(LivingUiSkin.State state){
+        if(menuScrim==null||state==null)return;
+        int key=(state.night?1:0)|(state.wet?2:0)|(state.raining?4:0)|(state.burning?8:0);
+        if(key==menuScrimState)return;
+        menuScrimState=key;
+        int top,bottom;
+        if(state.night){top=0x50101818;bottom=0xA0090B09;}
+        else if(state.raining){top=0x34566D70;bottom=0x78302A21;}
+        else if(state.wet){top=0x33415042;bottom=0x542A251B;}
+        else if(state.burning){top=0x2B4A2817;bottom=0x56351D10;}
+        else {top=0x1A342719;bottom=0x38251B12;}
+        GradientDrawable veil=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                                                   new int[]{top,bottom});
+        menuScrim.animate().cancel();
+        menuScrim.setBackground(veil);
+        menuScrim.setAlpha(0f);
+        menuScrim.animate().alpha(1f).setDuration(520).start();
     }
     private TextView caption(String content,int size,int color){
         TextView v=new TextView(this);
@@ -314,8 +344,7 @@ public final class MainActivity extends Activity {
     private void refreshNearby(){
         final String nearby=nativeNearby();
         if(proximity!=null)proximity.setText(nearby);
-        if(pickupButton!=null)pickupButton.setVisibility(
-                nearby.contains("FELVEHETŐ")&&activePanel==0?View.VISIBLE:View.GONE);
+        if(pickupButton!=null)pickupButton.setVisibility(nearby.contains("FELVEHETŐ")?View.VISIBLE:View.GONE);
     }
     private void say(String msg){if(notice!=null){notice.setText(msg);notice.setVisibility(View.VISIBLE);}}
     private void act(String cmd){say(nativeDo(cmd));refreshNearby();refreshScene();if(activePanel!=0)showPanel(activePanel);refreshLivingSkin();}
@@ -331,11 +360,7 @@ public final class MainActivity extends Activity {
         p.bottomMargin=4;
         box.addView(b,p);
     }
-    private void closePanel(){
-        if(sheet!=null){root.removeView(sheet);sheet=null;}
-        activePanel=0;
-        refreshNearby();
-    }
+    private void closePanel(){if(sheet!=null){root.removeView(sheet);sheet=null;}activePanel=0;}
     private void showPanel(int which){
         closePanel();activePanel=which;
         sheet=new LinearLayout(this);sheet.setOrientation(LinearLayout.VERTICAL);
@@ -373,6 +398,13 @@ public final class MainActivity extends Activity {
             content.addView(caption("2 · MEGMUNKÁLÁS",12,0xFF9EC9B9));
             addVertical(content,"Kőél készítése · 2 kő",()->act("knap"));
             addVertical(content,"Cölöp megmunkálása · 1 faág + kopó kőél",()->act("pole"));
+            content.addView(caption("2/B · SZABAD ALKATRÉSZEK (a játékos előtt, egymásra rakva rögzülnek)",12,0xFF9EC9B9));
+            addVertical(content,"Cölöp lerakása · 1 megmunkált cölöp",()->act("part_pole"));
+            addVertical(content,"Gerenda lerakása · 2 megmunkált cölöp",()->act("part_beam"));
+            addVertical(content,"Deszka lerakása · 1 megmunkált cölöp",()->act("part_plank"));
+            addVertical(content,"Kő lerakása · 1 kő",()->act("part_stone"));
+            addVertical(content,"Közeli alkatrész kettévágása · kőél kell, kopik",()->act("part_cut"));
+            addVertical(content,"Közeli alkatrész elforgatása 45°-kal",()->act("part_turn"));
             content.addView(caption("3 · SAJÁT ÉPÍTÉSI HELY",12,0xFF9EC9B9));
             addVertical(content,"Új építési hely kijelölése · 1 kő",()->act("site"));
             int stage=nativeSiteStage();
@@ -428,7 +460,6 @@ public final class MainActivity extends Activity {
         FrameLayout.LayoutParams ps=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
         ps.setMargins(dp(8),0,dp(8),bottomBarPx()+5);
         root.addView(sheet,ps);
-        refreshNearby();
         refreshLivingSkin();
     }
     private void togglePanel(int which){if(activePanel==which)closePanel();else showPanel(which);}
@@ -736,6 +767,14 @@ public final class MainActivity extends Activity {
         });
     }
     private View originalLogoOrTitle(){
+        // The original logo is earned: it appears only once the native World reaches the space era
+        // (knowledge, materials, energy, infrastructure, work and an orbital flight). Before that, a plain
+        // earth-toned title is shown. The logo files and pixels are never altered or replaced.
+        if(!nativeLogoUnlocked()){
+            TextView title=caption("TAKS WORLD",25,0xFFE7D5B4);
+            title.setGravity(Gravity.CENTER);title.setLetterSpacing(.12f);
+            return title;
+        }
         // This is an actual downscaled copy of the user's blue/silver TAKS
         // globe/tree logo, not a substitute image or invented design.
         for(String path:new String[]{"logo/TAKS_WORLD_RUNTIME.webp",
@@ -768,17 +807,27 @@ public final class MainActivity extends Activity {
         if(menuCover!=null)root.removeView(menuCover);
 
         menuCover=new FrameLayout(this);
+        menuCover.setBackgroundColor(Color.rgb(24,19,14));
         final PrehistoricMenuTheme.Look natural=PrehistoricMenuTheme.fromCues(nativeMenuCues());
-        // A background is a translucent veil over the ACTUAL game world.
-        // Only earth, bark, soot and ochre; world daylight/rain drive its tones.
-        GradientDrawable earthenVeil=new GradientDrawable(
-            GradientDrawable.Orientation.TOP_BOTTOM,
-            new int[]{natural.veilTop,natural.veilBottom});
-        menuCover.setBackground(earthenVeil);
+        // The menu remains part of the native Android game. Its photographic
+        // Wonderwerk plate is a bundled offline asset; the native world's real
+        // rain, moisture, fire and day/night state tint the scene below.
+        ImageView backdrop=new ImageView(this);
+        Bitmap background=menuBackground();
+        if(background!=null)backdrop.setImageBitmap(background);
+        backdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        backdrop.setContentDescription("Wonderwerk-barlang és a kőkori környezet menüháttere");
+        menuCover.addView(backdrop,new FrameLayout.LayoutParams(-1,-1));
+        menuScrim=new View(this);
+        menuScrim.setClickable(false);
+        menuCover.addView(menuScrim,new FrameLayout.LayoutParams(-1,-1));
+        menuScrimState=-1;
+        applyMenuScrim(currentSkin());
         LinearLayout stack=new LinearLayout(this);
         stack.setOrientation(LinearLayout.VERTICAL);
         stack.setGravity(Gravity.CENTER);
         stack.setPadding(dp(12),dp(8),dp(12),dp(8));
+        skin(stack,"CARD");
         final int usableHeight=getResources().getDisplayMetrics().heightPixels;
         final int menuButtonHeight=Math.min(dp(43),Math.max(dp(33),(usableHeight-dp(90))/5));
         final int menuLogoHeight=Math.min(dp(134),Math.max(dp(65),usableHeight-4*menuButtonHeight-dp(78)));
@@ -819,7 +868,8 @@ public final class MainActivity extends Activity {
         }
         FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(
             Math.min(dp(340),getResources().getDisplayMetrics().widthPixels-dp(32)),
-            -2,Gravity.CENTER);
+            -2,Gravity.START|Gravity.CENTER_VERTICAL);
+        p.leftMargin=dp(18);
         menuCover.addView(stack,p);
         root.addView(menuCover,new FrameLayout.LayoutParams(-1,-1));
         refreshLivingSkin();
@@ -831,9 +881,6 @@ public final class MainActivity extends Activity {
     }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
-        // CI can freeze only the periodic menu-skin repaint while inspecting
-        // Android accessibility. Production keeps live weather and fire cues.
-        uiRegressionMode=getIntent().getBooleanExtra("TAKS_UI_TEST_MODE",false);
         getWindow().setStatusBarColor(Color.rgb(15,25,22));
         getWindow().setNavigationBarColor(Color.rgb(15,25,22));
         // Landscape gameplay fills the phone screen, not the Android gesture
@@ -977,7 +1024,7 @@ public final class MainActivity extends Activity {
         setContentView(root);
         showMainMenu();
         skinHandler.removeCallbacks(skinLoop);
-        if(!uiRegressionMode)skinHandler.post(skinLoop);
+        skinHandler.post(skinLoop);
     }
     @Override protected void onResume(){
         super.onResume();
@@ -988,7 +1035,7 @@ public final class MainActivity extends Activity {
             renderHandler.removeCallbacks(renderLoop);renderHandler.post(renderLoop);
         }
         skinHandler.removeCallbacks(skinLoop);
-        if(!uiRegressionMode)skinHandler.post(skinLoop);
+        skinHandler.post(skinLoop);
     }
     @Override protected void onPause(){
         padActive=false;moveIntent=false;sprinting=false;

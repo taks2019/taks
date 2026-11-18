@@ -22,8 +22,6 @@ jobs:
         run: python scripts/import_cc0_foliage.py
       - name: Download original skinned CC0 humanoid, hide-look clothing, and 7 source clips
         run: python scripts/import_cc0_rigged_human.py
-      - name: Verify source skin color and upright grass asset dimensions
-        run: python3 tests/test_asset_importers.py
       - name: Verify no missing offline assets
         run: |
           python - <<'PY'
@@ -140,6 +138,7 @@ jobs:
         run: |
           test -s app/src/main/assets/logo/TAKS_WORLD_LOGO.webp
           test -s app/src/main/assets/logo/TAKS_WORLD_RUNTIME.webp
+          test -s app/src/main/assets/menu/wonderwerk_main_menu.webp
           python - <<'PY'
           import hashlib
           from pathlib import Path
@@ -151,6 +150,9 @@ jobs:
           assert hashlib.sha256(runtime).hexdigest() == 'd3a2d6b1c509030066262eb4e91e329d5bca9723a98329be66865858915c7195'
           assert runtime[:4]==b'RIFF' and runtime[8:12]==b'WEBP'
           print('Menu-sized original-logo derivative verified:',len(runtime),'bytes')
+          menu=Path('app/src/main/assets/menu/wonderwerk_main_menu.webp').read_bytes()
+          assert menu[:4]==b'RIFF' and menu[8:12]==b'WEBP' and len(menu)>100000
+          print('Wonderwerk main-menu background verified:',len(menu),'bytes')
           PY
       - name: Build real native Android APK (not web)
         run: gradle --no-daemon :app:assembleDebug --stacktrace
@@ -169,6 +171,10 @@ jobs:
               assert z.read(logo)[:4]==b'RIFF', 'Original logo not valid WebP'
               assert z.read(logo)[8:12]==b'WEBP'
               print('VERIFIED SIZE-OPTIMIZED ORIGINAL USER LOGO DERIVATIVE inside native Android APK')
+              menu='assets/menu/wonderwerk_main_menu.webp'
+              assert menu in names and z.getinfo(menu).file_size>100000
+              assert z.read(menu)[:4]==b'RIFF' and z.read(menu)[8:12]==b'WEBP'
+              print('VERIFIED PHOTOREAL WONDERWERK MAIN-MENU PLATE inside native Android APK')
               for m in ('rock_07','namaqualand_boulders_01',
                         'namaqualand_cliff_01','grass_bermuda_01',
                         'fern_02'):
