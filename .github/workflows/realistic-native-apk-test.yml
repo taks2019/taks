@@ -20,8 +20,8 @@ jobs:
         run: python scripts/import_cc0_rocks.py
       - name: Download and bake original CC0 grass and fern
         run: python scripts/import_cc0_foliage.py
-      - name: Download and bake CC0 MakeHuman neutral anatomical model
-        run: python scripts/import_cc0_human.py
+      - name: Download original skinned CC0 humanoid, hide-look clothing, and 7 source clips
+        run: python scripts/import_cc0_rigged_human.py
       - name: Verify no missing offline assets
         run: |
           python - <<'PY'
@@ -29,7 +29,7 @@ jobs:
           from pathlib import Path
           base=Path('app/src/main/assets/models')
           meshes=('rock_07','namaqualand_boulders_01','namaqualand_cliff_01',
-                  'grass_bermuda_01','fern_02','makehuman_cc0')
+                  'grass_bermuda_01','fern_02')
           for m in meshes:
               data=(base/(m+'.tkm')).read_bytes()
               assert data[:4]==b'TKM1'
@@ -39,6 +39,15 @@ jobs:
               print(m,'real triangles',count//3)
           for png in ('ground_sandy_gravel.png','wall_cliff_side.png'):
               assert (base/png).stat().st_size>100_000
+          rig=(base/'makehuman_rigged.tks').read_bytes()
+          assert rig[:4]==b'TKS1'
+          magic,vertices,joints,clips=__import__('struct').unpack_from('<4sIII',rig)
+          assert magic==b'TKS1' and vertices>30000 and joints==53 and clips==7
+          assert (base/'makehuman_rigged.png').stat().st_size>100_000
+          source=json.loads((base/'makehuman_rigged_source.json').read_text())
+          assert source['rig']=='53-joint mpfb-game_engine' and len(source['clips'])==7
+          assert source['historical_clothing_authenticity'].startswith('UNVERIFIED')
+          print('Skinned humanoid',vertices,'vertices;',joints,'joints;',clips,'clips')
           assert json.loads((base/'foliage_manifest.json').read_text())['models']
           PY
       - uses: actions/upload-artifact@v4
@@ -125,9 +134,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Verify committed approved user's original logo at source
+      - name: Verify optimized runtime copy of the approved original logo
         run: |
           test -s app/src/main/assets/logo/TAKS_WORLD_LOGO.webp
+          test -s app/src/main/assets/logo/TAKS_WORLD_RUNTIME.webp
           python - <<'PY'
           import hashlib
           from pathlib import Path
@@ -135,6 +145,10 @@ jobs:
           b=p.read_bytes()
           assert hashlib.sha1(b'blob '+str(len(b)).encode()+b'\x00'+b).hexdigest() == 'bc3fa5e3e27a9fa60c749314306dc027a66285d4'
           print('Logo source verified:',len(b),'bytes')
+          runtime=Path('app/src/main/assets/logo/TAKS_WORLD_RUNTIME.webp').read_bytes()
+          assert hashlib.sha256(runtime).hexdigest() == 'd3a2d6b1c509030066262eb4e91e329d5bca9723a98329be66865858915c7195'
+          assert runtime[:4]==b'RIFF' and runtime[8:12]==b'WEBP'
+          print('Menu-sized original-logo derivative verified:',len(runtime),'bytes')
           PY
       - name: Build real native Android APK (not web)
         run: gradle --no-daemon :app:assembleDebug --stacktrace
@@ -147,17 +161,27 @@ jobs:
           assert f.stat().st_size>8_000_000, 'APK missing large genuine 3D assets'
           with zipfile.ZipFile(f) as z:
               names=set(z.namelist())
-              logo='assets/logo/TAKS_WORLD_LOGO.webp'
+              logo='assets/logo/TAKS_WORLD_RUNTIME.webp'
               assert logo in names, 'The user-approved original TAKS WORLD emblem is missing'
-              assert z.getinfo(logo).file_size>6000, 'Original logo is unexpectedly tiny'
+              assert z.getinfo(logo).file_size>30000, 'Original logo derivative is unexpectedly tiny'
               assert z.read(logo)[:4]==b'RIFF', 'Original logo not valid WebP'
-              print('VERIFIED ORIGINAL USER LOGO inside standalone native Android APK')
+              assert z.read(logo)[8:12]==b'WEBP'
+              print('VERIFIED SIZE-OPTIMIZED ORIGINAL USER LOGO DERIVATIVE inside native Android APK')
               for m in ('rock_07','namaqualand_boulders_01',
                         'namaqualand_cliff_01','grass_bermuda_01',
-                        'fern_02','makehuman_cc0'):
+                        'fern_02'):
                   for ext in ('tkm','png'):
                       path='assets/models/'+m+'.'+ext
                       assert path in names and z.getinfo(path).file_size>10000,path
+              for path in ('assets/models/makehuman_rigged.tks',
+                           'assets/models/makehuman_rigged.png',
+                           'assets/models/makehuman_rigged_source.json'):
+                  assert path in names and z.getinfo(path).file_size>1000,path
+              rig=z.read('assets/models/makehuman_rigged.tks')
+              import struct
+              magic,vertices,joints,clips=struct.unpack_from('<4sIII',rig)
+              assert magic==b'TKS1' and vertices>30000 and joints==53 and clips==7
+              print('VERIFIED RIGGED 53-BONE HUMANOID AND 7 CLIPS EMBEDDED IN APK')
               print('TAKS NATIVE ANDROID REAL-3D TEST APK VERIFIED:',f.stat().st_size,'bytes')
           PY
       - name: Prepare named test APK for phone

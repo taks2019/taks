@@ -19,16 +19,15 @@ def adb(*args, check=True):
     return result.stdout
 
 def dump(name):
-    # ADB exec-out cat can be empty on some Android 35 emulator images.
-    # Pull the actual file (as verified by our first screenshot run), retry
-    # accessibility while the launcher finishes its initial focus transition.
-    path=ROOT/(name+".xml")
+    remote="/sdcard/taks-ui.xml"
     for attempt in range(4):
         result=subprocess.run(["adb","shell","uiautomator","dump",
-                               "/sdcard/taks-ui.xml"],capture_output=True)
-        pulled=subprocess.run(["adb","pull","/sdcard/taks-ui.xml",str(path)],
-                              capture_output=True)
-        raw=path.read_bytes() if path.exists() else b""
+                               "--compressed",remote],capture_output=True)
+        # `adb pull` is unavailable on some Android 35 images even though the
+        # dump command succeeds. Read the finished file over the adb shell pipe.
+        raw=adb("exec-out","cat",remote,check=False)
+        if not raw:
+            raw=adb("shell","cat",remote,check=False)
         if b"<hierarchy" in raw:
             raw=raw[raw.index(b"<hierarchy"):]
             try:
@@ -37,8 +36,8 @@ def dump(name):
             except ET.ParseError:
                 pass
         print("UI dump retry",name,attempt,"dump",result.returncode,
-              "pull",pulled.returncode,"size",len(raw),flush=True)
-        time.sleep(1.5)
+              "size",len(raw),"diagnostic",result.stderr.decode(errors="replace")[-240:],flush=True)
+        time.sleep(2.0)
     picture("DIAGNOSTIC-"+name)
     raise AssertionError("Android accessibility hierarchy unavailable: "+name)
 
@@ -61,6 +60,14 @@ def click(nodes,text,contains=False):
     print("TAPPED",repr(text),"at",x,y,flush=True)
     return x,y
 
+def position(nodes):
+    for node in nodes:
+        match=re.search(r"JÁTÉKOS:\s*(-?[0-9]+(?:\.[0-9]+)?) m,\s*(-?[0-9]+(?:\.[0-9]+)?) m",
+                        node.get("text",""))
+        if match:
+            return tuple(map(float,match.groups()))
+    raise AssertionError("The native status panel did not expose the live player position")
+
 def picture(name):
     data=adb("exec-out","screencap","-p")
     assert data.startswith(b"\x89PNG\r\n\x1a\n") and len(data)>15000
@@ -76,6 +83,11 @@ adb("shell","settings","put","secure","immersive_mode_confirmations","confirmed"
 adb("shell","am","start","-n",PACKAGE+"/hu.taks.world.MainActivity")
 time.sleep(10)
 assert adb("shell","pidof",PACKAGE).strip(), "App process crashed on launch"
+runtime_log=adb("logcat","-d","-t","1200")
+assert b"Loaded skinned humanoid: 53-bone rig, 7 animation clips" in runtime_log, \
+    "The Android GPU thread did not load the verified rigged character asset"
+assert b"Rigged skinned humanoid asset unavailable" not in runtime_log, \
+    "Android could not decode the skinned humanoid model"
 
 # A fresh Android emulator shows a one-time OS-level full-screen prompt.
 # This prompt is NOT the TAKS interface; dismiss before screenshots/tests.
@@ -101,12 +113,30 @@ assert find(nodes,"KÉSZÍTŐK")
 assert find(nodes,"KILÉPÉS")
 picture("01-android-fomenu-eredeti-logo")
 
+click(nodes,"KÉSZÍTŐK")
+time.sleep(1)
+nodes=dump("credits")
+assert find(nodes,"KÉSZÍTŐK")
+assert find(nodes,"X"),"Credits modal lacks its working close button"
+picture("02-android-keszitok")
+click(nodes,"X")
+time.sleep(1)
+nodes=dump("main-after-credits")
+click(nodes,"KILÉPÉS")
+time.sleep(1)
+nodes=dump("exit-confirm")
+assert find(nodes,"Mentés és kilépés")
+picture("03-android-kilepes-megerosites")
+click(nodes,"Vissza")
+time.sleep(1)
+nodes=dump("main-after-exit-confirm")
+
 click(nodes,"BEÁLLÍTÁSOK")
 time.sleep(2)
 nodes=dump("settings")
 assert find(nodes,"X"),"Settings lacks functional X button"
 assert find(nodes,"3D felbontás",True),"Graphics setting not visible"
-picture("02-android-beallitasok-elo-skin")
+picture("04-android-beallitasok-elo-skin")
 click(nodes,"X")
 time.sleep(1)
 
@@ -124,7 +154,32 @@ if find(nodes,"Folytatás a mentett világból"):
 assert find(nodes,"ÉPÍTÉS"),"Game HUD is not present"
 assert find(nodes,"TÁRSAK"),"NPC screen inaccessible"
 assert find(nodes,"TÁSKA"),"Inventory screen inaccessible"
-picture("03-android-jatek-elomenuk")
+picture("05-android-jatek-elomenuk")
+
+# Drive the actual left touch pad and compare live native coordinates.
+click(nodes,"TÁSKA")
+time.sleep(1)
+nodes=dump("movement-before")
+before=position(nodes)
+click(nodes,"X")
+size=adb("shell","wm","size").decode(errors="replace")
+density=adb("shell","wm","density").decode(errors="replace")
+sm=re.search(r"(\d+)x(\d+)",size);dm=re.search(r"(\d+)",density)
+assert sm and dm,"Cannot derive Android touch-test coordinates"
+scale=int(dm.group(1))/160.0
+screen_height=min(int(sm.group(1)),int(sm.group(2)))
+x1=round(59*scale);x2=round(83*scale);y=round((screen_height/scale-66)*scale)
+adb("shell","input","swipe",str(x1),str(y),str(x2),str(y),"900")
+time.sleep(1)
+click(dump("movement-after-touch"),"TÁSKA")
+time.sleep(1)
+nodes=dump("movement-verified")
+after=position(nodes)
+assert abs(after[0]-before[0])+abs(after[1]-before[1])>.12, \
+    f"Android joystick did not move the native player: {before} -> {after}"
+picture("06-android-erintesvezerles-mozgas")
+click(nodes,"X")
+time.sleep(1)
 
 click(nodes,"ÉPÍTÉS")
 time.sleep(1)
@@ -132,13 +187,13 @@ nodes=dump("building")
 assert find(nodes,"ÉPÍTÉS ÉS ANYAGOK"),"Building submenu missing"
 assert find(nodes,"⚙"),"Building submenu lacks Settings gear"
 assert find(nodes,"X"),"Building submenu lacks X close"
-picture("04-android-epites-almenu")
+picture("07-android-epites-almenu")
 
 click(nodes,"⚙")
 time.sleep(1)
 nodes=dump("settings-from-building")
 assert find(nodes,"3D felbontás",True)
-picture("05-android-beallitasok-epitesbol")
+picture("08-android-beallitasok-epitesbol")
 click(nodes,"X")
 time.sleep(1)
 nodes=dump("building-after-settings")
@@ -152,7 +207,7 @@ time.sleep(1)
 nodes=dump("npcs")
 assert find(nodes,"KÖZÖSSÉG ÉS TÁBOR")
 assert find(nodes,"⚙")
-picture("06-android-tarsak-almenu")
+picture("09-android-tarsak-almenu")
 click(nodes,"X")
 time.sleep(1)
 
@@ -162,7 +217,7 @@ time.sleep(1)
 nodes=dump("inventory")
 assert find(nodes,"KÖRNYEZET ÉS ÁLLAPOT")
 assert find(nodes,"⚙")
-picture("07-android-taska-allapot")
+picture("10-android-taska-allapot")
 click(nodes,"X")
 time.sleep(1)
 
@@ -172,5 +227,11 @@ time.sleep(1)
 nodes=dump("game-menu")
 assert find(nodes,"JÁTÉKMENÜ")
 assert find(nodes,"Beállítások")
-picture("08-android-jatekmenu")
-print("PASS: actual Android app, original logo, settings from every view, X, build/NPC/inventory and exit UI.",flush=True)
+picture("11-android-jatekmenu")
+click(nodes,"Mentés")
+time.sleep(1)
+saved=adb("shell","run-as",PACKAGE,"cat","shared_prefs/taks_native_save_v1.xml")
+assert b'name="state"' in saved and b'TAKS_NATIVE_' in saved, \
+    "The save button did not persist a native world-state snapshot"
+picture("12-android-mentes-ellenorizve")
+print("PASS: Android launch, 53-bone rig load, menu/navigation, touch movement, save persistence, settings and exit.",flush=True)

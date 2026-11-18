@@ -226,41 +226,8 @@ void addBuildings(const FastFrame& scene){
     }
 }
 void addPlayerAndNpcs(const FastFrame& scene){
-    // The old anatomical rods are a test fallback only when real mesh import
-    // fails. They must never overlap genuine human geometry.
-    if(!taks::RealModels::hasRealHuman()){
-    auto addCharacter=[](float x,float z,float phase,float accent){
-        float h=surfaceHeight(x,z);
-        // A végleges embermodell helyett az animált mozgási és pozíciós teszt geometria.
-        float w=.10f*std::sin(phase);
-        axisBar(objectsMesh,{x,h+.9f,z},{x,h+1.40f,z},.135f,5.f,8);
-        irregularRock(objectsMesh,x,z,.13f,1.05f,5.f,3);
-        axisBar(objectsMesh,{x-.095f,h+.88f,z},{x-.13f,h+.1f,z+w},.06f,5.f,7);
-        axisBar(objectsMesh,{x+.095f,h+.88f,z},{x+.13f,h+.1f,z-w},.06f,5.f,7);
-        axisBar(objectsMesh,{x-.14f,h+1.27f,z},{x-.28f,h+.84f,z-w*.5f},.047f,5.f,6);
-        axisBar(objectsMesh,{x+.14f,h+1.27f,z},{x+.28f,h+.84f,z+w*.5f},.047f,5.f,6);
-        // Azonosító gyűrűként nem lebegő UI elem: a talajra fektetett 3D geometria.
-        for(int j=0;j<16;++j){
-            float a=2*PI*j/16,b=2*PI*(j+1)/16;
-            Vec3 p{x+.33f*std::cos(a),h+.025f,z+.33f*std::sin(a)};
-            Vec3 q{x+.33f*std::cos(b),h+.025f,z+.33f*std::sin(b)};
-            axisBar(objectsMesh,p,q,.018f,accent,4);
-        }
-    };
-    addCharacter(scene.playerX,scene.playerZ,scene.walkPhase,7.f);
-    for(int i=0;i<4;++i){
-        const float* n=scene.npcs+i*4;
-        float x=n[0],z=n[1],h=surfaceHeight(x,z),c=8.f+float(i%2);
-        // A társak még nem fotórealisztikusak: egyszerű térbeli helyzetjelölő.
-        axisBar(objectsMesh,{x,h+.05f,z},{x,h+.46f,z},.045f,c,5);
-        for(int j=0;j<12;++j){
-            float a=2*PI*j/12,b=2*PI*(j+1)/12;
-            Vec3 p{x+.22f*std::cos(a),h+.025f,z+.22f*std::sin(a)};
-            Vec3 q{x+.22f*std::cos(b),h+.025f,z+.22f*std::sin(b)};
-            axisBar(objectsMesh,p,q,.016f,c,3);
-        }
-    }
-    } // fallback characters end; preserve physical hearth in either renderer.
+    // No white mannequins or rod people. The animated, source-skinned humanoids
+    // are drawn by RealModels; a missing asset reports an import error.
     if(scene.hearth>.5f){
         float x=-1.15f,z=-1.8f,h=surfaceHeight(x,z);
         for(int k=0;k<7;++k){
@@ -458,6 +425,8 @@ void render(int width,int height,const FastFrame& f){
                  objectsMesh.empty()?nullptr:objectsMesh.data(),GL_STREAM_DRAW);
     glDrawArrays(GL_TRIANGLES,0,(GLsizei)objectsMesh.size());
     glBindVertexArray(0);
-    taks::RealModels::render(vp.a,f.nodes,f.grass,f.trees,f.verifiedFerns,f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,f.npcs);
+    taks::RealModels::render(vp.a,f.nodes,f.grass,f.trees,f.verifiedFerns,
+        f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,
+        f.playerMoving,f.playerRunning,f.npcs);
 }
 }

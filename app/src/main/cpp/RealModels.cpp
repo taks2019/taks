@@ -5,16 +5,24 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <chrono>
 #include <string>
 #include <vector>
 
 namespace taks::RealModels {
 namespace {
 struct Vertex { float pos[3], normal[3], uv[2]; };
-struct Model { GLuint vao=0,vbo=0,texture=0; GLsizei count=0; };
+struct SkinnedVertex { float pos[3],normal[3],uv[2];std::uint16_t joints[4];float weights[4]; };
+static_assert(sizeof(SkinnedVertex)==56,"TKS1 skinned vertex layout");
+struct Model { GLuint vao=0,vbo=0,texture=0; GLsizei count=0;bool skinned=false; };
+struct Joint { int parent=-1;float translation[3]={};float rotation[4]={0,0,0,1};float inverseBind[16]={}; };
+struct Clip { std::string name;float fps=30;int frames=0;std::vector<float> rotations,root; };
+struct HumanRig { std::array<Joint,53> joints{};std::vector<Clip> clips;bool valid=false; };
 std::array<Model,7> models;
+HumanRig human;
 GLuint shader=0;
 GLint uVP=-1,uModel=-1,uTexture=-1,uCutoff=-1,uDaylight=-1,uRain=-1,uTint=-1;
+GLint uBones=-1;
 std::string error;
 constexpr float PI=3.14159265358979323846f;
 const char* VS=R"GLSL(#version 300 es
@@ -22,15 +30,25 @@ precision highp float;
 layout(location=0) in vec3 aPosition;
 layout(location=1) in vec3 aNormal;
 layout(location=2) in vec2 aTexCoord;
+layout(location=3) in uvec4 aJoints;
+layout(location=4) in vec4 aWeights;
 uniform mat4 uViewProjection;
 uniform mat4 uModel;
+uniform mat4 uBones[53];
 out highp vec3 vNormal;
 out highp vec3 vWorld;
 out highp vec2 vUV;
 void main() {
- vec4 p=uModel*vec4(aPosition,1.0);
+ float totalWeight=dot(aWeights,vec4(1.0));
+ mat4 skin=mat4(1.0);
+ if(totalWeight>0.0001){
+   skin=uBones[aJoints.x]*aWeights.x+uBones[aJoints.y]*aWeights.y+
+        uBones[aJoints.z]*aWeights.z+uBones[aJoints.w]*aWeights.w;
+ }
+ vec4 skinned=skin*vec4(aPosition,1.0);
+ vec4 p=uModel*skinned;
  vWorld=p.xyz;
- vNormal=normalize(mat3(uModel)*aNormal);
+ vNormal=normalize(mat3(uModel)*mat3(skin)*aNormal);
  vUV=aTexCoord;
  gl_Position=uViewProjection*p;
 }
@@ -61,6 +79,89 @@ void main(){
   fragColor=vec4(pow(max(color,vec3(0.0)),vec3(1.0/2.2)),1.0);
 }
 )GLSL";
+struct Quat { float x=0,y=0,z=0,w=1; };
+struct Vec3 { float x=0,y=0,z=0; };
+struct Mat4 { float a[16]{}; };
+Quat qmul(Quat a,Quat b){return {a.w*b.x+a.x*b.w+a.y*b.z-a.z*b.y,
+                                 a.w*b.y-a.x*b.z+a.y*b.w+a.z*b.x,
+                                 a.w*b.z+a.x*b.y-a.y*b.x+a.z*b.w,
+                                 a.w*b.w-a.x*b.x-a.y*b.y-a.z*b.z};}
+Quat qnorm(Quat q){float n=std::sqrt(q.x*q.x+q.y*q.y+q.z*q.z+q.w*q.w);
+    if(n<1.e-8f)return {};
+    return {q.x/n,q.y/n,q.z/n,q.w/n};}
+Quat qslerp(Quat a,Quat b,float t){
+    float d=a.x*b.x+a.y*b.y+a.z*b.z+a.w*b.w;
+    if(d<0.f){b={-b.x,-b.y,-b.z,-b.w};d=-d;}
+    if(d>.9995f)return qnorm({a.x+(b.x-a.x)*t,a.y+(b.y-a.y)*t,
+                              a.z+(b.z-a.z)*t,a.w+(b.w-a.w)*t});
+    const float angle=std::acos(std::clamp(d,-1.f,1.f));
+    const float sa=std::sin((1.f-t)*angle)/std::sin(angle),sb=std::sin(t*angle)/std::sin(angle);
+    return {a.x*sa+b.x*sb,a.y*sa+b.y*sb,a.z*sa+b.z*sb,a.w*sa+b.w*sb};
+}
+Mat4 multiply(const Mat4& a,const Mat4& b){Mat4 o;
+    for(int c=0;c<4;++c)for(int r=0;r<4;++r)
+        for(int k=0;k<4;++k)o.a[c*4+r]+=a.a[k*4+r]*b.a[c*4+k];
+    return o;}
+Mat4 localMatrix(const float* t,Quat q){q=qnorm(q);Mat4 m;
+    const float x=q.x,y=q.y,z=q.z,w=q.w;
+    m.a[0]=1-2*(y*y+z*z);m.a[1]=2*(x*y+z*w);m.a[2]=2*(x*z-y*w);
+    m.a[4]=2*(x*y-z*w);m.a[5]=1-2*(x*x+z*z);m.a[6]=2*(y*z+x*w);
+    m.a[8]=2*(x*z+y*w);m.a[9]=2*(y*z-x*w);m.a[10]=1-2*(x*x+y*y);
+    m.a[12]=t[0];m.a[13]=t[1];m.a[14]=t[2];m.a[15]=1;return m;}
+struct Pose { std::array<Quat,53> rotations{};Vec3 root{}; };
+std::array<Mat4,53> boneMatrices{};
+std::array<Pose,5> previousPose{};
+std::array<int,5> previousClip{{-1,-1,-1,-1,-1}};
+std::array<double,5> transitionStart{};
+double animationNow(){using clock=std::chrono::steady_clock;
+    return std::chrono::duration<double>(clock::now().time_since_epoch()).count();}
+Pose sampleClip(int clipIndex,double time){
+    Pose pose;for(auto& q:pose.rotations)q={};
+    if(clipIndex<0||clipIndex>=static_cast<int>(human.clips.size()))return pose;
+    const Clip& clip=human.clips[clipIndex];if(clip.frames<=0)return pose;
+    const int loopFrames=std::max(1,clip.frames-1);
+    const double frame=std::fmod(std::max(0.0,time)*clip.fps,double(loopFrames));
+    const int a=static_cast<int>(frame),b=std::min(a+1,clip.frames-1);const float blend=float(frame-a);
+    for(int joint=0;joint<53;++joint){
+        const std::size_t ia=(std::size_t(a)*53+joint)*4,ib=(std::size_t(b)*53+joint)*4;
+        const auto& q=clip.rotations;
+        pose.rotations[joint]=qslerp({q[ia],q[ia+1],q[ia+2],q[ia+3]},
+                                     {q[ib],q[ib+1],q[ib+2],q[ib+3]},blend);
+    }
+    const std::size_t ra=std::size_t(a)*3,rb=std::size_t(b)*3;
+    pose.root={clip.root[ra]+(clip.root[rb]-clip.root[ra])*blend,
+               clip.root[ra+1]+(clip.root[rb+1]-clip.root[ra+1])*blend,
+               clip.root[ra+2]+(clip.root[rb+2]-clip.root[ra+2])*blend};
+    return pose;
+}
+Pose poseForActor(int actor,int desired,double now){
+    if(previousClip[actor]!=desired){
+        previousPose[actor]=sampleClip(previousClip[actor],now);
+        previousClip[actor]=desired;transitionStart[actor]=now;
+    }
+    Pose current=sampleClip(desired,now);
+    const float t=std::clamp(float((now-transitionStart[actor])/.28),0.f,1.f);
+    if(t<1.f){
+        for(int j=0;j<53;++j)current.rotations[j]=qslerp(previousPose[actor].rotations[j],current.rotations[j],t);
+        current.root.x=previousPose[actor].root.x+(current.root.x-previousPose[actor].root.x)*t;
+        current.root.y=previousPose[actor].root.y+(current.root.y-previousPose[actor].root.y)*t;
+        current.root.z=previousPose[actor].root.z+(current.root.z-previousPose[actor].root.z)*t;
+    }
+    return current;
+}
+void evaluateBones(const Pose& pose){
+    std::array<Mat4,53> global{};
+    for(int i=0;i<53;++i){
+        const Joint& j=human.joints[i];
+        float t[3]={j.translation[0],j.translation[1],j.translation[2]};
+        if(i==0){t[0]+=pose.root.x;t[1]+=pose.root.y;t[2]+=pose.root.z;}
+        Quat rest{j.rotation[0],j.rotation[1],j.rotation[2],j.rotation[3]};
+        Mat4 local=localMatrix(t,qmul(rest,pose.rotations[i]));
+        global[i]=j.parent<0?local:multiply(global[j.parent],local);
+        Mat4 bind;std::copy(j.inverseBind,j.inverseBind+16,bind.a);
+        boneMatrices[i]=multiply(global[i],bind);
+    }
+}
 GLuint compile(GLenum type,const char* code){
  GLuint result=glCreateShader(type);
  glShaderSource(result,1,&code,nullptr);glCompileShader(result);
@@ -80,6 +181,79 @@ void deleteModel(Model& model){
  if(model.texture)glDeleteTextures(1,&model.texture);
  model={};
 }
+template<class T> bool take(const std::uint8_t*& cursor,const std::uint8_t* end,T& value){
+ if(std::size_t(end-cursor)<sizeof(T))return false;
+ std::memcpy(&value,cursor,sizeof(T));cursor+=sizeof(T);return true;
+}
+bool uploadRigged(const std::uint8_t* bytes,std::size_t size,const std::uint32_t* argb,
+                 int width,int height){
+ if(size<16||std::memcmp(bytes,"TKS1",4)!=0){error="A riggelt embermodell fejléce hibás.";return false;}
+ const std::uint8_t* cursor=bytes+4;const std::uint8_t* end=bytes+size;
+ std::uint32_t count=0,jointCount=0,clipCount=0;
+ if(!take(cursor,end,count)||!take(cursor,end,jointCount)||!take(cursor,end,clipCount)||
+    count<15000||count>180000||jointCount!=53||clipCount<3||clipCount>8||count%3){
+    error="A riggelt embermodell mérete vagy 53 csontos váza hibás.";return false;
+ }
+ const std::size_t vertexBytes=std::size_t(count)*sizeof(SkinnedVertex);
+ if(vertexBytes>std::size_t(end-cursor)){error="A riggelt hálóadat csonka.";return false;}
+ const std::uint8_t* vertexData=cursor;cursor+=vertexBytes;
+ HumanRig next;
+ for(int i=0;i<53;++i){
+    Joint& j=next.joints[i];
+    if(!take(cursor,end,j.parent)||!take(cursor,end,j.translation)||
+       !take(cursor,end,j.rotation)||!take(cursor,end,j.inverseBind)||
+       j.parent>=i||j.parent< -1){error="A humanoid csontváz kapcsolatai hibásak.";return false;}
+ }
+ for(std::uint32_t c=0;c<clipCount;++c){
+    char name[16]{};std::uint32_t frameCount=0;float fps=0;
+    if(!take(cursor,end,name)||!take(cursor,end,frameCount)||!take(cursor,end,fps)||
+       frameCount<2||frameCount>600||!std::isfinite(fps)||fps<1||fps>120){
+       error="A humanoid animációs klip fejléce hibás.";return false;
+    }
+    Clip clip;clip.name.assign(name,strnlen(name,sizeof(name)));clip.frames=int(frameCount);clip.fps=fps;
+    const std::size_t rotationCount=std::size_t(frameCount)*53*4;
+    const std::size_t rootCount=std::size_t(frameCount)*3;
+    const std::size_t clipBytes=(rotationCount+rootCount)*sizeof(float);
+    if(clipBytes>std::size_t(end-cursor)){error="A humanoid animációs klip csonka.";return false;}
+    clip.rotations.resize(rotationCount);std::memcpy(clip.rotations.data(),cursor,rotationCount*sizeof(float));cursor+=rotationCount*sizeof(float);
+    clip.root.resize(rootCount);std::memcpy(clip.root.data(),cursor,rootCount*sizeof(float));cursor+=rootCount*sizeof(float);
+    if(!std::all_of(clip.rotations.begin(),clip.rotations.end(),[](float v){return std::isfinite(v);})||
+       !std::all_of(clip.root.begin(),clip.root.end(),[](float v){return std::isfinite(v);})){
+       error="A humanoid animációs klip nem véges számot tartalmaz.";return false;
+    }
+    next.clips.push_back(std::move(clip));
+ }
+ if(cursor!=end||width<128||height<128||width>2048||height>2048){
+    error="A riggelt embermodell atlasza vagy fájlhossza hibás.";return false;
+ }
+ Model& model=models[6];deleteModel(model);
+ glGenVertexArrays(1,&model.vao);glBindVertexArray(model.vao);
+ glGenBuffers(1,&model.vbo);glBindBuffer(GL_ARRAY_BUFFER,model.vbo);
+ glBufferData(GL_ARRAY_BUFFER,GLsizeiptr(vertexBytes),vertexData,GL_STATIC_DRAW);
+ glEnableVertexAttribArray(0);glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(SkinnedVertex),reinterpret_cast<const void*>(0));
+ glEnableVertexAttribArray(1);glVertexAttribPointer(1,3,GL_FLOAT,GL_FALSE,sizeof(SkinnedVertex),reinterpret_cast<const void*>(12));
+ glEnableVertexAttribArray(2);glVertexAttribPointer(2,2,GL_FLOAT,GL_FALSE,sizeof(SkinnedVertex),reinterpret_cast<const void*>(24));
+ glEnableVertexAttribArray(3);glVertexAttribIPointer(3,4,GL_UNSIGNED_SHORT,sizeof(SkinnedVertex),reinterpret_cast<const void*>(32));
+ glEnableVertexAttribArray(4);glVertexAttribPointer(4,4,GL_FLOAT,GL_FALSE,sizeof(SkinnedVertex),reinterpret_cast<const void*>(40));
+ glBindVertexArray(0);
+ std::vector<std::uint8_t> rgba(std::size_t(width)*height*4);
+ for(std::size_t i=0;i<std::size_t(width)*height;++i){
+    const std::uint32_t color=argb[i];rgba[i*4]=std::uint8_t(color>>16);
+    rgba[i*4+1]=std::uint8_t(color>>8);rgba[i*4+2]=std::uint8_t(color);
+    rgba[i*4+3]=std::uint8_t(color>>24);
+ }
+ glGenTextures(1,&model.texture);glBindTexture(GL_TEXTURE_2D,model.texture);
+ glTexImage2D(GL_TEXTURE_2D,0,GL_SRGB8_ALPHA8,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE,rgba.data());
+ glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+ glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+ glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+ glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);glGenerateMipmap(GL_TEXTURE_2D);
+ glBindTexture(GL_TEXTURE_2D,0);
+ if(glGetError()!=GL_NO_ERROR){error="A telefon GPU-ja nem tudta feltölteni a skinned humanoid hálót.";deleteModel(model);return false;}
+ model.count=GLsizei(count);model.skinned=true;next.valid=true;human=std::move(next);
+ previousClip.fill(-1);previousPose={};transitionStart.fill(animationNow());
+ return true;
+}
 float surfaceHeight(float x,float z){
  auto saturate=[](float v){return std::max(0.f,std::min(1.f,v));};
  float e=saturate((11.f-std::abs(x))/2.4f) *
@@ -98,11 +272,24 @@ void draw(const Model& m,float x,float z,float scale,float radians){
  glUniformMatrix4fv(uModel,1,GL_FALSE,matrix);
  glBindTexture(GL_TEXTURE_2D,m.texture);
  glBindVertexArray(m.vao);
+ if(!m.skinned){glVertexAttribI4ui(3,0,0,0,0);glVertexAttrib4f(4,0,0,0,0);}
  glDrawArrays(GL_TRIANGLES,0,m.count);
+}
+void drawHuman(float x,float z,float scale,float radians,int actor,int clipIndex,double now){
+ const Model& model=models[6];if(!model.vao||!human.valid||uBones<0)return;
+ const Pose pose=poseForActor(actor,clipIndex,now);evaluateBones(pose);
+ glUniformMatrix4fv(uBones,53,GL_FALSE,boneMatrices[0].a);
+ float c=std::cos(radians),s=std::sin(radians);
+ const float matrix[16]={scale*c,0.f,-scale*s,0.f,0.f,scale,0.f,0.f,
+                         scale*s,0.f,scale*c,0.f,x,surfaceHeight(x,z)-.014f,z,1.f};
+ glUniformMatrix4fv(uModel,1,GL_FALSE,matrix);
+ glBindTexture(GL_TEXTURE_2D,model.texture);glBindVertexArray(model.vao);
+ glDrawArrays(GL_TRIANGLES,0,model.count);
 }
 }
 void shutdown(){
  for(auto& m:models)deleteModel(m);
+ human=HumanRig{};previousClip.fill(-1);previousPose={};transitionStart.fill(0.0);
  if(shader)glDeleteProgram(shader);
  shader=0;
 }
@@ -126,7 +313,8 @@ bool init(){
  uDaylight=glGetUniformLocation(shader,"uDaylight");
  uRain=glGetUniformLocation(shader,"uRain");
  uTint=glGetUniformLocation(shader,"uTint");
- if(uVP<0||uModel<0||uTexture<0||uCutoff<0||uDaylight<0||uRain<0||uTint<0){error="3D modellshader uniform hiány";shutdown();return false;}
+ uBones=glGetUniformLocation(shader,"uBones[0]");
+ if(uVP<0||uModel<0||uTexture<0||uCutoff<0||uDaylight<0||uRain<0||uTint<0||uBones<0){error="3D modellshader uniform hiány";shutdown();return false;}
  return true;
 }
 bool upload(int id,const std::uint8_t* bytes,std::size_t size,
@@ -134,6 +322,9 @@ bool upload(int id,const std::uint8_t* bytes,std::size_t size,
  if(id<0||id>=static_cast<int>(models.size())||!shader||!bytes||!argb){
     error="Hiányzó vagy hibás valódi 3D hálómodell.";return false;
  }
+ if(id==6&&size>=4&&std::memcmp(bytes,"TKS1",4)==0)
+    return uploadRigged(bytes,size,argb,width,height);
+ if(id==6){error="Az embermodell csak megőrzött bőrsúlyokkal és TKS1 csontvázzal tölthető be.";return false;}
  if(size<8 || std::memcmp(bytes,"TKM1",4)!=0){
     error="A 3D modellek TKM1 formátuma sérült.";return false;
  }
@@ -178,12 +369,13 @@ bool upload(int id,const std::uint8_t* bytes,std::size_t size,
  return true;
 }
 bool complete(){return models[0].vao&&models[0].texture&&models[1].vao&&models[1].texture;}
-bool hasRealHuman(){return models[6].vao!=0 && models[6].texture!=0 && models[6].count>=15000;}
+bool hasRealHuman(){return models[6].vao!=0 && models[6].texture!=0 && models[6].count>=15000&&human.valid;}
 const char* errorMessage(){return error.c_str();}
 void render(const float* viewProjection,const float* worldNodes,
             const float* grass,const float* trees,bool fernApproved,
             float worldClock,float rain,float playerX,float playerZ,
-            float playerHeading,const float* npcPositions){
+            float playerHeading,bool playerMoving,bool playerRunning,
+            const float* npcPositions){
  if(!shader||!viewProjection||!worldNodes||!grass||!trees||!npcPositions||!complete())return;
  glUseProgram(shader);
  glUniformMatrix4fv(uVP,1,GL_FALSE,viewProjection);
@@ -195,6 +387,7 @@ void render(const float* viewProjection,const float* worldNodes,
  glUniform1f(uCutoff,0.f);
  glUniform3f(uTint,1.f,1.f,1.f);
  glActiveTexture(GL_TEXTURE0);
+ const double now=animationNow();
  // Smaller rocks follow real, finite, collectible world inventory.
  for(int i=0;i<12;++i){
     const float* n=worldNodes+i*4;
@@ -205,10 +398,27 @@ void render(const float* viewProjection,const float* worldNodes,
  // A later geology system must give the static rock formation physical identity.
  // Photo-scanned stones stay grounded and human-scaled. The old free-
  // standing giant cliff props looked suspended above the cave entrance:
- // remove them until a physically registered geological scene is available.
+ // use two lower side outcrops, then distribute smaller scans around the edge
+ // of the explored ground. These remain visual geology; resource nodes are
+ // still the only stones with collectible inventory state.
+ if(models[2].vao&&models[2].texture){
+    draw(models[2],-8.25f,2.15f,.48f,-.48f);
+    draw(models[2],8.10f,2.45f,.44f,2.45f);
+ }
  draw(models[1],-6.8f,1.9f,.88f,.6f);
  draw(models[1],5.9f,2.4f,.82f,2.1f);
  draw(models[1],6.8f,-2.8f,.95f,-.25f);
+ for(int i=0;i<24;++i){
+    const float phase=float(i)*2.39996323f;
+    const float radius=3.5f+float((i*7)%8)*.60f;
+    const float x=std::cos(phase)*radius;
+    const float z=std::sin(phase)*(4.0f+float((i*3)%5)*.42f)-1.0f;
+    if(std::abs(x)<1.45f&&z>1.2f)continue;
+    const float dx=x-playerX,dz=z-playerZ;
+    if(dx*dx+dz*dz<1.8f)continue;
+    const float scale=.48f+.20f*(.5f+.5f*std::sin(float(i)*1.73f));
+    draw(models[0],x,z,scale,phase*.7f);
+ }
  // Genuine published botanical geometry; no generated tube/ball foliage.
  if(models[3].vao && models[3].texture){
     glUniform1f(uCutoff,.42f);
@@ -247,23 +457,35 @@ void render(const float* viewProjection,const float* worldNodes,
     // This biome plant is only visible when ecological verification is explicit.
     if(grass[2]>.12f)draw(models[4],grass[0]+.72f,grass[1]-.25f,.85f,.6f);
  }
- // Anatomical human meshes are real CC0 source geometry, not rod people.
- // This still tests a static neutral pose, not historical Homo erectus identity
- // or a finished skeletal walking animation.
+ // Real source skin weights and the 53-bone rig drive every person on the GPU.
+ // Clip changes blend over 280 ms; the source remains a general humanoid, not a
+ // claimed archaeological reconstruction of Homo erectus.
  if(hasRealHuman()){
     glUniform1f(uCutoff,.34f);
-    // Warm, sunlit skin material correction for the source's pale neutral
-    // anatomical texture, while retaining authored face/eye/hair UV detail.
-    glUniform3f(uTint,.80f,.56f,.43f);
-    draw(models[6],playerX,playerZ,.99f,playerHeading);
+    glUniform3f(uTint,1.f,1.f,1.f);
+    const int playerClip=playerRunning?4:(playerMoving?3:0);
+    drawHuman(playerX,playerZ,1.f,playerHeading,0,playerClip,now);
     for(int i=0;i<4;++i){
         const float* n=npcPositions+i*4;
         const float scale=.92f+.025f*float(i);
-        const float t=float(i);
-        glUniform3f(uTint,.83f-.04f*t,.60f-.025f*t,.47f-.02f*t);
-        draw(models[6],n[0],n[1],scale,float(i)*1.33f+.47f);
+        const int task=std::clamp(int(n[2]+.5f),0,4);
+        const bool carrying=n[3]>.5f;
+        float targetX=-.30f,targetZ=-3.40f;
+        if(!carrying){
+            static constexpr int resourceTypeByRole[4]={0,1,3,2};
+            const int resourceType=resourceTypeByRole[i];
+            float best=1.e9f;
+            for(int k=0;k<12;++k){const float* node=worldNodes+k*4;
+                if(int(node[2]+.5f)!=resourceType||node[3]<.5f)continue;
+                const float dx=node[0]-n[0],dz=node[1]-n[1],distance=dx*dx+dz*dz;
+                if(distance<best){best=distance;targetX=node[0];targetZ=node[1];}
+            }
+        }
+        const float heading=std::atan2(targetX-n[0],targetZ-n[1]);
+        const int clip=(task==1||task==2)?3:(task==3?1:0);
+        glUniform3f(uTint,1.f,1.f,1.f);
+        drawHuman(n[0],n[1],scale,heading,i+1,clip,now);
     }
-    glUniform3f(uTint,1.f,1.f,1.f);
  }
  glUniform1f(uCutoff,0.f);
  glBindVertexArray(0);

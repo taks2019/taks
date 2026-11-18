@@ -16,25 +16,26 @@ jobs:
           python-version: '3.11'
       - name: Prepare glTF import library without Blender
         run: python -m pip install 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2'
-      - name: Verify actual UV-mapped CC0 MakeHuman asset geometry
-        run: python scripts/import_cc0_human.py
-      - name: Show source polygon/material counts
+      - name: Verify actual 53-joint CC0 MakeHuman asset and animation clips
+        run: python scripts/import_cc0_rigged_human.py
+      - name: Show source skinned-mesh and animation counts
         run: |
           python - <<'PY'
           from pathlib import Path
           import struct
-          p=Path('app/src/main/assets/models/makehuman_cc0.tkm')
+          p=Path('app/src/main/assets/models/makehuman_rigged.tks')
           b=p.read_bytes()
-          assert b[:4]==b'TKM1'
-          n=struct.unpack('<I',b[4:8])[0]
-          assert n>15000 and len(b)==8+n*32
-          assert Path('app/src/main/assets/models/makehuman_cc0.png').is_file()
-          print('CC0 UV human verified triangles',n//3)
+          assert b[:4]==b'TKS1'
+          _,n,joints,clips=struct.unpack_from('<4sIII',b)
+          assert n>30000 and joints==53 and clips==7
+          assert Path('app/src/main/assets/models/makehuman_rigged.png').is_file()
+          print('CC0 skinned humanoid:',n,'vertices,',joints,'joints,',clips,'clips')
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: TAKS-World-real-human-model-assessment
+          name: TAKS-World-real-rigged-human-assessment
           path: |
-            app/src/main/assets/models/makehuman_cc0.tkm
-            app/src/main/assets/models/makehuman_cc0.png
+            app/src/main/assets/models/makehuman_rigged.tks
+            app/src/main/assets/models/makehuman_rigged.png
+            app/src/main/assets/models/makehuman_rigged_source.json
           if-no-files-found: warn

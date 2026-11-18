@@ -13,7 +13,8 @@ namespace taks::RealModels {
     void render(const float* viewProjection,const float* worldNodes,
                 const float* grass, const float* trees, bool fernApproved,
                 float worldClock, float rain, float playerX, float playerZ,
-                float playerHeading, const float* npcPositions);
+                float playerHeading, bool playerMoving, bool playerRunning,
+                const float* npcPositions);
     bool hasRealHuman();
     bool complete();
     const char* errorMessage();

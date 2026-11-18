@@ -75,7 +75,15 @@ public final class MainActivity extends Activity {
     private float orbit=.785398f,cameraPitch=.615480f,zoom=10f,lastX=0,lastY=0,lastSpan=0;
     private int activePanel=0;
     private final Handler worldHandler=new Handler(Looper.getMainLooper());
+    private final Handler renderHandler=new Handler(Looper.getMainLooper());
     private int worldTickNumber=0;
+    private final Runnable renderLoop=new Runnable(){
+        @Override public void run(){
+            if(inMainMenu)return;
+            if(surface!=null)surface.requestRender();
+            renderHandler.postDelayed(this,40);
+        }
+    };
     private final Runnable worldLoop=new Runnable(){
         @Override public void run(){
             if(inMainMenu)return;
@@ -167,6 +175,28 @@ public final class MainActivity extends Activity {
             return true;
         }catch(Exception exception){
             android.util.Log.e("TAKS_MODEL","Missing or invalid CC0 scanned model: "+name,exception);
+            return false;
+        }
+    }
+    private boolean loadRiggedHumanAsset(){
+        try(InputStream meshStream=getAssets().open("models/makehuman_rigged.tks");
+            java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream()){
+            byte[] buffer=new byte[16384];int count;
+            while((count=meshStream.read(buffer))!=-1)bytes.write(buffer,0,count);
+            Bitmap image;
+            try(InputStream imageStream=getAssets().open("models/makehuman_rigged.png")){
+                image=BitmapFactory.decodeStream(imageStream);
+            }
+            if(image==null)throw new java.io.IOException("Rigged humanoid atlas decode failed");
+            int width=image.getWidth(),height=image.getHeight();
+            int[] pixels=new int[width*height];
+            image.getPixels(pixels,0,width,0,0,width,height);image.recycle();
+            boolean loaded=nativeUploadRealModel(6,bytes.toByteArray(),pixels,width,height);
+            if(!loaded)throw new java.io.IOException("The native GLES3 rig/animation importer rejected the humanoid");
+            android.util.Log.i("TAKS_HUMAN","Loaded skinned humanoid: 53-bone rig, 7 animation clips");
+            return true;
+        }catch(Exception exception){
+            android.util.Log.e("TAKS_HUMAN","Rigged skinned humanoid asset unavailable",exception);
             return false;
         }
     }
@@ -529,6 +559,8 @@ public final class MainActivity extends Activity {
         if(menuCover!=null){root.removeView(menuCover);menuCover=null;}
         setHudVisibility(true);
         refreshScene();
+        renderHandler.removeCallbacks(renderLoop);
+        renderHandler.post(renderLoop);
         worldHandler.removeCallbacks(worldLoop);
         worldHandler.postDelayed(worldLoop,1800);
     }
@@ -699,7 +731,9 @@ public final class MainActivity extends Activity {
     private View originalLogoOrTitle(){
         // This is an actual downscaled copy of the user's blue/silver TAKS
         // globe/tree logo, not a substitute image or invented design.
-        for(String path:new String[]{"logo/TAKS_WORLD_LOGO.webp",
+        for(String path:new String[]{"logo/TAKS_WORLD_RUNTIME.webp",
+                                     "logo/TAKS_WORLD_ORIGINAL.png",
+                                     "logo/TAKS_WORLD_LOGO.webp",
                                      "logo/TAKS_WORLD_LOGO.png"}){
             try(InputStream stream=getAssets().open(path)){
                 Bitmap bitmap=BitmapFactory.decodeStream(stream);
@@ -718,6 +752,7 @@ public final class MainActivity extends Activity {
     }
     private void showMainMenu(){
         inMainMenu=true;
+        renderHandler.removeCallbacks(renderLoop);
         worldHandler.removeCallbacks(worldLoop);
         padActive=false;moveIntent=false;sprinting=false;
         stopMovement();
@@ -829,7 +864,7 @@ public final class MainActivity extends Activity {
                 // None is replaced with placeholder tubes, boxes or billboard graphics.
                 boolean grassOk=loadAuthenticRockAsset(3,"grass_bermuda_01");
                 boolean fernOk=loadAuthenticRockAsset(4,"fern_02");
-                boolean humanOk=loadAuthenticRockAsset(6,"makehuman_cc0");
+                boolean humanOk=loadRiggedHumanAsset();
                 // The 2M-triangle tree awaits a genuine UV-preserving mobile LOD.
                 // No fake tree model is substituted.
                 boolean groundOk=loadRealPbrSurface(0,"ground_sandy_gravel");
@@ -853,7 +888,11 @@ public final class MainActivity extends Activity {
         LinearLayout header=new LinearLayout(this);header.setOrientation(LinearLayout.VERTICAL);
         header.setPadding(dp(15),dp(10),dp(10),dp(10));
         skin(header,"CARD");
-        header.addView(caption("TAKS WORLD",22,0xFFE6D6B5));
+        FrameLayout gameplayLogo=new FrameLayout(this);
+        gameplayLogo.setPadding(dp(3),dp(2),dp(3),dp(2));
+        gameplayLogo.addView(originalLogoOrTitle(),new FrameLayout.LayoutParams(-1,-1));
+        gameplayLogo.addView(new LogoEnvironmentView(this),new FrameLayout.LayoutParams(-1,-1));
+        header.addView(gameplayLogo,new LinearLayout.LayoutParams(dp(124),dp(77)));
         header.addView(caption("TAKS ENGINE · ÉLŐ VILÁG",10,0xFFC3D1C5));
         FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
         hp.setMargins(dp(12),dp(12),0,0);root.addView(header,hp);gameHud.add(header);
@@ -934,7 +973,10 @@ public final class MainActivity extends Activity {
         super.onResume();
         if(surface!=null)surface.onResume();
         worldHandler.removeCallbacks(worldLoop);
-        if(!inMainMenu)worldHandler.postDelayed(worldLoop,1800);
+        if(!inMainMenu){
+            worldHandler.postDelayed(worldLoop,1800);
+            renderHandler.removeCallbacks(renderLoop);renderHandler.post(renderLoop);
+        }
         skinHandler.removeCallbacks(skinLoop);
         skinHandler.post(skinLoop);
     }
@@ -942,6 +984,7 @@ public final class MainActivity extends Activity {
         padActive=false;moveIntent=false;sprinting=false;
         stopMovement();
         worldHandler.removeCallbacks(worldLoop);
+        renderHandler.removeCallbacks(renderLoop);
         skinHandler.removeCallbacks(skinLoop);
         saves.edit().putString("state",nativeSave()).apply();
         if(surface!=null)surface.onPause();

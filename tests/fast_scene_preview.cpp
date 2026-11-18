@@ -8,9 +8,11 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 #include <chrono>
 
@@ -67,6 +69,32 @@ void loadRealModel(int id,const std::string& name){
              <<" (texture "<<picture.width<<"x"<<picture.height<<")\n";
     png_image_free(&picture);
 }
+void loadRiggedHuman(){
+    const std::string base="app/src/main/assets/models/makehuman_rigged";
+    std::ifstream stream(base+".tks",std::ios::binary);
+    check(bool(stream),"missing actual rigged 3D humanoid");
+    std::vector<std::uint8_t> data((std::istreambuf_iterator<char>(stream)),std::istreambuf_iterator<char>());
+    check(data.size()>1'000'000&&std::memcmp(data.data(),"TKS1",4)==0,
+          "human asset must retain source skin weights and skeleton data");
+    std::uint32_t vertices=0,joints=0,clips=0;
+    std::memcpy(&vertices,data.data()+4,4);std::memcpy(&joints,data.data()+8,4);std::memcpy(&clips,data.data()+12,4);
+    check(vertices>30000&&joints==53&&clips==7,"humanoid must contain the source 53-bone rig and seven clips");
+    png_image picture{};picture.version=PNG_IMAGE_VERSION;
+    check(png_image_begin_read_from_file(&picture,(base+".png").c_str())!=0,
+          "missing skinned humanoid texture atlas");
+    picture.format=PNG_FORMAT_RGBA;std::vector<std::uint8_t> rgba(PNG_IMAGE_SIZE(picture));
+    check(png_image_finish_read(&picture,nullptr,rgba.data(),0,nullptr)!=0,
+          "could not decode skinned humanoid texture atlas");
+    std::vector<std::uint32_t> argb(std::size_t(picture.width)*picture.height);
+    for(std::size_t i=0;i<argb.size();++i)
+        argb[i]=std::uint32_t(rgba[4*i+3])<<24|std::uint32_t(rgba[4*i])<<16|
+                std::uint32_t(rgba[4*i+1])<<8|rgba[4*i+2];
+    check(taks::RealModels::upload(6,data.data(),data.size(),argb.data(),int(picture.width),int(picture.height)),
+          std::string("GPU import of skinned humanoid failed: ")+taks::RealModels::errorMessage());
+    check(taks::RealModels::hasRealHuman(),"native model must retain a valid skeletal rig");
+    std::cout<<"Loaded skinned humanoid: "<<vertices<<" vertices, "<<joints<<" bones, "<<clips<<" clips\n";
+    png_image_free(&picture);
+}
 void loadActualTerrainPhoto(int slot,const std::string& slug){
     const std::string filename="app/src/main/assets/models/"+slug+".png";
     png_image picture{};picture.version=PNG_IMAGE_VERSION;
@@ -116,8 +144,7 @@ int main(){
     loadRealModel(2,"namaqualand_cliff_01");
     loadRealModel(3,"grass_bermuda_01");
     loadRealModel(4,"fern_02");
-    loadRealModel(6,"makehuman_cc0");
-    check(taks::RealModels::hasRealHuman(),"genuine anatomical mesh must replace stick-figure scene markers");
+    loadRiggedHuman();
     // Tree candidate awaits true mobile LOD; not silently replaced.
     loadActualTerrainPhoto(0,"ground_sandy_gravel");
     loadActualTerrainPhoto(1,"wall_cliff_side");
@@ -203,7 +230,15 @@ int main(){
     // Camera close-up confirms the actual MakeHuman mesh is on the same GPU path.
     frame.playerX=0.f;frame.playerZ=-5.2f;frame.zoom=6.5f;
     frame.pitch=.48f;frame.yaw=.785398f;
-    render("11-valodi-texturazott-embermodellek.ppm");
+    const auto idlePose=render("11-skinned-embermodellek-idle.ppm");
+    frame.playerMoving=true;
+    std::this_thread::sleep_for(std::chrono::milliseconds(320));
+    const auto walkPose=render("12-skinned-embermodellek-seta.ppm");
+    check(idlePose!=walkPose,"the 53-bone walk animation must alter actual GLES pixels");
+    frame.playerRunning=true;
+    std::this_thread::sleep_for(std::chrono::milliseconds(320));
+    const auto runPose=render("13-skinned-embermodellek-futas.ppm");
+    check(walkPose!=runPose,"walk-to-run animation transition must alter actual GLES pixels");
     taks::FastScene::shutdown();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroyContext(display,context);eglDestroySurface(display,surface);

@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <GLES3/gl3.h>
 #include <android/log.h>
+#include <algorithm>
 #include "CauseWorld.h"
 #include "FastScene.h"
 #include "RealModels.h"
@@ -8,6 +9,8 @@
 #include <string>
 #include <mutex>
 #include <cmath>
+#include <chrono>
+#include <array>
 
 namespace {
 taks::World world;
@@ -15,6 +18,12 @@ std::mutex worldLock;
 GLuint program=0, vertexArray=0;
 float orbit=0.785398f, pitch=0.615480f, zoom=10.0f;
 float playerHeading=0.0f;
+std::chrono::steady_clock::time_point playerMovementDeadline{};
+std::chrono::steady_clock::time_point playerRunDeadline{};
+std::array<float,8> npcPrevious{};
+std::array<float,8> npcTarget{};
+std::chrono::steady_clock::time_point npcSegmentStart{};
+bool npcInterpolationReady=false;
 std::string rendererError;
 jstring toJava(JNIEnv* env,const std::string& s){return env->NewStringUTF(s.c_str());}
 GLuint compile(GLenum type,const char* source){
@@ -44,15 +53,21 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeDo(JN
     const std::string act=txt?txt:"";
     if(txt)env->ReleaseStringUTFChars(command,txt);
     std::lock_guard<std::mutex> guard(worldLock);
-    return toJava(env,world.act(act));
+    const std::string result=world.act(act);
+    npcInterpolationReady=false;
+    return toJava(env,result);
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeMove(JNIEnv* env,jobject,jfloat dx,jfloat dz){
     std::lock_guard<std::mutex> guard(worldLock);
     const double beforeX=world.playerX,beforeZ=world.playerZ;
     const std::string result=world.move(static_cast<double>(dx),static_cast<double>(dz));
     const double deltaX=world.playerX-beforeX,deltaZ=world.playerZ-beforeZ;
-    if(std::hypot(deltaX,deltaZ)>.00001)
+    if(std::hypot(deltaX,deltaZ)>.00001){
         playerHeading=static_cast<float>(std::atan2(deltaX,deltaZ));
+        const auto now=std::chrono::steady_clock::now();
+        playerMovementDeadline=now+std::chrono::milliseconds(130);
+        if(std::hypot(dx,dz)>.075)playerRunDeadline=now+std::chrono::milliseconds(130);
+    }
     return toJava(env,result);
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeGoal(JNIEnv* env,jobject){
@@ -69,14 +84,26 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeCampS
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeTick(JNIEnv*,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
+    if(!npcInterpolationReady){
+        for(int i=0;i<taks::World::npcCount;++i){
+            npcPrevious[i*2]=npcTarget[i*2]=static_cast<float>(world.npcs[i].x);
+            npcPrevious[i*2+1]=npcTarget[i*2+1]=static_cast<float>(world.npcs[i].z);
+        }
+        npcInterpolationReady=true;
+    }else npcPrevious=npcTarget;
     world.step(0.04);
+    for(int i=0;i<taks::World::npcCount;++i){
+        npcTarget[i*2]=static_cast<float>(world.npcs[i].x);
+        npcTarget[i*2+1]=static_cast<float>(world.npcs[i].z);
+    }
+    npcSegmentStart=std::chrono::steady_clock::now();
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeNearby(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
     return toJava(env,world.nearby());
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeAdvance(JNIEnv*,jobject){
-    std::lock_guard<std::mutex> guard(worldLock);world.step(1.0);
+    std::lock_guard<std::mutex> guard(worldLock);world.step(1.0);npcInterpolationReady=false;
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeState(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);return toJava(env,world.summary());
@@ -96,10 +123,15 @@ extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeLoad
     const char* txt=env->GetStringUTFChars(payload,nullptr);
     std::string raw=txt?txt:"";
     if(txt)env->ReleaseStringUTFChars(payload,txt);
-    std::lock_guard<std::mutex> guard(worldLock);return world.load(raw)?JNI_TRUE:JNI_FALSE;
+    std::lock_guard<std::mutex> guard(worldLock);
+    const bool loaded=world.load(raw);
+    if(loaded)npcInterpolationReady=false;
+    return loaded?JNI_TRUE:JNI_FALSE;
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeReset(JNIEnv*,jobject){
     std::lock_guard<std::mutex> guard(worldLock);world=taks::World();
+    playerMovementDeadline=playerRunDeadline=std::chrono::steady_clock::time_point{};
+    npcInterpolationReady=false;
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetView(JNIEnv*,jobject,jfloat yaw,jfloat cameraPitch,jfloat scale){
     std::lock_guard<std::mutex> guard(worldLock);
@@ -184,6 +216,9 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         f.playerZ=static_cast<float>(world.playerZ);
         f.walkPhase=static_cast<float>(world.walkPhase);
         f.playerHeading=playerHeading;
+        const auto frameNow=std::chrono::steady_clock::now();
+        f.playerMoving=frameNow<playerMovementDeadline;
+        f.playerRunning=f.playerMoving&&frameNow<playerRunDeadline;
         for(int i=0;i<taks::World::resourceCount;++i){
             f.nodes[i*4+0]=static_cast<float>(world.nodes[i].x);
             f.nodes[i*4+1]=static_cast<float>(world.nodes[i].z);
@@ -205,10 +240,20 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
             f.trees[i*4+3]=t.alive?1.f:0.f;
         }
         f.verifiedFerns=world.ecology.verifiedFerns;
+        const auto now=std::chrono::steady_clock::now();
+        if(!npcInterpolationReady){
+            for(int i=0;i<taks::World::npcCount;++i){
+                npcPrevious[i*2]=npcTarget[i*2]=static_cast<float>(world.npcs[i].x);
+                npcPrevious[i*2+1]=npcTarget[i*2+1]=static_cast<float>(world.npcs[i].z);
+            }
+            npcSegmentStart=now;npcInterpolationReady=true;
+        }
+        const float npcBlend=std::clamp(
+            std::chrono::duration<float>(now-npcSegmentStart).count()/1.8f,0.f,1.f);
         for(int i=0;i<taks::World::npcCount;++i){
-            f.npcs[i*4+0]=static_cast<float>(world.npcs[i].x);
-            f.npcs[i*4+1]=static_cast<float>(world.npcs[i].z);
-            f.npcs[i*4+2]=static_cast<float>(world.npcs[i].role);
+            f.npcs[i*4+0]=npcPrevious[i*2]+(npcTarget[i*2]-npcPrevious[i*2])*npcBlend;
+            f.npcs[i*4+1]=npcPrevious[i*2+1]+(npcTarget[i*2+1]-npcPrevious[i*2+1])*npcBlend;
+            f.npcs[i*4+2]=static_cast<float>(world.npcs[i].task);
             f.npcs[i*4+3]=static_cast<float>(world.npcs[i].carrying);
         }
         for(int i=0;i<taks::World::maxBuildSites;++i){
