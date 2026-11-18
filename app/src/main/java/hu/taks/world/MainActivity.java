@@ -270,9 +270,23 @@ public final class MainActivity extends Activity {
         closePanel();activePanel=which;
         sheet=new LinearLayout(this);sheet.setOrientation(LinearLayout.VERTICAL);
         sheet.setPadding(dp(12),dp(9),dp(12),dp(7));
-        sheet.setBackground(panelBackground(0xF1101B19,16));
+        skin(sheet,"CARD");
+        LinearLayout bar=new LinearLayout(this);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
         TextView title=caption(which==1?"ÉPÍTÉS ÉS ANYAGOK":which==3?"KÖZÖSSÉG ÉS TÁBOR":"KÖRNYEZET ÉS ÁLLAPOT",15,0xFFE4D6B6);
-        title.setPadding(0,0,0,4);sheet.addView(title);
+        title.setPadding(0,0,0,dp(4));title.setLetterSpacing(.04f);
+        bar.addView(title,new LinearLayout.LayoutParams(0,dp(38),1));
+        Button config=button("⚙",this::showSettings,false);
+        config.setContentDescription("Beállítások – minden almenüből");
+        bar.addView(config,new LinearLayout.LayoutParams(dp(47),dp(36)));
+        Button close=button("X",this::closePanel,false);
+        close.setContentDescription("Almenü bezárása");
+        LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(dp(47),dp(36));
+        cp.leftMargin=dp(5);bar.addView(close,cp);
+        sheet.addView(bar);
+        TextView why=caption(currentSkin().cause,11,0xFFD2C5AA);
+        why.setPadding(dp(4),dp(1),dp(4),dp(6));
+        skin(why,"CAUSE");sheet.addView(why);
         ScrollView scroll=new ScrollView(this);
         scroll.setVerticalScrollBarEnabled(false);
         LinearLayout content=new LinearLayout(this);
@@ -340,10 +354,11 @@ public final class MainActivity extends Activity {
         int screenHeight=getResources().getDisplayMetrics().heightPixels;
         int maxScroll=Math.max(95,Math.min(screenHeight/2,dp(250)));
         sheet.addView(scroll,new LinearLayout.LayoutParams(-1,maxScroll));
-        addVertical(sheet,"Bezárás",this::closePanel);
+        addVertical(sheet,"Vissza a játékhoz",this::closePanel);
         FrameLayout.LayoutParams ps=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
         ps.setMargins(dp(8),0,dp(8),bottomBarPx()+5);
         root.addView(sheet,ps);
+        refreshLivingSkin();
     }
     private void togglePanel(int which){if(activePanel==which)closePanel();else showPanel(which);}
 
@@ -535,27 +550,110 @@ public final class MainActivity extends Activity {
                     .setPositiveButton("Rendben",null).show();
             }).setNegativeButton("Mégse",null).show();
     }
+    private void closeModal(){
+        if(modalOverlay!=null && root!=null){
+            root.removeView(modalOverlay);modalOverlay=null;
+        }
+    }
+    private void modal(String title,Consumer<LinearLayout> populate){
+        closeModal();
+        modalOverlay=new FrameLayout(this);
+        modalOverlay.setBackgroundColor(0xD4101210);
+        // Tap outside closes the panel; the whole panel consumes inner touches.
+        modalOverlay.setOnClickListener(v->closeModal());
+        LinearLayout card=new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(15),dp(10),dp(15),dp(12));
+        card.setOnClickListener(v->{});
+        skin(card,"CARD");
+        LinearLayout header=new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        View original=originalLogoOrTitle();
+        FrameLayout logoFrame=new FrameLayout(this);
+        logoFrame.setPadding(dp(4),dp(2),dp(4),dp(2));
+        skin(logoFrame,"LOGO");
+        logoFrame.addView(original,new FrameLayout.LayoutParams(-1,-1));
+        header.addView(logoFrame,new LinearLayout.LayoutParams(dp(104),dp(56)));
+        TextView label=caption(title,16,0xFFF1E5CF);
+        label.setGravity(Gravity.CENTER_VERTICAL);
+        label.setPadding(dp(12),0,0,0);
+        header.addView(label,new LinearLayout.LayoutParams(0,dp(48),1));
+        Button close=button("X",this::closeModal,false);
+        close.setContentDescription("Almenü bezárása");
+        header.addView(close,new LinearLayout.LayoutParams(dp(42),dp(39)));
+        card.addView(header);
+        TextView cause=caption(currentSkin().cause,11,0xFFD2C5AA);
+        cause.setPadding(dp(4),dp(7),dp(4),dp(9));skin(cause,"CAUSE");
+        card.addView(cause);
+        ScrollView scroll=new ScrollView(this);
+        scroll.setFillViewport(false);
+        LinearLayout body=new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(3),dp(5),dp(3),dp(6));
+        populate.accept(body);
+        scroll.addView(body);
+        card.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        Button back=button("Vissza",this::closeModal,false);
+        card.addView(back,new LinearLayout.LayoutParams(-1,dp(42)));
+        FrameLayout.LayoutParams size=new FrameLayout.LayoutParams(
+                Math.min(dp(530),getResources().getDisplayMetrics().widthPixels-dp(24)),
+                Math.min(dp(370),getResources().getDisplayMetrics().heightPixels-dp(20)),
+                Gravity.CENTER);
+        modalOverlay.addView(card,size);
+        root.addView(modalOverlay,new FrameLayout.LayoutParams(-1,-1));
+        refreshLivingSkin();
+    }
     private void showSettings(){
-        final String[] items={"Grafikai felbontás","Izometrikus kamera","Kamera felülnézetből",
-                              "Kamera alacsonyabb nézetből","Vezérlés és ok-okozati szabályok","Korábbi mentés visszaállítása"};
-        new AlertDialog.Builder(this).setTitle("BEÁLLÍTÁSOK")
-            .setItems(items,(dialog,which)->{
-                switch(which){
-                    case 0:chooseGraphicsResolution();break;
-                    case 1:orbit=.785398f;cameraPitch=.615480f;zoom=10f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
-                    case 2:cameraPitch=1.37f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
-                    case 3:cameraPitch=.40f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
-                    case 4:new AlertDialog.Builder(this).setTitle("IRÁNYÍTÁS")
-                         .setMessage("Bal oldalon: a karakter mozgatása.\nJobb oldalon: 3D kamera forgatása és döntése.\nKét ujjal: izometrikus nagyítás.\n\nAz építéshez valódi anyag, szerszám, idő és munkavégzés kell. Sikertelenségnél a játék kiírja az okot.")
-                         .setPositiveButton("Rendben",null).show();break;
-                    case 5:restoreOldWorld();break;
-                }
-            }).setNegativeButton("Vissza",null).show();
+        modal("BEÁLLÍTÁSOK",body->{
+            addVertical(body,"3D felbontás – gyors / kiegyensúlyozott / részletes",
+                    this::chooseGraphicsResolution);
+            addVertical(body,"Izometrikus kamera",()->{
+                orbit=.785398f;cameraPitch=.615480f;zoom=10f;
+                nativeSetView(orbit,cameraPitch,zoom);refreshScene();
+            });
+            addVertical(body,"Kamera: felülnézet",()->{
+                cameraPitch=1.37f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();
+            });
+            addVertical(body,"Kamera: alacsony nézet",()->{
+                cameraPitch=.40f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();
+            });
+            TextView explanation=caption(
+                "IRÁNYÍTÁS: bal analóg = mozgás; FUTÁS = gyorsítás; jobb oldali húzás = kamera;"
+                +" két ujj = nagyítás.\n"
+                +"OK → FOLYAMAT → OKOZAT: az időjárás, a tűz, a nedvesség és a"
+                +" tényleges felfedezések vezérlik az összes menü megjelenését.",12,0xFFE3D6BC);
+            explanation.setPadding(dp(5),dp(10),dp(5),dp(10));
+            body.addView(explanation);
+            addVertical(body,"Korábbi mentés visszaállítása",this::restoreOldWorld);
+            addVertical(body,"Mentés",this::save);
+        });
     }
     private void showCredits(){
-        new AlertDialog.Builder(this).setTitle("TAKS WORLD")
-            .setMessage("Saját TAKS Engine · Wonderwerk\n\nNatív C++ játékmotor, Android 3D grafika és ok-okozati szimuláció.\n\nFejlesztői változat. A valódi geológiai és embermodellek, valamint az eredeti jóváhagyott logó külön forrásfájlokhoz kötöttek; a jelenlegi APK-ban még nincsenek kész.")
-            .setPositiveButton("Vissza",null).show();
+        modal("KÉSZÍTŐK",body->{
+            TextView text=caption("TAKS WORLD · saját TAKS Engine\n"
+                +"Natív Android, OpenGL ES 3, Wonderwerk-barlang.\n"
+                +"Élő ok–okozati világ és kőzet/növény/embermodell teszt.\n\n"
+                +"Az eredeti TAKS WORLD logó a projekt saját jelképe.\n"
+                +"A realisztikus karakteranimáció és a történetileg ellenőrzött"
+                +" élővilág fejlesztés alatt áll.",13,0xFFF1E5CF);
+            text.setLineSpacing(dp(5),1f);body.addView(text);
+        });
+    }
+    private void confirmExit(){
+        modal("KILÉPÉS",body->{
+            TextView why=caption("Kilépés előtt elmentjük a világ állapotát.\n"
+                +"A játékból kilépés nem törli a korábbi mentést.",13,0xFFF1E5CF);
+            why.setPadding(dp(5),dp(9),dp(5),dp(14));
+            body.addView(why);
+            addVertical(body,"Mentés és kilépés",()->{
+                saves.edit().putString("state",nativeSave()).commit();
+                closeModal();finish();
+            });
+            if(!inMainMenu)addVertical(body,"Mentés és vissza a főmenübe",()->{
+                saves.edit().putString("state",nativeSave()).commit();
+                closeModal();showMainMenu();
+            });
+        });
     }
     private View originalLogoOrTitle(){
         // A Biblia név szerint ezt az EREDETI assetet rögzíti. Nem generálunk helyette másik logót.
