@@ -1,7 +1,7 @@
-name: TAKS World 0.10 corrected touch movement native Android APK
+name: TAKS World 0.11 living UI causal logo and menus Android
 on:
   push:
-    branches: [taks-world-movement-controls-step-5]
+    branches: [taks-world-living-ui-step-6]
   workflow_dispatch:
 permissions:
   contents: read
@@ -66,10 +66,13 @@ jobs:
           javac -d build-java \
             app/src/main/java/hu/taks/world/PrehistoricMenuTheme.java \
             app/src/main/java/hu/taks/world/TouchMovement.java \
+            app/src/main/java/hu/taks/world/LivingUiSkin.java \
             tests/java/hu/taks/world/PrehistoricMenuThemeTest.java \
-            tests/java/hu/taks/world/TouchMovementTest.java
+            tests/java/hu/taks/world/TouchMovementTest.java \
+            tests/java/hu/taks/world/LivingUiSkinTest.java
           java -cp build-java hu.taks.world.PrehistoricMenuThemeTest
           java -cp build-java hu.taks.world.TouchMovementTest
+          java -cp build-java hu.taks.world.LivingUiSkinTest
   real-gpu-screenshots:
     needs: [assets,engine-tests]
     runs-on: ubuntu-latest
@@ -98,7 +101,7 @@ jobs:
           python3 tests/ppm_to_png.py
       - uses: actions/upload-artifact@v4
         with:
-          name: TAKS-World-0.10-Movement-Fix-GPU-Testkepek
+          name: TAKS-World-0.11-Living-UI-GPU-Testkepek
           path: build-previews/*.png
           if-no-files-found: error
           retention-days: 14
@@ -142,10 +145,10 @@ jobs:
               print('TAKS NATIVE ANDROID REAL-3D TEST APK VERIFIED:',f.stat().st_size,'bytes')
           PY
       - name: Prepare named test APK for phone
-        run: cp app/build/outputs/apk/debug/app-debug.apk TAKS_World_0_10_MOZGAS_JAVITOTT_ANDROID_TESZT.apk
+        run: cp app/build/outputs/apk/debug/app-debug.apk TAKS_World_0_11_ELO_MENU_ANDROID_TESZT.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: TAKS-World-0.10-Movement-Fix-Native-Android-TEST-APK
-          path: TAKS_World_0_10_MOZGAS_JAVITOTT_ANDROID_TESZT.apk
+          name: TAKS-World-0.11-Living-UI-Native-Android-TEST-APK
+          path: TAKS_World_0_11_ELO_MENU_ANDROID_TESZT.apk
           if-no-files-found: error
           retention-days: 14
