@@ -553,6 +553,56 @@ public final class MainActivity extends Activity {
             addVertical(body,"Vissza a Beállításokhoz",this::showSettings);
         });
     }
+    private void closeModal(){
+        if(modalOverlay!=null && root!=null){
+            root.removeView(modalOverlay);modalOverlay=null;
+        }
+    }
+    private void modal(String title,Consumer<LinearLayout> populate){
+        closeModal();
+        modalOverlay=new FrameLayout(this);
+        modalOverlay.setBackgroundColor(0xD8101411);
+        modalOverlay.setOnClickListener(v->closeModal());
+        LinearLayout card=new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(15),dp(10),dp(15),dp(12));
+        card.setOnClickListener(v->{});
+        skin(card,"CARD");
+        LinearLayout header=new LinearLayout(this);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        FrameLayout logoFrame=new FrameLayout(this);
+        logoFrame.setPadding(dp(4),dp(2),dp(4),dp(2));
+        skin(logoFrame,"LOGO");
+        logoFrame.addView(originalLogoOrTitle(),new FrameLayout.LayoutParams(-1,-1));
+        header.addView(logoFrame,new LinearLayout.LayoutParams(dp(104),dp(56)));
+        TextView label=caption(title,16,0xFFF1E5CF);
+        label.setGravity(Gravity.CENTER_VERTICAL);
+        label.setPadding(dp(12),0,0,0);
+        header.addView(label,new LinearLayout.LayoutParams(0,dp(48),1));
+        Button close=button("X",this::closeModal,false);
+        close.setContentDescription("Almenü bezárása");
+        header.addView(close,new LinearLayout.LayoutParams(dp(42),dp(39)));
+        card.addView(header);
+        TextView cause=caption(currentSkin().cause,11,0xFFD2C5AA);
+        cause.setPadding(dp(4),dp(7),dp(4),dp(9));skin(cause,"CAUSE");
+        card.addView(cause);
+        ScrollView scroll=new ScrollView(this);
+        LinearLayout body=new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(3),dp(5),dp(3),dp(6));
+        populate.accept(body);
+        scroll.addView(body);
+        card.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        Button back=button("Vissza",this::closeModal,false);
+        card.addView(back,new LinearLayout.LayoutParams(-1,dp(42)));
+        FrameLayout.LayoutParams size=new FrameLayout.LayoutParams(
+                Math.min(dp(530),getResources().getDisplayMetrics().widthPixels-dp(24)),
+                Math.min(dp(370),getResources().getDisplayMetrics().heightPixels-dp(20)),
+                Gravity.CENTER);
+        modalOverlay.addView(card,size);
+        root.addView(modalOverlay,new FrameLayout.LayoutParams(-1,-1));
+        refreshLivingSkin();
+    }
     private void showSettings(){
         modal("BEÁLLÍTÁSOK",body->{
             addVertical(body,"3D felbontás – gyors / kiegyensúlyozott / részletes",
