@@ -22,6 +22,8 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.ScrollView;
+import android.view.ViewGroup;
+import java.util.function.Consumer;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
@@ -56,7 +58,16 @@ public final class MainActivity extends Activity {
     private TextView notice;
     private TextView hint;
     private String shaderSource;
-    private FrameLayout menuCover;
+    private FrameLayout menuCover,modalOverlay;
+    // Keep the original logo pixels untouched. Only its physical frame and
+    // every other menu skin respond to actual native World causality.
+    private final Handler skinHandler=new Handler(Looper.getMainLooper());
+    private final Runnable skinLoop=new Runnable(){
+        @Override public void run(){
+            if(root!=null)refreshLivingSkin();
+            skinHandler.postDelayed(this,650);
+        }
+    };
     private final ArrayList<View> gameHud=new ArrayList<>();
     private boolean inMainMenu=true;
     private Button pickupButton;
@@ -70,6 +81,7 @@ public final class MainActivity extends Activity {
             nativeTick();
             if(surface!=null)surface.requestRender();
             if(activePanel==3 && ++worldTickNumber%7==0)showPanel(3);
+            refreshLivingSkin();
             worldHandler.postDelayed(this,1800);
         }
     };
@@ -159,12 +171,65 @@ public final class MainActivity extends Activity {
     }
 
     private int dp(float n){return Math.round(getResources().getDisplayMetrics().density*n);}
+    private LivingUiSkin.State currentSkin(){
+        return LivingUiSkin.fromCues(nativeMenuCues());
+    }
     private GradientDrawable panelBackground(int color,int radius){
         GradientDrawable d=new GradientDrawable();
         d.setColor(color);
         d.setCornerRadius(dp(radius));
         d.setStroke(dp(1),0x886F6244);
         return d;
+    }
+    private GradientDrawable naturalGradient(int top,int bottom,int stroke,int radius){
+        GradientDrawable d=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                                               new int[]{top,bottom});
+        d.setCornerRadius(dp(radius));
+        d.setStroke(dp(1),stroke);
+        return d;
+    }
+    private void skin(View view,String type){
+        view.setTag("TAKS_SKIN_"+type);
+        applySkin(view,currentSkin(),android.os.SystemClock.uptimeMillis());
+    }
+    private void applySkin(View v,LivingUiSkin.State state,long now){
+        Object tag=v.getTag();
+        if(tag instanceof String){
+            String role=(String)tag;
+            if("TAKS_SKIN_BUTTON".equals(role)){
+                v.setBackground(naturalGradient(state.buttonTop,state.buttonBottom,state.border,10));
+                if(v instanceof TextView)((TextView)v).setTextColor(state.text);
+            }else if("TAKS_SKIN_CARD".equals(role)){
+                v.setBackground(naturalGradient(state.panelTop,state.panelBottom,state.border,17));
+            }else if("TAKS_SKIN_LOGO".equals(role)){
+                int glow=state.animatedLogoGlow(now);
+                v.setBackground(naturalGradient((glow&0x00FFFFFF)|0x26000000,
+                         state.panelBottom,glow,19));
+            }else if("TAKS_SKIN_CAUSE".equals(role) && v instanceof TextView){
+                ((TextView)v).setText(state.cause);
+                ((TextView)v).setTextColor(state.mutedText);
+            }else if("TAKS_SKIN_DISCOVERY".equals(role) && v instanceof TextView){
+                ((TextView)v).setText(state.discovered);
+                ((TextView)v).setTextColor(state.border);
+            }
+        }
+        if(v instanceof ViewGroup){
+            ViewGroup children=(ViewGroup)v;
+            for(int i=0;i<children.getChildCount();i++){
+                applySkin(children.getChildAt(i),state,now);
+            }
+        }
+    }
+    private void refreshLivingSkin(){
+        if(root==null)return;
+        LivingUiSkin.State state=currentSkin();
+        if(menuCover!=null){
+            menuCover.setBackground(naturalGradient(
+                    (state.panelTop&0x00FFFFFF)|0xC0000000,
+                    (state.panelBottom&0x00FFFFFF)|0xE6000000,
+                    state.border,0));
+        }
+        applySkin(root,state,android.os.SystemClock.uptimeMillis());
     }
     private TextView caption(String content,int size,int color){
         TextView v=new TextView(this);
@@ -176,8 +241,8 @@ public final class MainActivity extends Activity {
         b.setText(text);b.setAllCaps(false);
         b.setTextColor(bright?0xFF2D2115:0xFFF2E4CB);
         b.setTextSize(13);b.setPadding(dp(10),0,dp(10),0);
-        b.setBackground(panelBackground(bright?0xFFE4C38A:0xDA30251B,12));
-        b.setOnClickListener(v->{action.run();refreshScene();});
+        skin(b,"BUTTON");
+        b.setOnClickListener(v->{action.run();refreshScene();refreshLivingSkin();});
         return b;
     }
     private void refreshScene(){if(surface!=null)surface.requestRender();}
@@ -187,7 +252,7 @@ public final class MainActivity extends Activity {
         if(pickupButton!=null)pickupButton.setVisibility(nearby.contains("FELVEHETŐ")?View.VISIBLE:View.GONE);
     }
     private void say(String msg){if(notice!=null){notice.setText(msg);notice.setVisibility(View.VISIBLE);}}
-    private void act(String cmd){say(nativeDo(cmd));refreshNearby();refreshScene();if(activePanel!=0)showPanel(activePanel);}
+    private void act(String cmd){say(nativeDo(cmd));refreshNearby();refreshScene();if(activePanel!=0)showPanel(activePanel);refreshLivingSkin();}
     private void save(){saves.edit().putString("state",nativeSave()).apply();say("Világállapot mentve az eszközön.");}
     private int bottomBarPx(){
         int h=getResources().getDisplayMetrics().heightPixels;
