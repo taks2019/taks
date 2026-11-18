@@ -447,14 +447,20 @@ public final class MainActivity extends Activity {
         return true;
     }
     private void chooseGraphicsResolution(){
-        final String[] presets={"Gyors – 640 képpont széles","Kiegyensúlyozott – 840 képpont széles","Részletesebb – 1200 képpont széles"};
-        new AlertDialog.Builder(this).setTitle("3D grafikai teljesítmény")
-            .setItems(presets,(dialog,which)->{
-                int targetWidth=which==0?640:which==1?840:1200;
-                applyFramebufferSize(targetWidth);
-                refreshScene();
-                say("Renderfelbontás: "+targetWidth+" px. A kamera valódi ortografikus 3D.");
-            }).setNegativeButton("Mégse",null).show();
+        modal("3D FELBONTÁS",body->{
+            addVertical(body,"Gyors – 640 képpont széles",()->{
+                applyFramebufferSize(640);refreshScene();showSettings();
+            });
+            addVertical(body,"Kiegyensúlyozott – 840 képpont széles",()->{
+                applyFramebufferSize(840);refreshScene();showSettings();
+            });
+            addVertical(body,"Részletes – 1200 képpont széles",()->{
+                applyFramebufferSize(1200);refreshScene();showSettings();
+            });
+            body.addView(caption("A képarány megmarad. A valódi 3D világ töltődik be, nem előre rögzített kép.",
+                    12,0xFFD2C5AA));
+            addVertical(body,"Vissza a Beállításokhoz",this::showSettings);
+        });
     }
     private void applyFramebufferSize(int desiredWidth){
         android.util.DisplayMetrics m=getResources().getDisplayMetrics();
@@ -464,45 +470,27 @@ public final class MainActivity extends Activity {
         surface.getHolder().setFixedSize(width,height);
     }
     private void openGameMenu(){
-        showMainMenu();
-    }
-    private void openGameTools(){
-        closePanel();
-        String[] commands={"Folytatás","Mi a következő cél?","Mentés","Új világ","Izometrikus kamera visszaállítása","Kamera: felülnézet","Kamera: alacsony nézet","Grafikai felbontás","Készítők","Kilépés"};
-        new AlertDialog.Builder(this).setTitle("TAKS WORLD · FŐMENÜ")
-            .setItems(commands,(dialog,index)->{
-                switch(index){
-                    case 0: break;
-                    case 1: new AlertDialog.Builder(this)
-                            .setTitle("JÁTÉKCÉL")
-                            .setMessage(nativeGoal()+"\n\n"+nativeNearby()+"\n\nMozgás: bal oldalon húzd az ujjad; kamera: jobb oldalon húzd; kétujjas zoom. Ha az anyag közel van, válaszd a FELVESZ gombot.")
-                            .setPositiveButton("Rendben",null).show();break;
-                    case 2: save(); break;
-                    case 3: new AlertDialog.Builder(this)
-                         .setTitle("Új világ indítása")
-                         .setMessage("Biztosan új világot szeretnél? A régi mentés megmarad, amíg nem mentesz ismét.")
-                         .setPositiveButton("Új világ",(d,w)->{
-                             nativeReset();refreshScene();
-                             if(proximity!=null)proximity.setText(nativeNearby());
-                             say(nativeGoal());
-                         })
-                         .setNegativeButton("Mégse",null).show();break;
-                    case 4: orbit=.785398f;cameraPitch=.615480f;zoom=10f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
-                    case 5: cameraPitch=1.37f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
-                    case 6: cameraPitch=.40f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();break;
-                    case 7: chooseGraphicsResolution();break;
-                    case 8: new AlertDialog.Builder(this).setTitle("Készítők")
-                              .setMessage("TAKS WORLD – saját fejlesztésű natív játékmotor. A grafika és az oksági szimuláció fejlesztés alatt.")
-                              .setPositiveButton("OK",null).show();break;
-                    case 9: save();finish();break;
-                }
-            }).setNegativeButton("Vissza a játékba",null).show();
+        modal("JÁTÉKMENÜ",body->{
+            addVertical(body,"Folytatás",this::closeModal);
+            addVertical(body,"Beállítások",this::showSettings);
+            addVertical(body,"Mentés",this::save);
+            addVertical(body,"Cél és környezet",()->{
+                closeModal();showPanel(2);
+            });
+            addVertical(body,"Készítők",this::showCredits);
+            addVertical(body,"Vissza a főmenübe",()->{
+                saves.edit().putString("state",nativeSave()).commit();
+                closeModal();showMainMenu();
+            });
+            addVertical(body,"Kilépés",this::confirmExit);
+        });
     }
     private void setHudVisibility(boolean visible){
         for(View v:gameHud)v.setVisibility(visible?View.VISIBLE:View.GONE);
         if(visible)refreshNearby();
     }
     private void startPlaying(){
+        closeModal();
         inMainMenu=false;
         if(menuCover!=null){root.removeView(menuCover);menuCover=null;}
         setHudVisibility(true);
@@ -517,91 +505,53 @@ public final class MainActivity extends Activity {
             saves.edit().putString("state",nativeSave()).apply();
             startPlaying();return;
         }
-        final String[] choices={"Folytatás a mentett világból","Új világ indítása","Mégse"};
-        new AlertDialog.Builder(this).setTitle("TAKS WORLD · ÚJ JÁTÉK")
-            .setItems(choices,(dialog,choice)->{
-                if(choice==0){startPlaying();return;}
-                if(choice!=1)return;
-                new AlertDialog.Builder(this).setTitle("Új világ indítása")
-                    .setMessage("A meglévő világot külön biztonsági másolatba mentjük. Az új világban minden anyagot újra meg kell szerezni.")
-                    .setPositiveButton("Új világ",(d,which)->{
-                        saves.edit().putString("backup_state",existing).apply();
+        modal("ÚJ JÁTÉK",body->{
+            addVertical(body,"Folytatás a mentett világból",this::startPlaying);
+            addVertical(body,"Új világ – előbb biztonsági mentés",()->{
+                modal("ÚJ VILÁG MEGERŐSÍTÉSE",confirm->{
+                    confirm.addView(caption("A jelenlegi világ külön mentésbe kerül. "
+                        +"Az új világban minden anyagot újra meg kell szerezni.",
+                        13,0xFFE7D6BD));
+                    addVertical(confirm,"Igen, új világ indítása",()->{
+                        saves.edit().putString("backup_state",existing).commit();
                         nativeReset();
-                        saves.edit().putString("state",nativeSave()).apply();
+                        saves.edit().putString("state",nativeSave()).commit();
                         startPlaying();
-                    }).setNegativeButton("Vissza",null).show();
-            }).show();
+                    });
+                    addVertical(confirm,"Mégse",this::newWorldFromMenu);
+                });
+            });
+        });
     }
     private void restoreOldWorld(){
         final String backup=saves.getString("backup_state",null);
-        if(backup==null){
-            new AlertDialog.Builder(this).setMessage("Még nincs korábbi világ biztonsági másolata.")
-                .setPositiveButton("Rendben",null).show();return;
-        }
-        new AlertDialog.Builder(this).setTitle("Korábbi világ visszaállítása")
-            .setMessage("A jelenlegi világot előbb biztonsági másolatba mentjük, majd a régi világot visszatöltjük.")
-            .setPositiveButton("Visszaállítás",(dialog,which)->{
+        modal("KORÁBBI MENTÉS",body->{
+            if(backup==null){
+                body.addView(caption("Még nincs korábbi világ biztonsági másolata.",
+                                  13,0xFFE7D6BD));
+                addVertical(body,"Beállítások",this::showSettings);
+                return;
+            }
+            body.addView(caption(
+                "A jelenlegi világot külön biztonsági mentésbe tesszük. "
+                +"A visszatöltés csak érvényes mentéssel történik.",
+                13,0xFFE7D6BD));
+            addVertical(body,"Visszaállítás",()->{
                 String current=nativeSave();
                 if(nativeLoad(backup)){
                     saves.edit().putString("state",nativeSave())
-                        .putString("backup_state",current).apply();
-                    refreshNearby();refreshScene();
-                }else new AlertDialog.Builder(this).setMessage("A mentés sérült vagy nem kompatibilis; semmit sem módosítottunk.")
-                    .setPositiveButton("Rendben",null).show();
-            }).setNegativeButton("Mégse",null).show();
-    }
-    private void closeModal(){
-        if(modalOverlay!=null && root!=null){
-            root.removeView(modalOverlay);modalOverlay=null;
-        }
-    }
-    private void modal(String title,Consumer<LinearLayout> populate){
-        closeModal();
-        modalOverlay=new FrameLayout(this);
-        modalOverlay.setBackgroundColor(0xD4101210);
-        // Tap outside closes the panel; the whole panel consumes inner touches.
-        modalOverlay.setOnClickListener(v->closeModal());
-        LinearLayout card=new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(15),dp(10),dp(15),dp(12));
-        card.setOnClickListener(v->{});
-        skin(card,"CARD");
-        LinearLayout header=new LinearLayout(this);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        View original=originalLogoOrTitle();
-        FrameLayout logoFrame=new FrameLayout(this);
-        logoFrame.setPadding(dp(4),dp(2),dp(4),dp(2));
-        skin(logoFrame,"LOGO");
-        logoFrame.addView(original,new FrameLayout.LayoutParams(-1,-1));
-        header.addView(logoFrame,new LinearLayout.LayoutParams(dp(104),dp(56)));
-        TextView label=caption(title,16,0xFFF1E5CF);
-        label.setGravity(Gravity.CENTER_VERTICAL);
-        label.setPadding(dp(12),0,0,0);
-        header.addView(label,new LinearLayout.LayoutParams(0,dp(48),1));
-        Button close=button("X",this::closeModal,false);
-        close.setContentDescription("Almenü bezárása");
-        header.addView(close,new LinearLayout.LayoutParams(dp(42),dp(39)));
-        card.addView(header);
-        TextView cause=caption(currentSkin().cause,11,0xFFD2C5AA);
-        cause.setPadding(dp(4),dp(7),dp(4),dp(9));skin(cause,"CAUSE");
-        card.addView(cause);
-        ScrollView scroll=new ScrollView(this);
-        scroll.setFillViewport(false);
-        LinearLayout body=new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(3),dp(5),dp(3),dp(6));
-        populate.accept(body);
-        scroll.addView(body);
-        card.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        Button back=button("Vissza",this::closeModal,false);
-        card.addView(back,new LinearLayout.LayoutParams(-1,dp(42)));
-        FrameLayout.LayoutParams size=new FrameLayout.LayoutParams(
-                Math.min(dp(530),getResources().getDisplayMetrics().widthPixels-dp(24)),
-                Math.min(dp(370),getResources().getDisplayMetrics().heightPixels-dp(20)),
-                Gravity.CENTER);
-        modalOverlay.addView(card,size);
-        root.addView(modalOverlay,new FrameLayout.LayoutParams(-1,-1));
-        refreshLivingSkin();
+                        .putString("backup_state",current).commit();
+                    refreshNearby();refreshScene();showSettings();
+                }else{
+                    modal("MENTÉSI HIBA",error->{
+                        error.addView(caption("A mentés sérült vagy nem kompatibilis. "
+                            +"Nem módosítottuk a világodat.",13,0xFFE7D6BD));
+                        addVertical(error,"Vissza a Beállításokhoz",this::showSettings);
+                    });
+                }
+            });
+            addVertical(body,"Vissza a Beállításokhoz",this::showSettings);
+        });
     }
     private void showSettings(){
         modal("BEÁLLÍTÁSOK",body->{
