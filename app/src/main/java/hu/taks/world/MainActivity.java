@@ -193,6 +193,9 @@ public final class MainActivity extends Activity {
         applySkin(view,currentSkin(),android.os.SystemClock.uptimeMillis());
     }
     private void applySkin(View v,LivingUiSkin.State state,long now){
+        if(v instanceof LogoEnvironmentView) {
+            ((LogoEnvironmentView)v).setWorldState(state);
+        }
         Object tag=v.getTag();
         if(tag instanceof String){
             String role=(String)tag;
@@ -574,6 +577,8 @@ public final class MainActivity extends Activity {
         logoFrame.setPadding(dp(4),dp(2),dp(4),dp(2));
         skin(logoFrame,"LOGO");
         logoFrame.addView(originalLogoOrTitle(),new FrameLayout.LayoutParams(-1,-1));
+        logoFrame.addView(new LogoEnvironmentView(this),
+                          new FrameLayout.LayoutParams(-1,-1));
         header.addView(logoFrame,new LinearLayout.LayoutParams(dp(104),dp(56)));
         TextView label=caption(title,16,0xFFF1E5CF);
         label.setGravity(Gravity.CENTER_VERTICAL);
@@ -708,6 +713,8 @@ public final class MainActivity extends Activity {
         logoFrame.setPadding(dp(7),dp(4),dp(7),dp(4));
         skin(logoFrame,"LOGO");
         logoFrame.addView(originalLogoOrTitle(),new FrameLayout.LayoutParams(-1,-1));
+        logoFrame.addView(new LogoEnvironmentView(this),
+                          new FrameLayout.LayoutParams(-1,-1));
         LinearLayout.LayoutParams logoSize=new LinearLayout.LayoutParams(-1,menuLogoHeight);
         logoSize.bottomMargin=dp(5);
         stack.addView(logoFrame,logoSize);
