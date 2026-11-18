@@ -54,6 +54,9 @@ def picture(name):
 
 print("Installing real native Android test APK...",flush=True)
 adb("install","-r",APK)
+# AOSP's first-run immersive explanation blocks real app controls in a fresh
+# emulator. Android-shell may mark the user confirmation as acknowledged.
+adb("shell","settings","put","secure","immersive_mode_confirmations","confirmed",check=False)
 adb("shell","am","start","-n",PACKAGE+"/hu.taks.world.MainActivity")
 time.sleep(10)
 assert adb("shell","pidof",PACKAGE).strip(), "App process crashed on launch"
@@ -62,9 +65,15 @@ assert adb("shell","pidof",PACKAGE).strip(), "App process crashed on launch"
 # This prompt is NOT the TAKS interface; dismiss before screenshots/tests.
 for attempt in range(5):
     nodes=dump("system-start-"+str(attempt))
+    if attempt==0:
+        picture("00-diagnosztika-fullscreen")
     if find(nodes,"Got it"):
+        # Different emulator display density/rotation may make UIAutomator
+        # bounds unusable for input tap. Use secure acknowledgement and BACK.
         click(nodes,"Got it")
-        time.sleep(2)
+        adb("shell","settings","put","secure","immersive_mode_confirmations","confirmed",check=False)
+        adb("shell","input","keyevent","66",check=False)
+        time.sleep(1)
         continue
     if find(nodes,"BEÁLLÍTÁSOK"):
         break
