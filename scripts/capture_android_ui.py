@@ -19,12 +19,28 @@ def adb(*args, check=True):
     return result.stdout
 
 def dump(name):
-    adb("shell","uiautomator","dump","/sdcard/taks-ui.xml")
-    xml=adb("exec-out","cat","/sdcard/taks-ui.xml")
+    # ADB exec-out cat can be empty on some Android 35 emulator images.
+    # Pull the actual file (as verified by our first screenshot run), retry
+    # accessibility while the launcher finishes its initial focus transition.
     path=ROOT/(name+".xml")
-    path.write_bytes(xml)
-    root=ET.fromstring(xml)
-    return [n.attrib for n in root.iter("node")]
+    for attempt in range(4):
+        result=subprocess.run(["adb","shell","uiautomator","dump",
+                               "/sdcard/taks-ui.xml"],capture_output=True)
+        pulled=subprocess.run(["adb","pull","/sdcard/taks-ui.xml",str(path)],
+                              capture_output=True)
+        raw=path.read_bytes() if path.exists() else b""
+        if b"<hierarchy" in raw:
+            raw=raw[raw.index(b"<hierarchy"):]
+            try:
+                root=ET.fromstring(raw)
+                return [n.attrib for n in root.iter("node")]
+            except ET.ParseError:
+                pass
+        print("UI dump retry",name,attempt,"dump",result.returncode,
+              "pull",pulled.returncode,"size",len(raw),flush=True)
+        time.sleep(1.5)
+    picture("DIAGNOSTIC-"+name)
+    raise AssertionError("Android accessibility hierarchy unavailable: "+name)
 
 def find(nodes,text,contains=False):
     for n in nodes:
