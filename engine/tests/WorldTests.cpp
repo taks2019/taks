@@ -286,10 +286,10 @@ int main(){
     assert(upgraded.ecology.aliveAnimals()==4);
     // A character has radius: diagonal wall contact must slide, never teleport.
     taks::World wall;
-    wall.playerX=2.30;wall.playerZ=2.60;
+    wall.playerX=2.30;wall.playerZ=2.53;
     const double wallStamina=wall.stamina;
     wall.move(0.0,.70);
-    assert(wall.playerZ<=2.671 && wall.playerZ>=2.59);
+    assert(wall.playerZ<=2.671 && wall.playerZ>2.53);
     assert(wall.stamina<wallStamina);
     const double prevX=wall.playerX;
     wall.move(-.50,.30);
