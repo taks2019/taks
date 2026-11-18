@@ -470,7 +470,7 @@ void render(const float* viewProjection,const float* worldNodes,
     glUniform1f(uCutoff,.34f);
     // Warm the extremely pale source diffuse map so exposed skin and hide
     // follow a more natural daylight range on phone displays.
-    glUniform3f(uTint,1.02f,.90f,.77f);
+    glUniform3f(uTint,1.f,1.f,1.f);
     const int playerClip=playerRunning?4:(playerMoving?3:0);
     drawHuman(playerX,playerZ,1.f,playerHeading,0,playerClip,now);
     for(int i=0;i<4;++i){
@@ -491,7 +491,7 @@ void render(const float* viewProjection,const float* worldNodes,
         }
         const float heading=std::atan2(targetX-n[0],targetZ-n[1]);
         const int clip=(task==1||task==2)?3:(task==3?1:0);
-        glUniform3f(uTint,1.02f,.90f,.77f);
+        glUniform3f(uTint,1.f,1.f,1.f);
         drawHuman(n[0],n[1],scale,heading,i+1,clip,now);
     }
  }

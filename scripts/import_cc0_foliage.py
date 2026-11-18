@@ -24,7 +24,8 @@ import trimesh
 from import_cc0_rocks import collect_asset, OUT
 
 SELECTION = {
-    "grass_bermuda_01": {"target_span_m": 1.0, "source":"https://polyhaven.com/a/grass_bermuda_01",
+    "grass_bermuda_01": {"target_span_m": 1.0, "target_height_m": .42,
+                         "source":"https://polyhaven.com/a/grass_bermuda_01",
                          "role":"living grazing biomass"},
     "fern_02": {"target_span_m": 1.4, "source":"https://polyhaven.com/a/fern_02",
                 "role":"ferns (render only when species verified)"},
@@ -102,16 +103,17 @@ def bake(gltf: Path, slug: str, spec: dict):
     bbox_max = all_positions.max(axis=0)
     span = np.maximum(bbox_max-bbox_min,1e-6)
     # Leaf-bearing models typically have Y-up, just like the existing TKM model path.
-    scale = (spec["target_height_m"]/float(span[1]) if "target_height_m" in spec
-             else spec["target_span_m"]/float(max(span[0],span[2])))
+    horizontal_scale = spec["target_span_m"]/float(max(span[0],span[2]))
+    vertical_scale = (spec["target_height_m"]/float(span[1]) if "target_height_m" in spec
+                      else horizontal_scale)
     anchor=(bbox_min+bbox_max)*0.5
     vertex_bytes = []
     alpha_present = False
     for (mesh,uv,texture),material_slot in zip(entries,group):
         pos = np.asarray(mesh.vertices,dtype=np.float32).copy()
-        pos[:,0] = (pos[:,0]-anchor[0])*scale
-        pos[:,2] = (pos[:,2]-anchor[2])*scale
-        pos[:,1] = (pos[:,1]-bbox_min[1])*scale
+        pos[:,0] = (pos[:,0]-anchor[0])*horizontal_scale
+        pos[:,2] = (pos[:,2]-anchor[2])*horizontal_scale
+        pos[:,1] = (pos[:,1]-bbox_min[1])*vertical_scale
         normals = np.asarray(mesh.vertex_normals,dtype=np.float32)
         tex = uv.copy()
         # Maintain the existing Android BitmapFactory/gltf V flip convention.
@@ -139,7 +141,8 @@ def bake(gltf: Path, slug: str, spec: dict):
         "real_meshes":len(parts),"triangles":total,
         "material_images":len(unique),"texture_alpha":alpha_present,
         "texture_px":[atlas.width,atlas.height],
-        "normalized_height_m":round(float(span[1]*scale),4),
+        "normalized_height_m":round(float(span[1]*vertical_scale),4),
+        "normalized_horizontal_span_m":round(float(max(span[0],span[2])*horizontal_scale),4),
         "material":"Photo-based authored multi-mesh RGBA atlas",
         "historical_species_authenticity":"UNVERIFIED",
         "model_sha256":hashlib.sha256(data).hexdigest(),

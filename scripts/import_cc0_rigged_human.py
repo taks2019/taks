@@ -114,9 +114,23 @@ def material_image(document, images, material_index):
         image = images[image_index]
         if image is None:
             raise RuntimeError("Only embedded images are supported in rigged GLB")
-        return image, alpha
+        return apply_base_color_factor(image, factor), alpha
     color = tuple(int(round(max(0., min(1., float(c))) * 255)) for c in factor)
     return Image.new("RGBA", (64, 64), color), alpha
+
+
+def apply_base_color_factor(image: Image.Image, factor) -> Image.Image:
+    """Apply the glTF baseColorFactor to its sRGB baseColorTexture."""
+    rgba = np.asarray(image.convert("RGBA"), dtype=np.float32) / 255.0
+    rgb = rgba[..., :3]
+    linear = np.where(rgb <= 0.04045, rgb / 12.92,
+                      ((rgb + 0.055) / 1.055) ** 2.4)
+    linear *= np.asarray(factor[:3], dtype=np.float32)
+    encoded = np.where(linear <= 0.0031308, linear * 12.92,
+                       1.055 * np.power(np.maximum(linear, 0.0), 1.0 / 2.4) - 0.055)
+    rgba[..., :3] = np.clip(encoded, 0.0, 1.0)
+    rgba[..., 3] *= float(factor[3]) if len(factor) > 3 else 1.0
+    return Image.fromarray(np.rint(rgba * 255.0).astype(np.uint8), "RGBA")
 
 
 def hide_texture():
@@ -365,6 +379,8 @@ def main():
             "source_license": "CC0 MakeHuman system assets",
             "rig": "53-joint mpfb-game_engine",
             "clips": list(CLIPS),
+            "skin_base_color_factor": body_doc["materials"][0].get(
+                "pbrMetallicRoughness", {}).get("baseColorFactor", [1., 1., 1., 1.]),
             "garment_meshes": ["clothing_shirt.glb", "clothing_shorts.glb"],
             "garment_license": "CC0 source garment meshes; hide-look material is project-original",
             "historical_clothing_authenticity": "UNVERIFIED; modern garment cuts are provisional",

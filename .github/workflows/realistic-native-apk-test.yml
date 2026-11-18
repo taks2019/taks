@@ -22,6 +22,8 @@ jobs:
         run: python scripts/import_cc0_foliage.py
       - name: Download original skinned CC0 humanoid, hide-look clothing, and 7 source clips
         run: python scripts/import_cc0_rigged_human.py
+      - name: Verify source skin color and upright grass asset dimensions
+        run: python3 tests/test_asset_importers.py
       - name: Verify no missing offline assets
         run: |
           python - <<'PY'
