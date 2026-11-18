@@ -15,6 +15,7 @@
 - A GPU regressziókép-csomag 13 képkockát ellenőriz: kameranézetek, környezeti változások, idle, séta és futás.
 - A GPU-képek felülvizsgálata után javítva a két importhiba: a humanoid textúra most megkapja a forrás GLTF bőrszín-szorzóját, a bermudafű pedig 42 cm magas, valódi növényhálóként töltődik be, nem lapos foltként.
 - Nyitott játékmenüben elrejti a helyzetfüggő „FELVESZ” gombot, így nem takarja ki az almenü műveleteit; az Android UI-teszt ezt külön ellenőrzi.
+- A fotótextúrás növények kétoldali nappali fényt és erősebb környezeti fényt kapnak; a szárított fű foltjain a valódi mesh mérete is nő, a bőr tónusa pedig a forrásanyag fölött visszafogott földszínű korrekciót kap.
 
 ## Ellenőrzés
 

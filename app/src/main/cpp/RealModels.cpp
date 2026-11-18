@@ -73,8 +73,12 @@ void main(){
   vec3 n=normalize(vNormal);
   vec3 sun=normalize(vec3(-0.55,1.10,-0.7));
   float diffuse=max(dot(n,sun),0.0);
+  // Thin photographed leaves need two-sided daylight and a stronger natural
+  // ambient term; otherwise their real, dark atlas disappears into the soil.
+  float foliage=step(0.40,uAlphaCutoff);
+  diffuse=mix(diffuse,abs(dot(n,sun)),foliage);
   // Energy-conserving-looking diffuse, no invented shiny metallic rocks.
-  vec3 color=albedo*(0.18+0.92*diffuse*(0.20+0.80*uDaylight))*(1.0-0.28*uRain);
+  vec3 color=albedo*(mix(0.18,0.30,foliage)+0.92*diffuse*(0.20+0.80*uDaylight))*(1.0-0.28*uRain);
   color=color/(color+vec3(0.45));
   fragColor=vec4(pow(max(color,vec3(0.0)),vec3(1.0/2.2)),1.0);
 }
@@ -443,8 +447,8 @@ void render(const float* viewProjection,const float* worldNodes,
             const float localR=2.05f*radial;
             const float x=g[0]+std::cos(phase)*localR;
             const float z=g[1]+std::sin(phase)*localR;
-            const float scale=(.29f+.15f*std::sin(float(j)*1.23f+float(i)*2.1f)
-                              +.24f*biomass);
+            const float scale=(.55f+.20f*std::sin(float(j)*1.23f+float(i)*2.1f)
+                              +.28f*biomass);
             draw(models[3],x,z,std::max(.10f,scale),phase+.42f);
         }
     }
@@ -470,7 +474,7 @@ void render(const float* viewProjection,const float* worldNodes,
     glUniform1f(uCutoff,.34f);
     // Warm the extremely pale source diffuse map so exposed skin and hide
     // follow a more natural daylight range on phone displays.
-    glUniform3f(uTint,1.f,1.f,1.f);
+    glUniform3f(uTint,.85f,.72f,.60f);
     const int playerClip=playerRunning?4:(playerMoving?3:0);
     drawHuman(playerX,playerZ,1.f,playerHeading,0,playerClip,now);
     for(int i=0;i<4;++i){
@@ -491,7 +495,7 @@ void render(const float* viewProjection,const float* worldNodes,
         }
         const float heading=std::atan2(targetX-n[0],targetZ-n[1]);
         const int clip=(task==1||task==2)?3:(task==3?1:0);
-        glUniform3f(uTint,1.f,1.f,1.f);
+        glUniform3f(uTint,.85f,.72f,.60f);
         drawHuman(n[0],n[1],scale,heading,i+1,clip,now);
     }
  }
