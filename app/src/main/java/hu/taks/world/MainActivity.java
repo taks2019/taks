@@ -579,6 +579,11 @@ public final class MainActivity extends Activity {
         label.setGravity(Gravity.CENTER_VERTICAL);
         label.setPadding(dp(12),0,0,0);
         header.addView(label,new LinearLayout.LayoutParams(0,dp(48),1));
+        if(!"BEÁLLÍTÁSOK".equals(title)){
+            Button settings=button("⚙",this::showSettings,false);
+            settings.setContentDescription("Beállítások ebben az almenüben");
+            header.addView(settings,new LinearLayout.LayoutParams(dp(42),dp(39)));
+        }
         Button close=button("X",this::closeModal,false);
         close.setContentDescription("Almenü bezárása");
         header.addView(close,new LinearLayout.LayoutParams(dp(42),dp(39)));
