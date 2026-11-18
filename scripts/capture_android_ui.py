@@ -80,7 +80,8 @@ adb("install","-r",APK)
 # AOSP's first-run immersive explanation blocks real app controls in a fresh
 # emulator. Android-shell may mark the user confirmation as acknowledged.
 adb("shell","settings","put","secure","immersive_mode_confirmations","confirmed",check=False)
-adb("shell","am","start","-n",PACKAGE+"/hu.taks.world.MainActivity")
+adb("shell","am","start","-n",PACKAGE+"/hu.taks.world.MainActivity",
+    "--ez","TAKS_UI_TEST_MODE","true")
 time.sleep(4)
 assert adb("shell","pidof",PACKAGE).strip(), "App process crashed on launch"
 runtime_log=b""

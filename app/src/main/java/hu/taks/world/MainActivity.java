@@ -60,13 +60,14 @@ public final class MainActivity extends Activity {
     private String shaderSource;
     private FrameLayout menuCover,modalOverlay;
     private Bitmap sharedStonePhoto;
+    private boolean uiRegressionMode=false;
     // Keep the original logo pixels untouched. Only its physical frame and
     // every other menu skin respond to actual native World causality.
     private final Handler skinHandler=new Handler(Looper.getMainLooper());
     private final Runnable skinLoop=new Runnable(){
         @Override public void run(){
-            if(root!=null)refreshLivingSkin();
-            skinHandler.postDelayed(this,650);
+            if(root!=null&&!uiRegressionMode)refreshLivingSkin();
+            if(!uiRegressionMode)skinHandler.postDelayed(this,650);
         }
     };
     private final ArrayList<View> gameHud=new ArrayList<>();
@@ -824,6 +825,9 @@ public final class MainActivity extends Activity {
     }
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
+        // CI can freeze only the periodic menu-skin repaint while inspecting
+        // Android accessibility. Production keeps live weather and fire cues.
+        uiRegressionMode=getIntent().getBooleanExtra("TAKS_UI_TEST_MODE",false);
         getWindow().setStatusBarColor(Color.rgb(15,25,22));
         getWindow().setNavigationBarColor(Color.rgb(15,25,22));
         // Landscape gameplay fills the phone screen, not the Android gesture
@@ -967,7 +971,7 @@ public final class MainActivity extends Activity {
         setContentView(root);
         showMainMenu();
         skinHandler.removeCallbacks(skinLoop);
-        skinHandler.post(skinLoop);
+        if(!uiRegressionMode)skinHandler.post(skinLoop);
     }
     @Override protected void onResume(){
         super.onResume();
@@ -978,7 +982,7 @@ public final class MainActivity extends Activity {
             renderHandler.removeCallbacks(renderLoop);renderHandler.post(renderLoop);
         }
         skinHandler.removeCallbacks(skinLoop);
-        skinHandler.post(skinLoop);
+        if(!uiRegressionMode)skinHandler.post(skinLoop);
     }
     @Override protected void onPause(){
         padActive=false;moveIntent=false;sprinting=false;
