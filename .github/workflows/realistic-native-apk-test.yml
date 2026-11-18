@@ -125,6 +125,17 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Verify committed approved user's original logo at source
+        run: |
+          test -s app/src/main/assets/logo/TAKS_WORLD_LOGO.webp
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          p=Path('app/src/main/assets/logo/TAKS_WORLD_LOGO.webp')
+          b=p.read_bytes()
+          assert hashlib.sha1(b'blob '+str(len(b)).encode()+b'\x00'+b).hexdigest() == 'bc3fa5e3e27a9fa60c749314306dc027a66285d4'
+          print('Logo source verified:',len(b),'bytes')
+          PY
       - name: Build real native Android APK (not web)
         run: gradle --no-daemon :app:assembleDebug --stacktrace
       - name: Verify all real assets are physically embedded in installable APK
@@ -136,6 +147,11 @@ jobs:
           assert f.stat().st_size>8_000_000, 'APK missing large genuine 3D assets'
           with zipfile.ZipFile(f) as z:
               names=set(z.namelist())
+              logo='assets/logo/TAKS_WORLD_LOGO.webp'
+              assert logo in names, 'The user-approved original TAKS WORLD emblem is missing'
+              assert z.getinfo(logo).file_size>6000, 'Original logo is unexpectedly tiny'
+              assert z.read(logo)[:4]==b'RIFF', 'Original logo not valid WebP'
+              print('VERIFIED ORIGINAL USER LOGO inside standalone native Android APK')
               for m in ('rock_07','namaqualand_boulders_01',
                         'namaqualand_cliff_01','grass_bermuda_01',
                         'fern_02','makehuman_cc0'):
