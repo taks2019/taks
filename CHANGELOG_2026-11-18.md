@@ -1,5 +1,14 @@
 # TAKS World Android — 2026-11-18
 
+## Közös szélállapot és élő növényháló
+
+- A szél a mentett játékórából és az időjárási állapotból számolódik; nem tárol külön, a mentéssel eltérő értéket.
+- Ugyanaz a szélerősség gyorsítja a talaj és a faanyag száradását, a növényökológia talajvíz-vesztését és a tűz véges tüzelőanyag-fogyását.
+- A státuszablak szélsebesség-jelzést mutat, a natív Android GLES3 renderer pedig ugyanezt a szélerősséget és animációs órát adja a GPU növényhálóinak.
+- A fotótextúrás fű/páfrány a gyökerét rögzítve hajlik, a fa lombja enyhébben leng. A grafikus regresszióteszt külön képkockával ellenőrzi a csendes és szeles állapot képkülönbségét.
+- A szélmodell első játékmeneti közelítés, nem helyi paleometeorológiai rekonstrukció.
+- Ellenőrzés: C++ motor- és ökológiatesztek, GLES C++ fordítási ellenőrzés és Mesa/EGL GLES3 shaderfordítás helyben. Az Android APK/GPU-kép/UI-mentés tesztet a branch Android CI futtatja.
+
 ## Módosítások
 
 - A régi TKM1 statikus emberimportot TKS1 bőrsúlyozott formátum váltja fel. A csomag 121 422 hálócsúcsot, 53 csontot és hét forrásból származó animációt tartalmaz.

@@ -427,6 +427,6 @@ void render(int width,int height,const FastFrame& f){
     glBindVertexArray(0);
     taks::RealModels::render(vp.a,f.nodes,f.grass,f.trees,f.verifiedFerns,
         f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,
-        f.playerMoving,f.playerRunning,f.npcs);
+        f.playerMoving,f.playerRunning,f.npcs,f.animationTime,f.wind);
 }
 }

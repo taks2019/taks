@@ -583,21 +583,24 @@ void World::step(double hoursElapsed) {
     // Közelítő determinisztikus időjárás, nem hiteles paleoklimatológiai rekonstrukció.
     humidity=clamp(0.38+0.32*std::sin(hours*0.30),0.04,0.98);
     if(!testWeather) rainIntensity=clamp((humidity-0.62)*2.8,0.0,1.0);
-    groundMoisture=clamp(groundMoisture+rainIntensity*0.25*hoursElapsed-(1-rainIntensity)*0.035*hoursElapsed,0,1);
-    woodMoisture=clamp(woodMoisture+rainIntensity*0.23*hoursElapsed-(1-rainIntensity)*0.07*hoursElapsed,0,1);
+    const double wind=windStrength();
+    groundMoisture=clamp(groundMoisture+rainIntensity*0.25*hoursElapsed-
+                         (1-rainIntensity)*(.035+.022*wind)*hoursElapsed,0,1);
+    woodMoisture=clamp(woodMoisture+rainIntensity*0.23*hoursElapsed-
+                       (1-rainIntensity)*(.07+.035*wind)*hoursElapsed,0,1);
     // This first Wonderwerk climate profile is explicitly provisional: seasonal
     // gameplay temperature, not a reconstruction of local Pleistocene weather.
     constexpr double twoPi=6.2831853071795864769;
     const double temperature=22.+4.*std::sin((hours/(24.*365.))*twoPi)
                             +2.*std::sin((std::fmod(hours,24.)/24.)*twoPi);
     const double sunlight=clamp(1.-std::abs(std::fmod(hours,24.)-13.)/12.,0.,1.);
-    ecology.step(hoursElapsed,rainIntensity,groundMoisture,sunlight,temperature);
+    ecology.step(hoursElapsed,rainIntensity,groundMoisture,sunlight,temperature,wind);
     // A tető NEM teleportálja szárazra a játékost. Csak fedett menedékbe húzódva véd.
     const double exposure=(underShelter && protectedAtPlayer())?0.07:1.0;
     playerWetness=clamp(playerWetness+rainIntensity*0.34*exposure*hoursElapsed
                         -(underShelter?0.09:0.035)*hoursElapsed,0.0,1.0);
     if(fireLit) {
-        fireFuel-=hoursElapsed*(0.35+0.15*rainIntensity);
+        fireFuel-=hoursElapsed*(0.35+0.15*rainIntensity+0.10*wind);
         if(rainIntensity>0.85 || fireFuel<=0.0){fireFuel=0.0;fireLit=false;++eventCounter;}
     }
     const double gain=(underShelter?0.85:0.35)*hoursElapsed;
@@ -627,8 +630,11 @@ std::string World::shelterStatus() const {
 }
 std::string World::summary() const {
     std::ostringstream os;os<<std::fixed<<std::setprecision(2);
+    const double wind=windStrength();
+    const char* windLabel=wind<.30?"csendes":wind<.52?"mérsékelt":"élénk";
     os<<"IDŐ: "<<hours<<" óra\n"
-      <<"CSAPADÉK: "<<rainIntensity*100<<"% | TALAJNEDVESSÉG: "<<groundMoisture*100<<"%\n"
+      <<"CSAPADÉK: "<<rainIntensity*100<<"% | SZÉL: "<<wind*100<<"% ("<<windLabel<<")"
+      <<" | TALAJNEDVESSÉG: "<<groundMoisture*100<<"%\n"
       <<"FA NEDVESSÉGE: "<<woodMoisture*100<<"% | ÁTÁZÁS: "<<playerWetness*100<<"%\n"
       <<"KÖRNYEZET: "<<groundWood<<" faág, "<<groundStone<<" kő, "<<groundLeaves<<" leveles ág, "<<groundTinder<<" gyújtós\n"
       <<"KÉSZLET: "<<carriedWood<<" faág, "<<carriedStone<<" kő, "<<carriedLeaves<<" leveles ág, "<<carriedTinder<<" gyújtós\n"      <<"JÁTÉKOS: "<<playerX<<" m, "<<playerZ<<" m | "<<nearby()<<"\n"
@@ -642,6 +648,15 @@ std::string World::summary() const {
       <<"OKOZATI ESEMÉNYEK: "<<eventCounter<<"\n"
       <<ecology.status();
     return os.str();
+}
+double World::windStrength() const {
+    if(!std::isfinite(hours)||!std::isfinite(humidity)||!std::isfinite(rainIntensity))return .25;
+    constexpr double twoPi=6.2831853071795864769;
+    const double hour=std::fmod(std::fmod(hours,24.0)+24.0,24.0);
+    const double daily=.5+.5*std::sin((hour/24.0)*twoPi-.7);
+    const double gust=.5+.5*std::sin(hours*.17+std::sin(hours*.023)*.8);
+    const double dryAir=clamp((.55-humidity)/.55,0.0,1.0);
+    return clamp(.12+.18*daily+.13*gust+.16*rainIntensity+.06*dryAir,.08,.78);
 }
 std::string World::save() const {
     std::ostringstream o;o<<std::setprecision(17);

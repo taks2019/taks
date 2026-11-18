@@ -243,6 +243,17 @@ int main(){
     std::this_thread::sleep_for(std::chrono::milliseconds(320));
     const auto runPose=render("14-skinned-embermodellek-futas.ppm");
     check(walkPose!=runPose,"walk-to-run animation transition must alter actual GLES pixels");
+    // Same real grass mesh, different shared wind/time inputs: pixels must move.
+    std::copy(grass,grass+20,frame.grass);
+    frame.playerMoving=false;frame.playerRunning=false;
+    frame.playerX=-5.2f;frame.playerZ=-1.7f;frame.zoom=8.2f;
+    frame.pitch=.615480f;frame.yaw=.785398f;
+    frame.animationTime=1.1f;frame.wind=.08f;
+    const auto calmFoliage=render("15-szelcsendes-noveny.ppm");
+    frame.animationTime=2.4f;frame.wind=.78f;
+    const auto windyFoliage=render("16-szelmozgatott-noveny.ppm");
+    check(calmFoliage!=windyFoliage,
+          "shared wind and animation time must deform actual plant geometry in the GPU image");
     taks::FastScene::shutdown();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroyContext(display,context);eglDestroySurface(display,surface);

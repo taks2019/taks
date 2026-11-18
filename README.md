@@ -19,6 +19,10 @@
 
 **Jelenlegi mérföldkő: 0.6.0-isometric-fast — natív gyors 3D hálókirajzolás, valódi izometrikus kamera és kétirányú forgatás.**
 
+## Következő oksági bővítés — szél és növénymozgás
+
+A mentett időjárásból egyetlen szélerősség származik. Ugyanaz az érték hat a talaj- és faanyag-száradásra, a tűz fogyására, a státuszjelzésre és a GLES3 fotótextúrás növényhálók folyamatos lengésére. Ez egy tesztelhető játékrendszer-bővítés; önmagában nem kész grafikai mérföldkő vagy kész játék.
+
 Ez a felhasználó saját játékmotorjának **valódi natív Android** fejlesztése, nem HTML/Canvas, Unity vagy Godot.
 
 ## 0.6.0 – Izometrikus kamera és mobilon is gyorsabb valódi 3D

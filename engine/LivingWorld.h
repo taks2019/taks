@@ -53,7 +53,8 @@ struct LivingWorld {
     // A zero value is an unloaded species/knowledge, NOT a visible fern/vine.
     bool verifiedFerns=false, verifiedVines=false;
 
-    void step(double hours,double precipitation,double moisture,double sunlight,double temperature);
+    void step(double hours,double precipitation,double moisture,double sunlight,
+              double temperature,double windStrength=0.35);
     void trampleTrail(double x0,double z0,double x1,double z1,double wetness);
     double walkSpeedFactor() const;
     double slipRisk() const;

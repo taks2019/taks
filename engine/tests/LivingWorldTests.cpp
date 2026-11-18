@@ -75,5 +75,11 @@ int main(){
     auto original=loaded.grassCover();
     std::istringstream bad("ECO1 3 x");
     assert(!loaded.read(bad) && loaded.grassCover()==original);
+    // Equal hot, dry conditions lose more soil moisture in stronger wind.
+    taks::LivingWorld calm,windy;
+    calm.soilWater=windy.soilWater=.70;
+    calm.step(24,0,.70,1,30,.10);
+    windy.step(24,0,.70,1,30,.80);
+    assert(windy.soilWater<calm.soilWater);
     std::cout<<"PASS: grass, trampling recovery, trees, animals, mortality, mud, snow and save/load\n";
 }

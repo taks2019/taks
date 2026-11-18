@@ -214,6 +214,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         f.rain=static_cast<float>(world.rainIntensity);
         f.moisture=static_cast<float>(world.groundMoisture);
         f.mud=static_cast<float>(world.ecology.mud);
+        f.wind=static_cast<float>(world.windStrength());
         f.hearth=world.hearthBuilt?1.f:0.f;
         f.fire=world.fireLit?1.f:0.f;
         f.playerX=static_cast<float>(world.playerX);
@@ -221,6 +222,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         f.walkPhase=static_cast<float>(world.walkPhase);
         f.playerHeading=playerHeading;
         const auto frameNow=std::chrono::steady_clock::now();
+        f.animationTime=std::chrono::duration<float>(frameNow.time_since_epoch()).count();
         f.playerMoving=frameNow<playerMovementDeadline;
         f.playerRunning=f.playerMoving&&frameNow<playerRunDeadline;
         for(int i=0;i<taks::World::resourceCount;++i){

@@ -30,15 +30,17 @@ int LivingWorld::aliveAnimals(int kind) const {
     for(const auto& a:animals)if(a.alive&&(kind<0||a.kind==kind))++result;
     return result;
 }
-void LivingWorld::step(double hours,double precipitation,double moisture,double sunlight,double temperature){
+void LivingWorld::step(double hours,double precipitation,double moisture,double sunlight,
+                       double temperature,double windStrength){
     if(!number(hours,0,24)||hours==0||!number(precipitation,0,1)||
-       !number(moisture,0,1)||!number(sunlight,0,1)||!number(temperature,-60,60))return;
+       !number(moisture,0,1)||!number(sunlight,0,1)||
+       !number(temperature,-60,60)||!number(windStrength,0,1))return;
     const double days=hours/24.0;
     simulatedDays+=days;
     temperatureC=temperature;
     soilWater=bound(soilWater+.30*precipitation*days
                    +.25*(moisture-soilWater)*days
-                   -.065*(.4+sunlight)*days,0,1);
+                   -.065*(.4+sunlight)*(.65+.70*windStrength)*days,0,1);
     if(temperature<=-.5){
         snowDepth=bound(snowDepth+precipitation*.18*days,0,1.5);
         ice=bound(ice+(snowDepth>.03?.28:.04)*days,0,1);

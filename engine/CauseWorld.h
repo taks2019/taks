@@ -83,6 +83,8 @@ struct World {
     bool isNear(double x,double z,double radius) const;
     void step(double hoursElapsed);
     std::string summary() const;
+    // Derived from saved time, humidity and rain so physics/UI/rendering agree.
+    double windStrength() const;
     std::string shelterStatus() const;
     int nearbySiteIndex(double range=2.8) const;
     int nearbySiteStage() const;

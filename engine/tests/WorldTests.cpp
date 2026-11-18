@@ -420,6 +420,27 @@ int main(){
         g.forceRainForTest(1.0);g.step(10.0);
         assert(g.structure.parts[0].condition<c0);
     }
+    assert(taks::World().summary().find("SZÉL:")!=std::string::npos);
+    // Deterministic wind is derived from current clock/weather and changes the
+    // finite fuel burn rate. Save data needs no duplicate wind field.
+    int calmHour=1,gustHour=1;
+    double calmWind=2.0,gustWind=-1.0;
+    for(int hour=1;hour<2400;++hour){
+        taks::World sample;
+        sample.hours=hour;
+        sample.humidity=.38+.32*std::sin(sample.hours*.30);
+        const double value=sample.windStrength();
+        if(value<calmWind){calmWind=value;calmHour=hour;}
+        if(value>gustWind){gustWind=value;gustHour=hour;}
+    }
+    assert(gustWind>calmWind+.10);
+    taks::World calmFire,gustyFire;
+    calmFire.hours=calmHour-.5;gustyFire.hours=gustHour-.5;
+    calmFire.forceRainForTest(0.0);gustyFire.forceRainForTest(0.0);
+    calmFire.fireLit=gustyFire.fireLit=true;
+    calmFire.fireFuel=gustyFire.fireFuel=10.0;
+    calmFire.step(.5);gustyFire.step(.5);
+    assert(gustyFire.fireFuel<calmFire.fireFuel);
     std::cout<<"PASS: F2 structure wired into world, materials, save v8\n";
     std::cout<<"PASS: F1 unique item ledger, causal log, v7 save and v6 migration\n";
     std::cout<<"TAKS spatial game, construction and save migration tests PASSED\n";
