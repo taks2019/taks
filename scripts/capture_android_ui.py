@@ -198,6 +198,7 @@ nodes=dump("building")
 assert find(nodes,"ÉPÍTÉS ÉS ANYAGOK"),"Building submenu missing"
 assert find(nodes,"⚙"),"Building submenu lacks Settings gear"
 assert find(nodes,"X"),"Building submenu lacks X close"
+assert not find(nodes,"FELVESZ"),"Contextual pickup control overlaps the open submenu"
 picture("07-android-epites-almenu")
 
 click(nodes,"⚙")

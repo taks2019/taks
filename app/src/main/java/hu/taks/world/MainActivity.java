@@ -314,7 +314,8 @@ public final class MainActivity extends Activity {
     private void refreshNearby(){
         final String nearby=nativeNearby();
         if(proximity!=null)proximity.setText(nearby);
-        if(pickupButton!=null)pickupButton.setVisibility(nearby.contains("FELVEHETŐ")?View.VISIBLE:View.GONE);
+        if(pickupButton!=null)pickupButton.setVisibility(
+                nearby.contains("FELVEHETŐ")&&activePanel==0?View.VISIBLE:View.GONE);
     }
     private void say(String msg){if(notice!=null){notice.setText(msg);notice.setVisibility(View.VISIBLE);}}
     private void act(String cmd){say(nativeDo(cmd));refreshNearby();refreshScene();if(activePanel!=0)showPanel(activePanel);refreshLivingSkin();}
@@ -330,7 +331,11 @@ public final class MainActivity extends Activity {
         p.bottomMargin=4;
         box.addView(b,p);
     }
-    private void closePanel(){if(sheet!=null){root.removeView(sheet);sheet=null;}activePanel=0;}
+    private void closePanel(){
+        if(sheet!=null){root.removeView(sheet);sheet=null;}
+        activePanel=0;
+        refreshNearby();
+    }
     private void showPanel(int which){
         closePanel();activePanel=which;
         sheet=new LinearLayout(this);sheet.setOrientation(LinearLayout.VERTICAL);
@@ -423,6 +428,7 @@ public final class MainActivity extends Activity {
         FrameLayout.LayoutParams ps=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
         ps.setMargins(dp(8),0,dp(8),bottomBarPx()+5);
         root.addView(sheet,ps);
+        refreshNearby();
         refreshLivingSkin();
     }
     private void togglePanel(int which){if(activePanel==which)closePanel();else showPanel(which);}
