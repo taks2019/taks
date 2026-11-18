@@ -73,12 +73,8 @@ void main(){
   vec3 n=normalize(vNormal);
   vec3 sun=normalize(vec3(-0.55,1.10,-0.7));
   float diffuse=max(dot(n,sun),0.0);
-  // Thin photographed leaves need two-sided daylight and a stronger natural
-  // ambient term; otherwise their real, dark atlas disappears into the soil.
-  float foliage=step(0.40,uAlphaCutoff);
-  diffuse=mix(diffuse,abs(dot(n,sun)),foliage);
   // Energy-conserving-looking diffuse, no invented shiny metallic rocks.
-  vec3 color=albedo*(mix(0.18,0.30,foliage)+0.92*diffuse*(0.20+0.80*uDaylight))*(1.0-0.28*uRain);
+  vec3 color=albedo*(0.18+0.92*diffuse*(0.20+0.80*uDaylight))*(1.0-0.28*uRain);
   color=color/(color+vec3(0.45));
   fragColor=vec4(pow(max(color,vec3(0.0)),vec3(1.0/2.2)),1.0);
 }
@@ -432,31 +428,39 @@ void render(const float* viewProjection,const float* worldNodes,
  // Genuine published botanical geometry; no generated tube/ball foliage.
  if(models[3].vao && models[3].texture){
     glUniform1f(uCutoff,.42f);
-    // The source atlas was photographed under dark studio lighting; lift its
-    // leaf greens slightly so real blades remain visible against gravel.
-    glUniform3f(uTint,1.20f,1.70f,1.10f);
     for(int i=0;i<4;++i){
-        const float* g=grass+4*i;
+        const float* g=grass+5*i;
         const float biomass=std::clamp(g[2],0.f,1.f);
         const float health=std::clamp(g[3],0.f,1.f);
+        const float trampling=std::clamp(g[4],0.f,1.f);
         if(biomass<.02f||health<=0.f)continue;
         // An ecological clump is a distributed PATCH of the real scanned
         // plant, never an invented fifth or infinite independent resource.
         // Grazing shrinks the whole patch, drought reduces visual density.
-        const int count=std::max(1,int(48.f*biomass*health));
+        const int count=std::max(1,int(48.f*biomass*health*(1.f-.58f*trampling)));
         for(int j=0;j<count;++j){
             const float phase=float(j)*2.39996323f+float(i)*.87f;
             const float radial=std::sqrt((float(j)+.5f)/48.f);
             const float localR=2.05f*radial;
             const float x=g[0]+std::cos(phase)*localR;
             const float z=g[1]+std::sin(phase)*localR;
-            const float scale=(.55f+.20f*std::sin(float(j)*1.23f+float(i)*2.1f)
-                              +.28f*biomass);
-            draw(models[3],x,z,std::max(.10f,scale),phase+.42f);
+            const float scale=(.29f+.15f*std::sin(float(j)*1.23f+float(i)*2.1f)
+                              +.24f*biomass)*(1.f-.38f*trampling);
+            const float lean=trampling*.58f;
+            const float c=std::cos(phase+.42f),s=std::sin(phase+.42f);
+            const float matrix[16]={
+                scale*c,0.f,-scale*s,0.f,
+                lean*scale,scale*(1.f-.30f*trampling),lean*.55f*scale,0.f,
+                scale*s,0.f,scale*c,0.f,
+                x,surfaceHeight(x,z)-.014f,z,1.f};
+            glUniformMatrix4fv(uModel,1,GL_FALSE,matrix);
+            glBindTexture(GL_TEXTURE_2D,models[3].texture);
+            glBindVertexArray(models[3].vao);
+            glVertexAttribI4ui(3,0,0,0,0);glVertexAttrib4f(4,0,0,0,0);
+            glDrawArrays(GL_TRIANGLES,0,models[3].count);
         }
     }
  }
- glUniform3f(uTint,1.f,1.f,1.f);
  if(models[5].vao && models[5].texture){
     glUniform1f(uCutoff,.42f);
     for(int i=0;i<3;++i){
@@ -468,10 +472,8 @@ void render(const float* viewProjection,const float* worldNodes,
  }
  if(fernApproved && models[4].vao && models[4].texture){
     glUniform1f(uCutoff,.42f);
-    glUniform3f(uTint,1.20f,1.70f,1.10f);
     // This biome plant is only visible when ecological verification is explicit.
     if(grass[2]>.12f)draw(models[4],grass[0]+.72f,grass[1]-.25f,.85f,.6f);
-    glUniform3f(uTint,1.f,1.f,1.f);
  }
  // Real source skin weights and the 53-bone rig drive every person on the GPU.
  // Clip changes blend over 280 ms; the source remains a general humanoid, not a
@@ -480,7 +482,7 @@ void render(const float* viewProjection,const float* worldNodes,
     glUniform1f(uCutoff,.34f);
     // Warm the extremely pale source diffuse map so exposed skin and hide
     // follow a more natural daylight range on phone displays.
-    glUniform3f(uTint,.85f,.72f,.60f);
+    glUniform3f(uTint,1.02f,.90f,.77f);
     const int playerClip=playerRunning?4:(playerMoving?3:0);
     drawHuman(playerX,playerZ,1.f,playerHeading,0,playerClip,now);
     for(int i=0;i<4;++i){
@@ -501,7 +503,7 @@ void render(const float* viewProjection,const float* worldNodes,
         }
         const float heading=std::atan2(targetX-n[0],targetZ-n[1]);
         const int clip=(task==1||task==2)?3:(task==3?1:0);
-        glUniform3f(uTint,.85f,.72f,.60f);
+        glUniform3f(uTint,1.02f,.90f,.77f);
         drawHuman(n[0],n[1],scale,heading,i+1,clip,now);
     }
  }

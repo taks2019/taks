@@ -77,3 +77,11 @@
 - Kept the user-provided TAKS WORLD logo as a separate, untouched asset; the existing four actions remain native, accessible and interactive.
 - The scene overlay now crossfades when the native world reports night, rain, wet ground or a burning fire; it does not invent weather or discoveries.
 - This is a main-menu image layer, not the freely rotatable in-game world and not the completed eight-view object-atlas renderer. The Android emulator screenshot and APK verification run in CI.
+
+## Rain, mud and trampling causality – 2026-11-18
+
+- Player movement now applies a persistent trampling value to nearby living grass patches. Wet muddy ground increases the flattening/crushing effect; the renderer thins, shortens and leans the grass in the affected patch.
+- Existing rain → soil moisture → mud → reduced walking speed remains the source of truth; no separate UI-only weather state was added. The menu's native scrim now also responds to whether grass is present.
+- Trampled biomass is not counted as harvested food. Grass can regrow, while flattened patches recover at different rates according to simulated soil water. The `ECO2` ecology save block stores the state and continues reading legacy `ECO1` saves.
+- Native test coverage checks dry vs wet trampling, regrowth/recovery, player movement, and old/new save compatibility. Host C++ tests passed. Android/GLSL build and emulator screenshot verification are still pending.
+- Generated 8-view plant-atlas drafts were reviewed but rejected for the project: the outputs have color fringes, insufficiently distinct rotation views, and do not meet in-game asset quality. They are not bundled or presented as finished game art.

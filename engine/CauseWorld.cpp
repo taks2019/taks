@@ -6,6 +6,85 @@
 
 namespace taks {
 namespace { double clamp(double v, double lo, double hi){return std::max(lo, std::min(hi,v));} }
+
+// ---------------- Egyedi tárgyak főkönyve ----------------
+void World::logCause(const std::string& line){
+    std::ostringstream o;o<<'#'<<eventCounter<<" t="<<std::fixed<<std::setprecision(2)<<hours<<"h "<<line;
+    causeLog.push_back(o.str());
+    if(causeLog.size()>64)causeLog.erase(causeLog.begin(),causeLog.begin()+(causeLog.size()-64));
+}
+unsigned World::countItems(int type,int where,int node,int by) const{
+    unsigned n=0;
+    for(const Item& it:items)
+        if(it.type==type&&it.where==where&&(node<0||it.node==node)&&(by<0||it.by==by))++n;
+    return n;
+}
+void World::rebuildLedgerFromCounts(){
+    items.clear();
+    for(int i=0;i<resourceCount;++i){
+        const int type=nodes[i].type;if(type>1)continue;
+        for(int k=0;k<nodes[i].amount;++k)items.push_back({nextItemId++,type,0,i,-1});
+    }
+    for(int k=0;k<carriedWood;++k)items.push_back({nextItemId++,0,1,-1,-1});
+    for(int k=0;k<carriedStone;++k)items.push_back({nextItemId++,1,1,-1,-1});
+    for(int k=0;k<campStock[0];++k)items.push_back({nextItemId++,0,2,-1,-1});
+    for(int k=0;k<campStock[1];++k)items.push_back({nextItemId++,1,2,-1,-1});
+    for(int i=0;i<npcCount;++i)
+        if(npcs[i].carrying>0&&npcs[i].role<2)
+            for(int k=0;k<npcs[i].carrying;++k)items.push_back({nextItemId++,npcs[i].role,4,-1,i});
+    ledgerReady=true;
+}
+void World::ensureLedger(){ if(!ledgerReady)rebuildLedgerFromCounts(); }
+bool World::ledgerConsistent() const{
+    if(!ledgerReady)return true;
+    for(int i=0;i<resourceCount;++i){
+        const int type=nodes[i].type;if(type>1)continue;
+        if(countItems(type,0,i)!=static_cast<unsigned>(nodes[i].amount))return false;
+    }
+    if(countItems(0,1)!=static_cast<unsigned>(carriedWood)||countItems(1,1)!=static_cast<unsigned>(carriedStone))return false;
+    if(countItems(0,2)!=static_cast<unsigned>(campStock[0])||countItems(1,2)!=static_cast<unsigned>(campStock[1]))return false;
+    for(int i=0;i<npcCount;++i){
+        unsigned held=0;
+        for(const Item& it:items)if(it.where==4&&it.by==i)++held;
+        const unsigned expected=(npcs[i].role<2)?static_cast<unsigned>(npcs[i].carrying):0u;
+        if(held!=expected)return false;
+    }
+    for(size_t a=0;a<items.size();++a){
+        if(items[a].id==0||items[a].id>=nextItemId)return false;
+        for(size_t b=a+1;b<items.size();++b)if(items[a].id==items[b].id)return false;
+    }
+    return true;
+}
+void World::moveItem(int type,int fromWhere,int fromNode,int fromBy,int toWhere,int toNode,int toBy,const char* cause){
+    ensureLedger();
+    int idx=-1;
+    for(size_t i=0;i<items.size();++i){
+        const Item& it=items[i];
+        if(it.type==type&&it.where==fromWhere&&(fromNode<0||it.node==fromNode)&&(fromBy<0||it.by==fromBy)){idx=static_cast<int>(i);break;}
+    }
+    if(idx<0)return;
+    Item& it=items[idx];
+    std::ostringstream o;o<<(type==0?"faág":"kő")<<" #"<<it.id<<" ["<<cause<<"]: hely "<<fromWhere<<"->"<<toWhere;
+    it.where=toWhere;it.node=toNode;it.by=toBy;
+    logCause(o.str());
+}
+void World::grantCarriedForTest(int type,int count){
+    ensureLedger();
+    if(type<0||type>1)return;
+    for(int k=0;k<count;++k){items.push_back({nextItemId++,type,1,-1,-1});(type==0?carriedWood:carriedStone)++;}
+    logCause("TESZT: tárgyak adva a játékosnak");
+}
+void World::consumeItems(int type,int count,const char* cause){
+    ensureLedger();
+    for(int k=0;k<count;++k){
+        int idx=-1;
+        for(size_t i=0;i<items.size();++i)if(items[i].type==type&&items[i].where==1){idx=static_cast<int>(i);break;}
+        if(idx<0)return;
+        std::ostringstream o;o<<(type==0?"faág":"kő")<<" #"<<items[idx].id<<" ["<<cause<<"]: elhasználva";
+        items.erase(items.begin()+idx);++consumedItems[type];
+        logCause(o.str());
+    }
+}
 int World::nearbySiteIndex(double range) const {
     int chosen=-1;
     double minSq=range*range;
@@ -96,6 +175,7 @@ std::string World::npcStatus() const {
 }
 void World::updateNpcs(double dt){
     if(!std::isfinite(dt)||dt<=0)return;
+    ensureLedger();
     npcSimulatedHours+=dt;
     // Rögzített szimulációs részlés: 1 óra 25 lépés, mentés után is determinisztikus.
     const int roles[4]={0,1,3,2};
@@ -122,6 +202,7 @@ void World::updateNpcs(double dt){
                 const double dx=-.30-npc.x,dz=-3.40-npc.z;
                 const double length=std::sqrt(dx*dx+dz*dz);
                 if(length<.58){
+                    if(npc.role<2)moveItem(npc.role,4,-1,i,2,-1,-1,"társ leadja a táborban");
                     campStock[npc.role]+=npc.carrying;
                     npc.delivered+=npc.carrying;
                     npc.carrying=0;
@@ -150,6 +231,7 @@ void World::updateNpcs(double dt){
             const double length=std::sqrt(dx*dx+dz*dz);
             if(length<.62){
                 if(npc.energy<3){npc.task=3;continue;}
+                if(node.type<2)moveItem(node.type,0,chosen,-1,4,-1,i,"társ felveszi");
                 --node.amount;
                 npc.carrying=1;
                 npc.task=2;
@@ -235,7 +317,9 @@ std::string World::move(double dx,double dz){
             return "A világ jelenlegi bejárható határához értél.";
         return "A sziklafal vagy egy fatörzs elállja az utat.";
     }
+    const double oldX=playerX,oldZ=playerZ;
     playerX=mx;playerZ=mz;
+    ecology.trampleTrail(oldX,oldZ,playerX,playerZ,clamp(ecology.mud+groundMoisture*.45,0,1));
     walkPhase+=traveled*5.5;
     stamina=clamp(stamina-traveled*(0.50+groundMoisture*.65+ecology.mud*.8+
                    ecology.snowDepth*.35+ecology.slipRisk()*.4),0.0,100.0);
@@ -245,6 +329,7 @@ std::string World::move(double dx,double dz){
     return nearby();
 }
 std::string World::act(const std::string& action) {
+    ensureLedger();
     if(action=="npc_talk"){
         for(int i=0;i<npcCount;++i){
             const auto& n=npcs[i];
@@ -263,6 +348,7 @@ std::string World::act(const std::string& action) {
         const int role=action=="camp_wood"?0:action=="camp_stone"?1:action=="camp_leaves"?2:3;
         if(campStock[role]<=0)return "Ebből az anyagból a társak még nem hoztak a táborba.";
         if(stamina<.5)return "Kimerült vagy, előbb pihenj.";
+        if(role<2)moveItem(role,2,-1,-1,1,-1,-1,"játékos átveszi a tábori készletből");
         --campStock[role];
         int* bag=role==0?&carriedWood:role==1?&carriedStone:role==2?&carriedLeaves:&carriedTinder;
         ++(*bag);stamina-=.5;step(.025);++eventCounter;
@@ -288,6 +374,7 @@ std::string World::act(const std::string& action) {
         ResourceNode& node=nodes[nodeId];
         const int type=node.type;
         int* bag=type==0?&carriedWood:type==1?&carriedStone:type==2?&carriedTinder:&carriedLeaves;
+        if(type<2)moveItem(type,0,nodeId,-1,1,-1,-1,"játékos felveszi a lelőhelyről");
         --node.amount;++(*bag);syncGroundCounts();
         stamina-=2;step(.10);++eventCounter;
         return type==0?"Faág felvéve a lelőhelyről. A világ készlete 1-gyel csökkent.":
@@ -299,6 +386,7 @@ std::string World::act(const std::string& action) {
         if(chippedEdgeWear>0) return "Már van használható kőéled; a követ a későbbi munkára tartalékold.";
         if(carriedStone<2) return "Kőeszköz: két kő szükséges (ütőkő és nyersanyag).";
         if(stamina<6) return "Kőmegmunkálás: előbb pihenned kell.";
+        consumeItems(1,2,"kőmegmunkálás: ütőkő és nyersanyag");
         carriedStone-=2;stoneDebris+=1;chippedEdgeWear=6;stamina-=6;step(0.40);++eventCounter;
         return "Éles kőszilánk készült: 2 kő -> 1 használható él + kőhulladék. A szerszám kopik.";
     }
@@ -307,6 +395,7 @@ std::string World::act(const std::string& action) {
         if(carriedWood<1) return "Nincs nyers faág, amiből cölöp készülhetne.";
         if(stamina<5) return "Cölöp készítése: nincs elég állóképességed.";
         if(woodMoisture>0.85) return "A fa nagyon átázott: várj a megmunkálással.";
+        consumeItems(0,1,"faág cölöppé munkálva");
         --carriedWood;++preparedPoles;--chippedEdgeWear;
         if(chippedEdgeWear==0)++stoneDebris;
         stamina-=5;step(0.30);++eventCounter;
@@ -324,6 +413,7 @@ std::string World::act(const std::string& action) {
         }
         if(carriedStone<1)return "Az építési hely kijelöléséhez egy követ kell elhelyezned a terepen.";
         if(stamina<2)return "A kijelöléshez előbb pihenned kell.";
+        consumeItems(1,1,"építési hely jelölőköve");
         --carriedStone;stamina-=2;
         auto& site=sites[siteCount++];
         site.x=playerX;site.z=playerZ;site.stage=0;site.condition=100.0;
@@ -339,6 +429,7 @@ std::string World::act(const std::string& action) {
             if(preparedPoles<2)return "Oszlopok: két megmunkált cölöp hiányzik.";
             if(carriedStone<2)return "Oszlopok: két támasztókő hiányzik.";
             if(stamina<12)return "Oszlopok: a munkához kevés az állóképesség.";
+            consumeItems(1,2,"oszlop támasztókövei");
             preparedPoles-=2;carriedStone-=2;stamina-=12;site.stage=1;
             shelterStage=std::max(shelterStage,site.stage);
             step(1.0);++eventCounter;
@@ -385,12 +476,74 @@ std::string World::act(const std::string& action) {
         underShelter=false;step(0.10);++eventCounter;
         return "Elhagytad a menedéket: újra közvetlenül ér a környezet.";
     }
+    if(action=="part_pole"||action=="part_beam"||action=="part_stone"||action=="part_plank"){
+        const int kind=action=="part_pole"?PART_POLE:action=="part_beam"?PART_BEAM:action=="part_stone"?PART_STONE:PART_PLANK;
+        const int poleCost=kind==PART_BEAM?2:(kind==PART_POLE||kind==PART_PLANK)?1:0;
+        if(poleCost>0&&preparedPoles<poleCost)return kind==PART_BEAM?"Gerendához két megmunkált cölöp kell.":"Ehhez egy megmunkált cölöp kell.";
+        if(kind==PART_STONE&&carriedStone<1)return "Nincs nálad kő, amit le lehetne rakni.";
+        if(stamina<3)return "Az építéshez előbb pihenned kell.";
+        // Új alkatrész a játékos előtt áll; ha alatta már van alkatrész, rá kerül (és rögzül hozzá).
+        const double px=playerX+0.6,pz=playerZ;
+        double y=0.0;unsigned underId=0;
+        for(const auto& q:structure.parts){
+            const double dx=q.x-px,dz=q.z-pz;
+            if(dx*dx+dz*dz>0.45*0.45)continue;
+            double top=q.y+(q.kind==PART_POLE||q.kind==PART_STONE?q.length:(q.kind==PART_BEAM?0.25:0.1));
+            if(top>y){y=top;underId=q.id;}
+        }
+        std::string why;
+        const unsigned before=structure.nextId;
+        const unsigned id=structure.addPart(kind,px,y,pz,0.0,&why);
+        if(id==0)return why.empty()?"Ide nem rakható alkatrész.":why;
+        if(underId!=0&&!structure.addJoint(id,underId,0,&why)){
+            // Rögzítés nélkül nem marad ott: visszavonjuk a lerakást, anyag nem fogyott.
+            structure.undo();structure.nextId=std::max(structure.nextId,before+1);
+            return "Nem sikerült rögzíteni az alkatrészt: "+why;
+        }
+        if(poleCost>0)preparedPoles-=poleCost;
+        if(kind==PART_STONE)consumeItems(1,1,"szerkezet alkatrésze: kő");
+        if(kind==PART_STONE)--carriedStone;
+        stamina-=3;step(.2);++eventCounter;
+        std::ostringstream out;
+        out<<"Alkatrész lerakva (#"<<id<<"). ";
+        const StructureReport rep=structure.analyze();
+        out<<(rep.stable?"A szerkezet most stabil.":"FIGYELEM: a szerkezet nem stabil (túlterhelt vagy lebegő rész).");
+        return out.str();
+    }
+    if(action=="part_cut"||action=="part_turn"){
+        // A játékoshoz legközelebbi alkatrész (1,5 m-en belül).
+        unsigned target=0;double best=1.5*1.5;
+        for(const auto& q:structure.parts){
+            const double dx=q.x-playerX,dz=q.z-playerZ;const double d=dx*dx+dz*dz;
+            if(d<best){best=d;target=q.id;}
+        }
+        if(target==0)return "Nincs alkatrész a közelben: menj közelebb.";
+        std::string why;
+        if(action=="part_turn"){
+            if(stamina<1)return "A forgatáshoz előbb pihenned kell.";
+            const Part* p=structure.find(target);
+            if(!structure.rotatePart(target,p->yaw+0.7853981633974483,&why))return why;
+            stamina-=1;step(0.05);++eventCounter;
+            return "Az alkatrész (#"+std::to_string(target)+") elfordítva 45°-kal.";
+        }
+        if(chippedEdgeWear<=0)return "Vágáshoz éles kőeszköz kell.";
+        if(stamina<4)return "A vágáshoz előbb pihenned kell.";
+        const unsigned created=structure.cutPart(target,0.5,&why);
+        if(created==0)return why.empty()?"Nem vágható el.":why; // hiba: sem kopás, sem idő nem fogy
+        --chippedEdgeWear;if(chippedEdgeWear==0)++stoneDebris;
+        stamina-=4;step(0.3);++eventCounter;
+        std::ostringstream out;
+        out<<"Az alkatrész (#"<<target<<") kettévágva; új darab: #"<<created<<". Kőél kopott, az anyag megmaradt. ";
+        out<<(structure.analyze().stable?"A szerkezet stabil.":"FIGYELEM: a szerkezet nem stabil.");
+        return out.str();
+    }
     if(action=="hearth") {
         if(!isNear(-1.15,-1.8,2.7))return "Tűzhelyet csak a kijelölt munkaterületen építhetsz: menj oda.";
         if(hearthBuilt) return "A tűzhely már felépült.";
         if(carriedWood<3) return "Tűzhely: 3 faág szükséges.";
         if(carriedStone<2) return "Tűzhely: 2 kő szükséges.";
         if(stamina<12) return "Tűzhely: a munkához túl kevés az állóképességed.";
+        consumeItems(0,3,"tűzhely építése: faág");consumeItems(1,2,"tűzhely építése: kő");
         carriedWood-=3;carriedStone-=2;stamina-=12;hearthBuilt=true;step(0.75);++eventCounter;
         return "A tűzhely elkészült. 3 faág, 2 kő és 0,75 játékóra elfogyott.";
     }
@@ -403,6 +556,7 @@ std::string World::act(const std::string& action) {
         if(woodMoisture>0.40) return "A fa túl nedves: előbb száradnia kell.";
         if(rainIntensity>0.60) return "Az erős eső eláztatja az előkészítetlen tűzhelyet.";
         if(stamina<4) return "Tűzgyújtáshoz pihenned kell.";
+        consumeItems(0,2,"tűzgyújtás: tüzelő faág");
         --carriedTinder;carriedWood-=2;stamina-=4;fireFuel=2.0;fireLit=true;++eventCounter;
         return "A tűz meggyulladt. Gyújtós és tüzelő fogyott; fény és hő keletkezett.";
     }
@@ -417,6 +571,7 @@ void World::forceRainForTest(double intensity){ testWeather=true; rainIntensity=
 void World::step(double hoursElapsed) {
     if(!std::isfinite(hoursElapsed) || hoursElapsed<=0.0 || hoursElapsed>24.0) return;
     hours+=hoursElapsed;
+    structure.wear(hoursElapsed*(0.002+rainIntensity*0.03)); // az eső koptatja az alkatrészeket
     updateNpcs(hoursElapsed);
     for(int i=0;i<siteCount;++i){
         auto& site=sites[i];
@@ -490,7 +645,7 @@ std::string World::summary() const {
 }
 std::string World::save() const {
     std::ostringstream o;o<<std::setprecision(17);
-    o<<"TAKS_NATIVE_6 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
+    o<<"TAKS_NATIVE_9 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
      <<carriedWood<<' '<<carriedStone<<' '<<carriedTinder<<' '
      <<hours<<' '<<humidity<<' '<<rainIntensity<<' '<<woodMoisture<<' '
      <<groundMoisture<<' '<<stamina<<' '<<fireFuel<<' '
@@ -508,12 +663,19 @@ std::string World::save() const {
     for(const auto& site:sites)
         o<<' '<<site.x<<' '<<site.z<<' '<<site.stage<<' '<<site.condition;
     ecology.write(o);
+    // Egyedi tárgyak főkönyve (LEDG1): csak a meglévő tárgyak; az elhasználtakat számláló őrzi.
+    o<<" LEDG1 "<<nextItemId<<' '<<consumedItems[0]<<' '<<consumedItems[1]<<' '<<items.size();
+    for(const Item& it:items)o<<' '<<it.id<<' '<<it.type<<' '<<it.where<<' '<<it.node<<' '<<it.by;
+    o<<' '<<structure.save(); // F2: szerkezetek (STRUCT2; a STRUCT1 is betölthető)
     return o.str();
 }
 bool World::load(const std::string& data) {
     std::istringstream is(data);std::string header;World tmp;int hearth=0,fire=0,covered=0;
     if(!(is>>header) ||
-       (header!="TAKS_NATIVE_1" && header!="TAKS_NATIVE_2" && header!="TAKS_NATIVE_3" && header!="TAKS_NATIVE_4" && header!="TAKS_NATIVE_5" && header!="TAKS_NATIVE_6"))return false;
+       (header!="TAKS_NATIVE_1" && header!="TAKS_NATIVE_2" && header!="TAKS_NATIVE_3" && header!="TAKS_NATIVE_4" && header!="TAKS_NATIVE_5" && header!="TAKS_NATIVE_6" && header!="TAKS_NATIVE_7" && header!="TAKS_NATIVE_8" && header!="TAKS_NATIVE_9"))return false;
+    const bool hasLedger=(header=="TAKS_NATIVE_7"||header=="TAKS_NATIVE_8"||header=="TAKS_NATIVE_9");
+    const bool hasStruct=(header=="TAKS_NATIVE_8"||header=="TAKS_NATIVE_9");
+    if(hasLedger)header="TAKS_NATIVE_6";
     if(!(is>>tmp.groundWood>>tmp.groundStone>>tmp.groundTinder
       >>tmp.carriedWood>>tmp.carriedStone>>tmp.carriedTinder
       >>tmp.hours>>tmp.humidity>>tmp.rainIntensity>>tmp.woodMoisture
@@ -540,6 +702,24 @@ bool World::load(const std::string& data) {
             if(!(is>>site.x>>site.z>>site.stage>>site.condition))return false;
     }
     if(header=="TAKS_NATIVE_6" && !tmp.ecology.read(is))return false;
+    std::vector<Item> loadedItems;unsigned loadedNext=1,loadedConsumed[2]={0,0};
+    if(hasLedger){
+        std::string tag;size_t n=0;
+        if(!(is>>tag)||tag!="LEDG1"||!(is>>loadedNext>>loadedConsumed[0]>>loadedConsumed[1]>>n)||n>100000)return false;
+        for(size_t i=0;i<n;++i){
+            Item it;
+            if(!(is>>it.id>>it.type>>it.where>>it.node>>it.by))return false;
+            if(it.type<0||it.type>1||(it.where!=0&&it.where!=1&&it.where!=2&&it.where!=4))return false;
+            if(it.where==0&&(it.node<0||it.node>=World::resourceCount))return false;
+            if(it.where==4&&(it.by<0||it.by>=World::npcCount))return false;
+            loadedItems.push_back(it);
+        }
+    }
+    Structure loadedStructure;
+    if(hasStruct){
+        std::string rest;std::getline(is,rest);
+        if(!loadedStructure.load(rest))return false;
+    }
     std::string trailing;
     if(is>>trailing)return false;
     if(tmp.groundWood<0||tmp.groundStone<0||tmp.groundTinder<0||
@@ -624,6 +804,15 @@ bool World::load(const std::string& data) {
             }else if(site.stage!=0||site.x!=0||site.z!=0||site.condition!=100)return false;
         }
         if(maxStage!=tmp.shelterStage)return false;
+    }
+    if(hasLedger){
+        tmp.items=loadedItems;tmp.nextItemId=loadedNext;
+        tmp.consumedItems[0]=loadedConsumed[0];tmp.consumedItems[1]=loadedConsumed[1];
+        tmp.ledgerReady=true;
+        tmp.structure=loadedStructure;
+        if(!tmp.ledgerConsistent())return false; // a főkönyv és a készlet nem térhet el
+    }else{
+        tmp.rebuildLedgerFromCounts(); // régi mentés: azonosítók a készletből, előzmény nélkül
     }
     tmp.hearthBuilt=hearth!=0;tmp.fireLit=fire!=0;tmp.underShelter=covered!=0;
     // Sérült mentésben a fedés nem védhet a távolból.

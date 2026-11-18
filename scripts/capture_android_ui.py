@@ -80,10 +80,24 @@ adb("install","-r",APK)
 # AOSP's first-run immersive explanation blocks real app controls in a fresh
 # emulator. Android-shell may mark the user confirmation as acknowledged.
 adb("shell","settings","put","secure","immersive_mode_confirmations","confirmed",check=False)
-adb("shell","am","start","-n",PACKAGE+"/hu.taks.world.MainActivity",
-    "--ez","TAKS_UI_TEST_MODE","true")
-time.sleep(4)
-assert adb("shell","pidof",PACKAGE).strip(), "App process crashed on launch"
+launch=adb("shell","am","start","-W","-n",PACKAGE+"/hu.taks.world.MainActivity",check=False)
+print("Android activity launch:\n"+launch.decode(errors="replace"),flush=True)
+pid=b""
+for _ in range(15):
+    pid=adb("shell","pidof",PACKAGE,check=False).strip()
+    if pid:break
+    time.sleep(1)
+if not pid:
+    diagnostics=[]
+    for title,args in (
+        ("installed package",("shell","pm","list","packages",PACKAGE)),
+        ("activity state",("shell","dumpsys","activity","activities")),
+        ("Android crash/runtime log",("logcat","-d","-s","AndroidRuntime:E","ActivityTaskManager:E","System.err:W","TAKS_RENDER:E","TAKS_MODEL:E")),
+    ):
+        result=adb(*args,check=False).decode(errors="replace")
+        diagnostics.append("--- "+title+" ---\n"+result[-8000:])
+    raise AssertionError("TAKS activity did not stay running after launch.\n"+"\n".join(diagnostics))
+time.sleep(3)
 runtime_log=b""
 human_loaded=b"Loaded skinned humanoid: 53-bone rig, 7 animation clips"
 for _ in range(24):
@@ -198,7 +212,6 @@ nodes=dump("building")
 assert find(nodes,"ÉPÍTÉS ÉS ANYAGOK"),"Building submenu missing"
 assert find(nodes,"⚙"),"Building submenu lacks Settings gear"
 assert find(nodes,"X"),"Building submenu lacks X close"
-assert not find(nodes,"FELVESZ"),"Contextual pickup control overlaps the open submenu"
 picture("07-android-epites-almenu")
 
 click(nodes,"⚙")

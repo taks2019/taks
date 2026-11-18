@@ -117,7 +117,7 @@ int main(){
     taks::World old1,old2;
     assert(old1.load("TAKS_NATIVE_1 14 8 5 0 0 0 6 0.4 0 0.13 0.13 100 0 0 0 0"));
     assert(old2.load("TAKS_NATIVE_2 12 7 4 1 1 1 8 0.4 0 0.13 0.13 88 0 0 0 3 15 2 6 1 0 1 0.12 0"));
-    assert(old1.save().find("TAKS_NATIVE_6")==0);
+    assert(old1.save().find("TAKS_NATIVE_9")==0);
     assert(old2.groundWood==12 && old2.groundStone==7 && old2.groundLeaves==15);
     assert(old2.nodes[0].amount<=3);
     const auto stable=old2.save();
@@ -129,6 +129,12 @@ int main(){
     const auto noEnergy=exhausted.save();
     assert(exhausted.move(1,0).find("kimerült")!=std::string::npos);
     assert(exhausted.save()==noEnergy);
+    taks::World trampleWorld;
+    trampleWorld.playerX=trampleWorld.ecology.grass[0].x-1.5;
+    trampleWorld.playerZ=trampleWorld.ecology.grass[0].z;
+    const double standingGrass=trampleWorld.ecology.grass[0].trampling;
+    trampleWorld.move(.70,0);
+    assert(trampleWorld.ecology.grass[0].trampling>standingGrass);
     taks::World wet;wet.forceRainForTest(1);
     double oldWet=wet.groundMoisture;wet.step(1);
     assert(wet.groundMoisture>oldWet);
@@ -172,7 +178,7 @@ int main(){
     taks::World legacy3;
     const auto v4Save=taks::World().save();
     // V3-ból induló mentés új NPC mezők nélkül is migrál.
-    const auto suffix=v4Save.substr(v4Save.find("TAKS_NATIVE_6")+13);
+    const auto suffix=v4Save.substr(v4Save.find("TAKS_NATIVE_9")+13);
     std::istringstream fields(suffix);
     std::string rawToken;
     // A V3-migráció kódútját a korábbi 27+12 mezővel is ellenőrizzük.
@@ -183,7 +189,7 @@ int main(){
     }
     assert(legacy3.load(v3));
     assert(legacy3.npcs[0].role==0);
-    assert(legacy3.save().find("TAKS_NATIVE_6")==0);
+    assert(legacy3.save().find("TAKS_NATIVE_9")==0);
     // A társakkal helyben lehet beszélni, távolról nincs mágikus kommunikáció.
     taks::World talk;
     assert(talk.act("npc_talk").find("Nincs beszélgetési")!=std::string::npos);
@@ -192,7 +198,7 @@ int main(){
     // Három egymástól független építési hely: külön világhelyzet, anyag és állapot.
     taks::World multi;
     for(auto& worker:multi.npcs)worker.hunger=100;
-    multi.carriedStone=8;multi.preparedPoles=12;multi.carriedLeaves=14;
+    multi.grantCarriedForTest(1,8);multi.preparedPoles=12;multi.carriedLeaves=14;
     walkTo(multi,3.0,-1.6);
     assert(multi.act("site").find("kijelölve")!=std::string::npos);
     assert(multi.siteCount==1 && multi.nearbySiteStage()==0);
@@ -245,7 +251,8 @@ int main(){
     while(savedParts>>token)oldFields.push_back(token);
     assert(oldFields.size()>15);
     // v6 appends complete animal/plant ecology after the old v5 build sites.
-    const auto ecoBegin=std::find(oldFields.begin(),oldFields.end(),"ECO1");
+    auto ecoBegin=std::find(oldFields.begin(),oldFields.end(),"ECO2");
+    if(ecoBegin==oldFields.end())ecoBegin=std::find(oldFields.begin(),oldFields.end(),"ECO1");
     assert(ecoBegin!=oldFields.end());
     oldFields.erase(ecoBegin,oldFields.end());
     oldFields[0]="TAKS_NATIVE_4";
@@ -260,7 +267,7 @@ int main(){
     assert(migratedOld.siteCount==1 && migratedOld.sites[0].stage==3);
     assert(std::abs(migratedOld.sites[0].x-3.1)<1e-6);
     assert(std::abs(migratedOld.sites[0].z+1.55)<1e-6);
-    assert(migratedOld.save().find("TAKS_NATIVE_6")==0);
+    assert(migratedOld.save().find("TAKS_NATIVE_9")==0);
     // A saved 0.8 / v5 world loads without creating animals or losing inventory.
     auto oldV5Fields=oldFields;
     {
@@ -269,7 +276,7 @@ int main(){
         std::istringstream stream(allSites);
         oldV5Fields.clear();
         while(stream>>token){
-            if(token=="ECO1")break;
+            if(token=="ECO1"||token=="ECO2")break;
             oldV5Fields.push_back(token);
         }
     }
@@ -282,7 +289,8 @@ int main(){
     }
     taks::World upgraded;
     assert(upgraded.load(oldV5Text.str()));
-    assert(upgraded.save().find("TAKS_NATIVE_6")==0);
+    assert(upgraded.save().find("TAKS_NATIVE_9")==0);
+    assert(upgraded.ledgerConsistent());
     assert(upgraded.ecology.aliveAnimals()==4);
     // A character has radius: diagonal wall contact must slide, never teleport.
     taks::World wall;
@@ -310,5 +318,109 @@ int main(){
     trunk.move(0.0,.75);
     assert(trunk.playerZ> -1.65);
     std::cout<<"PASS: swept wall/trunk collisions and diagonal wall sliding\\n";
+    // ---- F1: egyedi azonosítójú kő/faág főkönyv ----
+    {
+        taks::World w;
+        w.ensureLedger();
+        assert(w.ledgerConsistent());
+        const unsigned idsBefore=w.nextItemId;
+        assert(w.countItems(1,0)==8u && w.countItems(0,0)==14u);
+        // Sikertelen akció (túl messze) nem hozhat létre és nem vihet el tárgyat.
+        w.playerX=-6.0;w.playerZ=1.2;
+        const size_t before=w.items.size();
+        w.act("stone");
+        assert(w.items.size()==before && w.ledgerConsistent());
+        // Siker: pontosan egy konkrét kő költözik a játékoshoz.
+        w.playerX=1.0;w.playerZ=-5.2;
+        w.act("stone");w.act("stone");
+        assert(w.carriedStone==2 && w.countItems(1,1)==2u && w.ledgerConsistent());
+        bool loggedStone=false;
+        for(const auto& line:w.causeLog)if(line.find("kő #")!=std::string::npos&&line.find("játékos felveszi")!=std::string::npos)loggedStone=true;
+        assert(loggedStone);
+        // Mentés/betöltés megtartja az azonosítókat.
+        const std::string saved=w.save();
+        assert(saved.find("TAKS_NATIVE_9")==0 && saved.find(" LEDG1 ")!=std::string::npos);
+        taks::World back;assert(back.load(saved));
+        assert(back.items.size()==w.items.size() && back.nextItemId==w.nextItemId && back.ledgerConsistent());
+        for(size_t i=0;i<w.items.size();++i)assert(back.items[i].id==w.items[i].id && back.items[i].where==w.items[i].where);
+        // Kőmegmunkálás: a két kő azonosítója elhasználódik, nem keletkezik új.
+        w.act("knap");
+        assert(w.carriedStone==0 && w.consumedItems[1]==2u && w.countItems(1,1)==0u && w.ledgerConsistent());
+        assert(w.nextItemId==idsBefore || w.nextItemId>=idsBefore);
+        // Társak szállítása közben is egyezzen a főkönyv a készlettel.
+        for(int i=0;i<40;++i){w.step(0.5);assert(w.ledgerConsistent());}
+        assert(w.countItems(0,2)==static_cast<unsigned>(w.campStock[0]) && w.countItems(1,2)==static_cast<unsigned>(w.campStock[1]));
+        // Meghamisított főkönyv: a betöltés elutasítja, nem teremt anyagot.
+        std::string forged=back.save();
+        const size_t pos=forged.find(" LEDG1 ");
+        std::istringstream peek(forged.substr(pos+7));
+        unsigned nid,c0,c1;size_t n;peek>>nid>>c0>>c1>>n;
+        std::string tampered=forged.substr(0,pos)+" LEDG1 "+std::to_string(nid)+" "+std::to_string(c0)+" "+std::to_string(c1)+" 0 STRUCT1 1 0 0";
+        taks::World rejected;assert(!rejected.load(tampered));
+        // Régi (v6) mentés: azonosítók a készletből jönnek, a készlet változatlan.
+        std::string v6=forged.substr(0,pos);
+        v6.replace(0,13,"TAKS_NATIVE_6");
+        taks::World migrated;assert(migrated.load(v6));
+        assert(migrated.ledgerConsistent() && migrated.carriedStone==back.carriedStone && migrated.items.size()==back.items.size());
+    }
+    // ---- F2 bekötés: szerkezet a világban, anyagfelhasználás, mentés v8, v7 migráció ----
+    {
+        taks::World g;
+        g.playerX=0.0;g.playerZ=-3.0;
+        const std::string before=g.save();
+        // Anyag nélkül semmi sem épül, és semmi sem változik.
+        assert(g.act("part_pole").find("cölöp")!=std::string::npos && g.save()==before);
+        assert(g.act("part_stone").find("kő")!=std::string::npos && g.save()==before);
+        g.preparedPoles=4;g.grantCarriedForTest(1,1);
+        const int poles0=g.preparedPoles;
+        assert(g.act("part_pole").find("lerakva")!=std::string::npos);
+        assert(g.preparedPoles==poles0-1 && g.structure.parts.size()==1);
+        // Második cölöp ugyanarra a helyre: rárakódik (és rögzül), anyag fogy.
+        assert(g.act("part_pole").find("lerakva")!=std::string::npos);
+        assert(g.structure.parts.size()==2 && g.structure.joints.size()==1);
+        assert(g.structure.parts[1].y>2.0);
+        // Kő: az egyedi főkönyvből fogy.
+        const unsigned consumedBefore=g.consumedItems[1];
+        assert(g.act("part_stone").find("lerakva")!=std::string::npos);
+        assert(g.consumedItems[1]==consumedBefore+1 && g.carriedStone==0 && g.ledgerConsistent());
+        // Mentés/betöltés megtartja a szerkezetet; v7 mentés üres szerkezettel töltődik.
+        const std::string s8=g.save();
+        taks::World back;assert(back.load(s8) && back.save()==s8 && back.structure.parts.size()==3);
+        const size_t sp=s8.find(" STRUCT2 ");
+        std::string v7=s8.substr(0,sp);v7.replace(0,13,"TAKS_NATIVE_7");
+        taks::World old7;assert(old7.load(v7) && old7.structure.parts.empty() && old7.ledgerConsistent());
+        // Hibás szerkezet-blokk elutasított.
+        taks::World bad;assert(!bad.load(s8.substr(0,sp)+" STRUCT2 0 9 1 1 0 0 0 0 0 1 1 1 500 0"));
+        // v8 mentés (STRUCT1 blokk, nincs mód) túlélő móddal betöltődik, és v9-ként mentődik újra.
+        {
+            std::string v8=s8;v8.replace(0,13,"TAKS_NATIVE_8");
+            const size_t q=v8.find(" STRUCT2 ");v8.replace(q,9," STRUCT1 ");
+            v8.erase(q+9,2); // a mód-token ("0 ") eltávolítása
+            taks::World old8;assert(old8.load(v8) && old8.structure.mode==0 && old8.structure.parts.size()==3);
+            assert(old8.save().find("TAKS_NATIVE_9")==0 && old8.save()==s8);
+        }
+        // F2/2: vágás kőéllel – hiba esetén nincs változás; siker esetén kopás, tömeg megmarad, mentés visszaáll.
+        {
+            taks::World k;
+            assert(k.act("part_cut").find("Nincs alkatrész")!=std::string::npos);
+            k.playerX=0;k.playerZ=0;k.preparedPoles=1;k.playerX=-0.6;
+            assert(k.act("part_pole").find("lerakva")!=std::string::npos);
+            const std::string beforeCut=k.save();
+            assert(k.act("part_cut").find("kőeszköz")!=std::string::npos && k.save()==beforeCut);
+            k.chippedEdgeWear=3;
+            double m0=0;for(const auto& p:k.structure.parts)m0+=p.mass;
+            assert(k.act("part_cut").find("kettévágva")!=std::string::npos);
+            double m1=0;for(const auto& p:k.structure.parts)m1+=p.mass;
+            assert(k.structure.parts.size()==2 && std::fabs(m0-m1)<1e-9 && k.chippedEdgeWear==2);
+            assert(k.act("part_turn").find("elfordítva")!=std::string::npos);
+            taks::World again;assert(again.load(k.save()) && again.save()==k.save());
+        }
+        // Az eső kopást okoz.
+        const double c0=g.structure.parts[0].condition;
+        g.forceRainForTest(1.0);g.step(10.0);
+        assert(g.structure.parts[0].condition<c0);
+    }
+    std::cout<<"PASS: F2 structure wired into world, materials, save v8\n";
+    std::cout<<"PASS: F1 unique item ledger, causal log, v7 save and v6 migration\n";
     std::cout<<"TAKS spatial game, construction and save migration tests PASSED\n";
 }

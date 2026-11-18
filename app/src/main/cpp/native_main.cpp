@@ -98,6 +98,10 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeTick(JNI
     }
     npcSegmentStart=std::chrono::steady_clock::now();
 }
+extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeLogoUnlocked(JNIEnv*,jobject){
+    std::lock_guard<std::mutex> guard(worldLock);
+    return world.logoUnlocked()?JNI_TRUE:JNI_FALSE;
+}
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeNearby(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
     return toJava(env,world.nearby());
@@ -227,10 +231,11 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         }
         for(int i=0;i<taks::LivingWorld::grassCount;++i){
             const auto& g=world.ecology.grass[i];
-            f.grass[i*4+0]=static_cast<float>(g.x);
-            f.grass[i*4+1]=static_cast<float>(g.z);
-            f.grass[i*4+2]=static_cast<float>(g.biomass);
-            f.grass[i*4+3]=static_cast<float>(g.health);
+            f.grass[i*5+0]=static_cast<float>(g.x);
+            f.grass[i*5+1]=static_cast<float>(g.z);
+            f.grass[i*5+2]=static_cast<float>(g.biomass);
+            f.grass[i*5+3]=static_cast<float>(g.health);
+            f.grass[i*5+4]=static_cast<float>(g.trampling);
         }
         for(int i=0;i<taks::LivingWorld::treeCount;++i){
             const auto& t=world.ecology.trees[i];

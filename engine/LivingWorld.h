@@ -17,6 +17,7 @@ struct LivingWorld {
         double biomass;      // 0..1, food actually available to grazing animals
         double seedBank;     // 0..1, enables regrowth after grazing
         double health;       // 0..1
+        double trampling=0;  // persistent flattened/compacted patch state, 0..1
     };
     struct Tree {
         double x,z,heightM,ageDays,health,seeds;
@@ -53,6 +54,7 @@ struct LivingWorld {
     bool verifiedFerns=false, verifiedVines=false;
 
     void step(double hours,double precipitation,double moisture,double sunlight,double temperature);
+    void trampleTrail(double x0,double z0,double x1,double z1,double wetness);
     double walkSpeedFactor() const;
     double slipRisk() const;
     double grassCover() const;

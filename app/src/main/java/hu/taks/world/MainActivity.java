@@ -310,7 +310,7 @@ public final class MainActivity extends Activity {
     }
     private void applyMenuScrim(LivingUiSkin.State state){
         if(menuScrim==null||state==null)return;
-        int key=(state.night?1:0)|(state.wet?2:0)|(state.raining?4:0)|(state.burning?8:0);
+        int key=(state.night?1:0)|(state.wet?2:0)|(state.raining?4:0)|(state.burning?8:0)|(state.grass?16:0);
         if(key==menuScrimState)return;
         menuScrimState=key;
         int top,bottom;
@@ -318,6 +318,7 @@ public final class MainActivity extends Activity {
         else if(state.raining){top=0x34566D70;bottom=0x78302A21;}
         else if(state.wet){top=0x33415042;bottom=0x542A251B;}
         else if(state.burning){top=0x2B4A2817;bottom=0x56351D10;}
+        else if(state.grass){top=0x1F3C4220;bottom=0x3B2C2918;}
         else {top=0x1A342719;bottom=0x38251B12;}
         GradientDrawable veil=new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
                                                    new int[]{top,bottom});

@@ -52,13 +52,16 @@ void LivingWorld::step(double hours,double precipitation,double moisture,double 
     for(auto& g:grass){
         const double warmth=bound((temperature+3)/21,0,1);
         const double growth=days*.085*sunlight*warmth
-                           *(soilWater>.15?1.:.28)*g.health*g.seedBank;
+                           *(soilWater>.15?1.:.28)*g.health*g.seedBank
+                           *(1.0-.55*g.trampling);
         const double stress=days*((soilWater<.10?.025:0.)+
                                   (temperature<0?.013:0.)+
                                   (temperature>40?.020:0.));
         g.biomass=bound(g.biomass+growth-stress,0,1);
         g.health=bound(g.health+days*(soilWater>.22?.002:-.004),0,1);
         g.seedBank=bound(g.seedBank+days*(g.biomass>.4?.001:-.002),0,1);
+        // A trampled patch heals faster when soil water can support new shoots.
+        g.trampling=bound(g.trampling-days*(soilWater>.20?.035:.009),0,1);
     }
     // Trees gain actual height/age only while living and with soil resources.
     for(auto& tree:trees){
@@ -153,11 +156,32 @@ void LivingWorld::step(double hours,double precipitation,double moisture,double 
         }
     }
 }
+void LivingWorld::trampleTrail(double x0,double z0,double x1,double z1,double wetness){
+    if(!number(x0,-1000,1000)||!number(z0,-1000,1000)||
+       !number(x1,-1000,1000)||!number(z1,-1000,1000)||!number(wetness,0,1))return;
+    const double dx=x1-x0,dz=z1-z0,length=std::hypot(dx,dz);
+    if(length<.00001)return;
+    constexpr double patchRadius=2.05;
+    for(auto& g:grass){
+        const double denominator=dx*dx+dz*dz;
+        const double t=denominator>0?bound(((g.x-x0)*dx+(g.z-z0)*dz)/denominator,0,1):0;
+        const double px=x0+t*dx,pz=z0+t*dz;
+        const double distance=std::hypot(g.x-px,g.z-pz);
+        if(distance>=patchRadius||g.biomass<=0)continue;
+        const double contact=1.0-distance/patchRadius;
+        const double impact=length*.115*contact*(1.0+.85*wetness);
+        g.trampling=bound(g.trampling+impact,0,1);
+        // Flattening crushes some living blades; it does not create harvested food.
+        g.biomass=bound(g.biomass-impact*.10,0,1);
+    }
+}
 std::string LivingWorld::status() const {
     std::ostringstream os;os<<std::fixed<<std::setprecision(2);
     os<<"ÉLŐVILÁG: fűállomány "<<grassCover()*100.<<"% · élő fák ";
     int livingTrees=0;for(const auto& t:trees)if(t.alive)++livingTrees;
-    os<<livingTrees<<"/"<<treeCount<<" · növényevők "<<aliveAnimals(0)
+    int flattened=0;for(const auto& g:grass)if(g.trampling>.05)++flattened;
+    os<<livingTrees<<"/"<<treeCount<<" · letaposott fűfoltok "<<flattened<<"/"<<grassCount
+      <<" · növényevők "<<aliveAnimals(0)
       <<" · ragadozók "<<aliveAnimals(1)<<" · elhullott "<<deadAnimals
       <<"\nTALAJ: nedvesség "<<soilWater*100.<<"% · sár "<<mud*100.
       <<"% · hó "<<snowDepth<<" m · jég "<<ice*100.
@@ -165,7 +189,7 @@ std::string LivingWorld::status() const {
     return os.str();
 }
 void LivingWorld::write(std::ostream& out) const {
-    out<<" ECO1 "<<temperatureC<<' '<<mud<<' '<<snowDepth<<' '<<ice
+    out<<" ECO2 "<<temperatureC<<' '<<mud<<' '<<snowDepth<<' '<<ice
        <<' '<<soilWater<<' '<<simulatedDays<<' '<<deadAnimals
        <<' '<<(verifiedFerns?1:0)<<' '<<(verifiedVines?1:0);
     for(const auto& g:grass)out<<' '<<g.x<<' '<<g.z<<' '<<g.biomass<<' '<<g.seedBank<<' '<<g.health;
@@ -174,12 +198,13 @@ void LivingWorld::write(std::ostream& out) const {
     for(const auto& a:animals)out<<' '<<a.kind<<' '<<a.sex<<' '<<a.x<<' '<<a.z
         <<' '<<a.ageDays<<' '<<a.energy<<' '<<a.hunger<<' '<<a.thirst
         <<' '<<a.health<<' '<<a.breedingDays<<' '<<(a.alive?1:0);
+    for(const auto& g:grass)out<<' '<<g.trampling;
 }
 bool LivingWorld::read(std::istream& in){
     LivingWorld copy;
     std::string version;
     int fern=0,vine=0;
-    if(!(in>>version)||version!="ECO1")return false;
+    if(!(in>>version)||(version!="ECO1"&&version!="ECO2"))return false;
     if(!(in>>copy.temperatureC>>copy.mud>>copy.snowDepth>>copy.ice
          >>copy.soilWater>>copy.simulatedDays>>copy.deadAnimals>>fern>>vine))return false;
     if((fern!=0&&fern!=1)||(vine!=0&&vine!=1))return false;
@@ -198,6 +223,7 @@ bool LivingWorld::read(std::istream& in){
         if(alive!=0&&alive!=1)return false;
         a.alive=alive!=0;
     }
+    if(version=="ECO2")for(auto& g:copy.grass)if(!(in>>g.trampling))return false;
     if(!copy.valid())return false;
     *this=copy;
     return true;
@@ -208,7 +234,8 @@ bool LivingWorld::valid() const {
        !number(simulatedDays,0,1e9)||!number(deadAnimals,0,1e8))return false;
     for(const auto& g:grass){
         if(!number(g.x,-1000,1000)||!number(g.z,-1000,1000)||
-           !number(g.biomass,0,1)||!number(g.seedBank,0,1)||!number(g.health,0,1))return false;
+           !number(g.biomass,0,1)||!number(g.seedBank,0,1)||!number(g.health,0,1)||
+           !number(g.trampling,0,1))return false;
     }
     for(const auto& t:trees){
         if(!number(t.x,-1000,1000)||!number(t.z,-1000,1000)||

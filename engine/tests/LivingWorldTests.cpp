@@ -3,6 +3,7 @@
 #include <cmath>
 #include <sstream>
 #include <iostream>
+#include <vector>
 
 int main(){
     taks::LivingWorld e;
@@ -21,6 +22,18 @@ int main(){
     assert(e.snowDepth>0 && e.ice>0);
     assert(e.walkSpeedFactor()<speedWet);
     assert(e.slipRisk()>0);
+    taks::LivingWorld trampled;
+    trampled.trampleTrail(trampled.grass[0].x,trampled.grass[0].z,
+                          trampled.grass[0].x+.7,trampled.grass[0].z,0.0);
+    const double dryTrample=trampled.grass[0].trampling;
+    assert(dryTrample>0 && trampled.grass[0].biomass<.62);
+    taks::LivingWorld muddyTrample;
+    muddyTrample.trampleTrail(muddyTrample.grass[0].x,muddyTrample.grass[0].z,
+                              muddyTrample.grass[0].x+.7,muddyTrample.grass[0].z,1.0);
+    assert(muddyTrample.grass[0].trampling>dryTrample);
+    const double beforeRecovery=trampled.grass[0].trampling;
+    trampled.step(24,0,.8,.8,22);
+    assert(trampled.grass[0].trampling<beforeRecovery);
     e.step(24,0,.0,1.,30);
     assert(e.snowDepth>=0 && e.snowDepth<.18);
     // Species labels are NEVER invented when ferns or vines have not been verified.
@@ -46,8 +59,21 @@ int main(){
     assert(loaded.read(input));
     std::ostringstream again;again.precision(17);loaded.write(again);
     assert(again.str()==out.str());
+    // ECO1 saves remain readable and receive an untrampled default state.
+    std::istringstream current(out.str());
+    std::vector<std::string> legacyTokens;std::string token;
+    while(current>>token)legacyTokens.push_back(token);
+    assert(legacyTokens.front()=="ECO2");
+    legacyTokens.front()="ECO1";
+    legacyTokens.resize(legacyTokens.size()-taks::LivingWorld::grassCount);
+    std::ostringstream legacyText;
+    for(std::size_t i=0;i<legacyTokens.size();++i){if(i)legacyText<<' ';legacyText<<legacyTokens[i];}
+    std::istringstream oldSave(legacyText.str());
+    taks::LivingWorld legacy;
+    assert(legacy.read(oldSave));
+    for(const auto& patch:legacy.grass)assert(patch.trampling==0);
     auto original=loaded.grassCover();
     std::istringstream bad("ECO1 3 x");
     assert(!loaded.read(bad) && loaded.grassCover()==original);
-    std::cout<<"PASS: grass, trees, animals, mortality, mud, snow and save/load\n";
+    std::cout<<"PASS: grass, trampling recovery, trees, animals, mortality, mud, snow and save/load\n";
 }

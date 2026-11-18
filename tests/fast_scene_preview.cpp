@@ -165,15 +165,15 @@ int main(){
         4.4f,-2.0f,2.f,0.f,-1.8f,-2.4f,3.f,0.f
     };
     std::copy(npc,npc+16,frame.npcs);
-    const float grass[16]={
-       -2.5f,-4.6f,.62f,.95f,2.25f,-4.2f,.57f,.90f,
-       -3.8f,.9f,.45f,.94f,4.4f,.5f,.53f,.91f
+    const float grass[20]={
+       -2.5f,-4.6f,.62f,.95f,0.f,2.25f,-4.2f,.57f,.90f,0.f,
+       -3.8f,.9f,.45f,.94f,0.f,4.4f,.5f,.53f,.91f,0.f
     };
     const float trees[12]={
        -6.4f,-1.3f,2.0f,1.0f,5.7f,3.1f,1.6f,1.0f,
        -5.8f,5.7f,.7f,1.0f
     };
-    std::copy(grass,grass+16,frame.grass);
+    std::copy(grass,grass+20,frame.grass);
     std::copy(trees,trees+12,frame.trees);
     frame.verifiedFerns=false; // never show historically unverified plants
     for(int i=0;i<3;++i){frame.sites[4*i+2]=-1.f;frame.sites[4*i+3]=1.f;}
@@ -215,29 +215,33 @@ int main(){
     frame.playerX=-5.2f;frame.playerZ=-1.7f;frame.zoom=8.2f;
     frame.yaw=.785398f;frame.pitch=.615480f;
     const auto aliveGrass=render("07-valodi-elo-fu.ppm");
-    for(int i=0;i<4;++i)frame.grass[i*4+2]=0.f;
-    const auto bareGround=render("08-legelt-fu-nelkul.ppm");
+    for(int i=0;i<4;++i)frame.grass[i*5+4]=1.f;
+    const auto trampledGrass=render("08-esoben-letaposott-fu.ppm");
+    check(aliveGrass!=trampledGrass,
+          "trampling must visibly thin and flatten the rendered grass patches");
+    for(int i=0;i<4;++i)frame.grass[i*5+2]=0.f;
+    const auto bareGround=render("09-legelt-fu-nelkul.ppm");
     check(aliveGrass!=bareGround,
           "real grass mesh must disappear after biomass was eaten");
     // Fern stays hidden unless the ecology explicitly approves this plant.
     frame.grass[2]=.62f;
     frame.verifiedFerns=true;
-    const auto fernKnown=render("09-hitelesitett-pafrany.ppm");
+    const auto fernKnown=render("10-hitelesitett-pafrany.ppm");
     frame.verifiedFerns=false;
-    const auto fernUnknown=render("10-nincs-megismert-pafrany.ppm");
+    const auto fernUnknown=render("11-nincs-megismert-pafrany.ppm");
     check(fernKnown!=fernUnknown,
           "fern geometry must be gated by world botanical approval");
     // Camera close-up confirms the actual MakeHuman mesh is on the same GPU path.
     frame.playerX=0.f;frame.playerZ=-5.2f;frame.zoom=6.5f;
     frame.pitch=.48f;frame.yaw=.785398f;
-    const auto idlePose=render("11-skinned-embermodellek-idle.ppm");
+    const auto idlePose=render("12-skinned-embermodellek-idle.ppm");
     frame.playerMoving=true;
     std::this_thread::sleep_for(std::chrono::milliseconds(320));
-    const auto walkPose=render("12-skinned-embermodellek-seta.ppm");
+    const auto walkPose=render("13-skinned-embermodellek-seta.ppm");
     check(idlePose!=walkPose,"the 53-bone walk animation must alter actual GLES pixels");
     frame.playerRunning=true;
     std::this_thread::sleep_for(std::chrono::milliseconds(320));
-    const auto runPose=render("13-skinned-embermodellek-futas.ppm");
+    const auto runPose=render("14-skinned-embermodellek-futas.ppm");
     check(walkPose!=runPose,"walk-to-run animation transition must alter actual GLES pixels");
     taks::FastScene::shutdown();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
