@@ -183,7 +183,7 @@ const char* errorMessage(){return error.c_str();}
 void render(const float* viewProjection,const float* worldNodes,
             const float* grass,const float* trees,bool fernApproved,
             float worldClock,float rain,float playerX,float playerZ,
-            const float* npcPositions){
+            float playerHeading,const float* npcPositions){
  if(!shader||!viewProjection||!worldNodes||!grass||!trees||!npcPositions||!complete())return;
  glUseProgram(shader);
  glUniformMatrix4fv(uVP,1,GL_FALSE,viewProjection);
@@ -255,7 +255,7 @@ void render(const float* viewProjection,const float* worldNodes,
     // Warm, sunlit skin material correction for the source's pale neutral
     // anatomical texture, while retaining authored face/eye/hair UV detail.
     glUniform3f(uTint,.80f,.56f,.43f);
-    draw(models[6],playerX,playerZ,.99f,.25f);
+    draw(models[6],playerX,playerZ,.99f,playerHeading);
     for(int i=0;i<4;++i){
         const float* n=npcPositions+i*4;
         const float scale=.92f+.025f*float(i);
