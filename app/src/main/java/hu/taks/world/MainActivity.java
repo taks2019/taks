@@ -646,7 +646,7 @@ public final class MainActivity extends Activity {
         FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
         hp.setMargins(dp(12),dp(12),0,0);root.addView(header,hp);gameHud.add(header);
 
-        hint=caption("Bal: mozgás · Jobb: kamera forgatás és döntés · Két ujjal: zoom",12,0xFFECE9DC);
+        hint=caption("Bal: analóg mozgás · FUTÁS: nyomva tartva · Jobb: kamera · Két ujjal: zoom",12,0xFFECE9DC);
         hint.setPadding(dp(10),dp(7),dp(10),dp(7));
         hint.setBackground(panelBackground(0xA5101A18,10));
         FrameLayout.LayoutParams hintParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
