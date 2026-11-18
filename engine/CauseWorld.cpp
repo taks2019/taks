@@ -186,25 +186,61 @@ std::string World::nearby() const{
 }
 std::string World::move(double dx,double dz){
     if(!std::isfinite(dx)||!std::isfinite(dz))return "Érvénytelen mozgás.";
-    const double requested=std::sqrt(dx*dx+dz*dz);
+    const double requested=std::hypot(dx,dz);
     if(requested<0.00001)return "A karakter helyben maradt.";
     if(stamina<0.5)return "A karakter kimerült: pihennie kell.";
-    // Az érintéses mozgás egy-egy kicsi világkoordináta-lépés; nem teleport.
-    double factor=std::min(1.0,0.75/requested);
-    factor*=ecology.walkSpeedFactor();
+
+    // Native step is a distance, not an arbitrary frames-per-second velocity.
+    // Cap any unexpectedly large JNI request and incorporate real soil grip.
+    const double factor=std::min(1.0,0.75/requested)*ecology.walkSpeedFactor();
     dx*=factor;dz*=factor;
-    const double nx=playerX+dx,nz=playerZ+dz;
-    if(nx< -7.5||nx>7.5||nz< -7.5||nz>13.0)return "A világ jelenlegi bejárható határához értél.";
-    // A barlang homlokzatának oldalsó sziklafalán nem lehet átsétálni.
-    if(nz>2.75 && nz<4.15 && std::abs(nx)>1.45 && std::abs(nx)<7.8)
-        return "A sziklafal elállja az utat. A barlangnyílás középen található.";
-    const double length=std::sqrt(dx*dx+dz*dz);
-    playerX=nx;playerZ=nz;walkPhase+=length*5.5;
-    stamina=clamp(stamina-length*(0.50+groundMoisture*0.65+ecology.mud*.8+
-            ecology.snowDepth*.35+ecology.slipRisk()*.4),0.0,100.0);
-    step(length*.013);
-    // A menedék nem véd, ha elhagytuk a valódi fedett területet.
-    if(underShelter && !protectedAtPlayer())underShelter=false;
+    const double distance=std::hypot(dx,dz);
+    const int slices=std::max(1,static_cast<int>(std::ceil(distance/.10)));
+    const double sx=dx/slices,sz=dz/slices;
+
+    auto walkable=[this](double x,double z)->bool{
+        // Body radius avoids walking through the edge of the cave wall.
+        if(x< -7.5||x>7.5||z< -7.5||z>13.0)return false;
+        if(z>2.67&&z<4.23&&std::abs(x)>1.22&&std::abs(x)<7.8)return false;
+        // Living tree trunks are solid until the tree dies, not invisible.
+        for(const auto& tree:ecology.trees){
+            if(!tree.alive||tree.heightM<=.5)continue;
+            const double ax=x-tree.x,az=z-tree.z;
+            if(ax*ax+az*az<.38*.38)return false;
+        }
+        return true;
+    };
+    double mx=playerX,mz=playerZ,traveled=0;
+    // Swept substeps: cannot jump over narrow stone/trunk obstacles.
+    // If a diagonal hits a wall, preserve the unobstructed direction:
+    // physically slide along the wall instead of freezing the whole stick.
+    for(int i=0;i<slices;++i){
+        const double originalX=mx,originalZ=mz;
+        if(walkable(mx+sx,mz+sz)){
+            mx+=sx;mz+=sz;
+        }else{
+            const bool tryXFirst=std::abs(sx)>=std::abs(sz);
+            if(tryXFirst){
+                if(walkable(mx+sx,mz))mx+=sx;
+                if(walkable(mx,mz+sz))mz+=sz;
+            }else{
+                if(walkable(mx,mz+sz))mz+=sz;
+                if(walkable(mx+sx,mz))mx+=sx;
+            }
+        }
+        traveled+=std::hypot(mx-originalX,mz-originalZ);
+    }
+    if(traveled<.00001){
+        if(std::abs(playerX)>=7.49||playerZ<=-7.49||playerZ>=12.99)
+            return "A világ jelenlegi bejárható határához értél.";
+        return "A sziklafal vagy egy fatörzs elállja az utat.";
+    }
+    playerX=mx;playerZ=mz;
+    walkPhase+=traveled*5.5;
+    stamina=clamp(stamina-traveled*(0.50+groundMoisture*.65+ecology.mud*.8+
+                   ecology.snowDepth*.35+ecology.slipRisk()*.4),0.0,100.0);
+    step(traveled*.013);
+    if(underShelter&&!protectedAtPlayer())underShelter=false;
     ++eventCounter;
     return nearby();
 }
