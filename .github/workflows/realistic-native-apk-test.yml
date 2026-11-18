@@ -168,3 +168,85 @@ jobs:
           path: TAKS_World_0_11_ELO_MENU_ANDROID_TESZT.apk
           if-no-files-found: error
           retention-days: 14
+
+
+  android-ui-evidence:
+    needs: [android-apk]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: TAKS-World-0.11-Living-UI-Native-Android-TEST-APK
+          path: android/
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Allow Linux Android emulator KVM acceleration
+        run: |
+          sudo sh -c 'echo "KERNEL==\"kvm\", GROUP=\"kvm\", MODE=\"0666\", OPTIONS+=\"static_node=kvm\"" > /etc/udev/rules.d/99-kvm4all.rules'
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: |
+            set -e
+            mkdir -p ui-evidence
+            adb install android/TAKS_World_0_11_ELO_MENU_ANDROID_TESZT.apk
+            adb shell am start -n hu.taks.world.livinguitest/hu.taks.world.MainActivity
+            sleep 14
+            adb shell pidof hu.taks.world.livinguitest
+            adb exec-out screencap -p > ui-evidence/01-valodi-android-fomenu.png
+            adb shell uiautomator dump /sdcard/ui.xml >/dev/null
+            adb pull /sdcard/ui.xml ui-evidence/main-menu-ui.xml >/dev/null
+            python3 - <<'PY'
+            import xml.etree.ElementTree as ET
+            import re, subprocess
+            root=ET.parse('ui-evidence/main-menu-ui.xml').getroot()
+            nodes=root.iter('node')
+            settings=next((n for n in nodes if n.attrib.get('text')=='BEÁLLÍTÁSOK'),None)
+            assert settings is not None, 'Main menu Settings button missing'
+            xy=list(map(int,re.findall(r'\d+',settings.attrib['bounds'])))
+            assert len(xy)==4
+            subprocess.check_call(['adb','shell','input','tap',str((xy[0]+xy[2])//2),str((xy[1]+xy[3])//2)])
+            PY
+            sleep 2
+            adb exec-out screencap -p > ui-evidence/02-valodi-android-beallitasok.png
+            adb shell uiautomator dump /sdcard/ui.xml >/dev/null
+            adb pull /sdcard/ui.xml ui-evidence/settings-ui.xml >/dev/null
+            python3 - <<'PY'
+            import xml.etree.ElementTree as ET
+            root=ET.parse('ui-evidence/settings-ui.xml').getroot()
+            labels=[x.attrib.get('text','') for x in root.iter('node')]
+            assert any('FELBONTÁS' in s or 'felbontás' in s for s in labels),labels
+            assert any(s=='X' for s in labels),'Settings X close button missing'
+            print('REAL ANDROID SETTINGS: visible and actionable')
+            PY
+      - name: Verify real Android screenshot PNG captures
+        if: always()
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          pictures=list(Path('ui-evidence').glob('*.png'))
+          for p in pictures:
+              raw=p.read_bytes()
+              assert raw[:8]==b'\x89PNG\r\n\x1a\n' and len(raw)>15000,(p,len(raw))
+              print('Verified screenshot:',p,len(raw))
+          if not pictures:
+              print('No emulator screenshots were produced')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TAKS-World-0.11-Android-Menu-Es-Beallitasok-Valodi-Kepek
+          path: ui-evidence/
+          if-no-files-found: warn
+          retention-days: 10
