@@ -14,6 +14,7 @@ taks::World world;
 std::mutex worldLock;
 GLuint program=0, vertexArray=0;
 float orbit=0.785398f, pitch=0.615480f, zoom=10.0f;
+float playerHeading=0.0f;
 std::string rendererError;
 jstring toJava(JNIEnv* env,const std::string& s){return env->NewStringUTF(s.c_str());}
 GLuint compile(GLenum type,const char* source){
@@ -47,7 +48,12 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeDo(JN
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeMove(JNIEnv* env,jobject,jfloat dx,jfloat dz){
     std::lock_guard<std::mutex> guard(worldLock);
-    return toJava(env,world.move(static_cast<double>(dx),static_cast<double>(dz)));
+    const double beforeX=world.playerX,beforeZ=world.playerZ;
+    const std::string result=world.move(static_cast<double>(dx),static_cast<double>(dz));
+    const double deltaX=world.playerX-beforeX,deltaZ=world.playerZ-beforeZ;
+    if(std::hypot(deltaX,deltaZ)>.00001)
+        playerHeading=static_cast<float>(std::atan2(deltaX,deltaZ));
+    return toJava(env,result);
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeGoal(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
@@ -177,6 +183,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         f.playerX=static_cast<float>(world.playerX);
         f.playerZ=static_cast<float>(world.playerZ);
         f.walkPhase=static_cast<float>(world.walkPhase);
+        f.playerHeading=playerHeading;
         for(int i=0;i<taks::World::resourceCount;++i){
             f.nodes[i*4+0]=static_cast<float>(world.nodes[i].x);
             f.nodes[i*4+1]=static_cast<float>(world.nodes[i].z);
