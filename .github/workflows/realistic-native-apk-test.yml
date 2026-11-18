@@ -250,3 +250,60 @@ jobs:
           path: ui-evidence/
           if-no-files-found: warn
           retention-days: 10
+
+  full-delivery-package:
+    needs: [real-gpu-screenshots, android-apk, android-ui-evidence]
+    if: always() && needs.android-apk.result == 'success' && needs.real-gpu-screenshots.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: TAKS-World-Real-Geology-Flora-Human-Assets
+          path: package-input/models/
+      - uses: actions/download-artifact@v4
+        with:
+          name: TAKS-World-0.11-Living-UI-Native-Android-TEST-APK
+          path: package-input/apk/
+      - uses: actions/download-artifact@v4
+        with:
+          name: TAKS-World-0.11-Living-UI-GPU-Testkepek
+          path: package-input/gpu/
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: TAKS-World-0.11-Android-Menu-Es-Beallitasok-Valodi-Kepek
+          path: package-input/android-ui/
+      - name: Assemble one source, assets, APK and evidence package
+        env:
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          mkdir -p TAKS_WORLD_ANDROID/source/app/src/main/assets/models
+          mkdir -p TAKS_WORLD_ANDROID/apk TAKS_WORLD_ANDROID/tests/gpu TAKS_WORLD_ANDROID/tests/android-ui
+          git archive --format=tar HEAD | tar -xf - -C TAKS_WORLD_ANDROID/source
+          cp -a package-input/models/. TAKS_WORLD_ANDROID/source/app/src/main/assets/models/
+          cp -a package-input/apk/. TAKS_WORLD_ANDROID/apk/
+          cp -a package-input/gpu/. TAKS_WORLD_ANDROID/tests/gpu/
+          cp -a package-input/android-ui/. TAKS_WORLD_ANDROID/tests/android-ui/ 2>/dev/null || true
+          cat > TAKS_WORLD_ANDROID/ATADAS.md <<EOF
+          TAKS WORLD – natív Android tesztcsomag
+          Forrás commit: ${SOURCE_COMMIT}
+          Tartalom: teljes forráskód, importált 3D modellek/textúrák, telepíthető debug APK, GPU renderképek, Android UI képernyőképek (ha az emulátoros futás készített ilyeneket) és változásnapló.
+          A debug APK tesztbuild. A Wonderwerk paleokörnyezete és a karakterek történeti hitelessége nincs teljesen igazolva.
+          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root=Path('TAKS_WORLD_ANDROID')
+          out=Path('TAKS_WORLD_ANDROID_TELJES_CSOMAG.zip')
+          with ZipFile(out,'w',ZIP_DEFLATED,compresslevel=6) as z:
+              for path in sorted(root.rglob('*')):
+                  if path.is_file(): z.write(path,path.relative_to(root.parent))
+          print('Created',out,'with',sum(1 for _ in root.rglob('*') if _.is_file()),'files')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-Android-Teljes-Csomag
+          path: TAKS_WORLD_ANDROID_TELJES_CSOMAG.zip
+          if-no-files-found: error
+          retention-days: 14
