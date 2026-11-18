@@ -721,7 +721,8 @@ public final class MainActivity extends Activity {
         if(!inMainMenu)worldHandler.postDelayed(worldLoop,1800);
     }
     @Override protected void onPause(){
-        moving=false;movementHandler.removeCallbacks(movementLoop);
+        padActive=false;moveIntent=false;sprinting=false;
+        stopMovement();
         worldHandler.removeCallbacks(worldLoop);
         saves.edit().putString("state",nativeSave()).apply();
         if(surface!=null)surface.onPause();
