@@ -3,6 +3,7 @@
 #include <android/log.h>
 #include <algorithm>
 #include "CauseWorld.h"
+#include "AfricanClimate.h"
 #include "FastScene.h"
 #include "RealModels.h"
 #include <vector>
@@ -213,8 +214,13 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         f.clock=static_cast<float>(world.hours);
         f.rain=static_cast<float>(world.rainIntensity);
         f.moisture=static_cast<float>(world.groundMoisture);
+        const auto climate=taks::africanWeatherAt(world.hours);
+        f.wetSeason=static_cast<float>(climate.wetSeason);
+        f.windStrength=static_cast<float>(climate.windStrength);
+        f.windX=static_cast<float>(climate.windX);
+        f.windZ=static_cast<float>(climate.windZ);
+        f.temperatureC=static_cast<float>(climate.temperatureC);
         f.mud=static_cast<float>(world.ecology.mud);
-        f.wind=static_cast<float>(world.windStrength());
         f.hearth=world.hearthBuilt?1.f:0.f;
         f.fire=world.fireLit?1.f:0.f;
         f.playerX=static_cast<float>(world.playerX);
@@ -222,7 +228,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         f.walkPhase=static_cast<float>(world.walkPhase);
         f.playerHeading=playerHeading;
         const auto frameNow=std::chrono::steady_clock::now();
-        f.animationTime=std::chrono::duration<float>(frameNow.time_since_epoch()).count();
+        f.animationTime=static_cast<float>(std::fmod(std::chrono::duration<double>(frameNow.time_since_epoch()).count(),4096.0));
         f.playerMoving=frameNow<playerMovementDeadline;
         f.playerRunning=f.playerMoving&&frameNow<playerRunDeadline;
         for(int i=0;i<taks::World::resourceCount;++i){
@@ -246,6 +252,31 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
             f.trees[i*4+2]=static_cast<float>(t.heightM);
             f.trees[i*4+3]=t.alive?1.f:0.f;
         }
+        for(int i=0;i<taks::LivingWorld::footprintCount;++i){
+            const auto& mark=world.ecology.footprints[i];
+            f.footprints[i*4+0]=static_cast<float>(mark.x);
+            f.footprints[i*4+1]=static_cast<float>(mark.z);
+            f.footprints[i*4+2]=static_cast<float>(mark.heading);
+            f.footprints[i*4+3]=static_cast<float>(mark.intensity);
+        }
+        for(int i=0;i<taks::LivingWorld::waterBodyCount;++i){
+            const auto& water=world.ecology.waters[i];
+            f.waters[i*4+0]=static_cast<float>(water.x);
+            f.waters[i*4+1]=static_cast<float>(water.z);
+            f.waters[i*4+2]=static_cast<float>(water.radius);
+            f.waters[i*4+3]=static_cast<float>(water.level);
+        }
+        for(int i=0;i<taks::LivingWorld::animalCount;++i){
+            const auto& animal=world.ecology.animals[i];
+            f.animals[i*6+0]=static_cast<float>(animal.x);
+            f.animals[i*6+1]=static_cast<float>(animal.z);
+            f.animals[i*6+2]=static_cast<float>(animal.kind);
+            f.animals[i*6+3]=animal.alive?1.f:0.f;
+            f.animals[i*6+4]=static_cast<float>(animal.thirst);
+            f.animals[i*6+5]=static_cast<float>(animal.hunger);
+        }
+        f.collectorStage=static_cast<float>(world.waterCollectorStage);
+        f.collectorWater=static_cast<float>(world.storedRainwater/60.0);
         f.verifiedFerns=world.ecology.verifiedFerns;
         const auto now=std::chrono::steady_clock::now();
         if(!npcInterpolationReady){

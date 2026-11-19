@@ -17,7 +17,7 @@ struct Vertex { float x,y,z,nx,ny,nz,kind; };
 struct Mat4 { float a[16]{}; };
 std::string error;
 GLuint program=0,staticVAO=0,staticVBO=0,dynamicVAO=0,dynamicVBO=0;
-GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uEye=-1,uGround=-1,uCliff=-1;
+GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uAnimation=-1,uEye=-1,uGround=-1,uCliff=-1;
 GLuint terrainTexture[2]={0,0};
 std::vector<Vertex> terrainMesh,objectsMesh;
 Vec3 add(Vec3 a,Vec3 b){return {a.x+b.x,a.y+b.y,a.z+b.z};}
@@ -59,6 +59,48 @@ void axisBar(std::vector<Vertex>& v,Vec3 a,Vec3 b,float radius,float kind,int si
         triangle(v,b,add(b,r0),add(b,r1),kind);
     }
 }
+void muddyFootprint(std::vector<Vertex>& v,float x,float z,float heading,float strength){
+    if(strength<.025f)return;
+    // A low, ground-conforming sole impression. It appears only after a step
+    // in soft mud and fades with the same saved ground-state simulation.
+    constexpr float halfWidth=.052f,halfLength=.125f;
+    constexpr float shape[10][2]={
+        {-.54f,-.72f},{.54f,-.72f},{.77f,-.49f},{.72f,-.05f},{.61f,.42f},
+        {.34f,.78f},{-.34f,.78f},{-.61f,.42f},{-.72f,-.05f},{-.77f,-.49f}
+    };
+    const float c=std::cos(heading),s=std::sin(heading);
+    std::array<Vec3,10> points{};
+    Vec3 center{};
+    for(int i=0;i<10;++i){
+        const float lx=shape[i][0]*halfWidth,lz=shape[i][1]*halfLength;
+        const float wx=x+lx*c+lz*s,wz=z-lx*s+lz*c;
+        points[i]={wx,surfaceHeight(wx,wz)+.008f,wz};
+        center=add(center,points[i]);
+    }
+    center=mul(center,.1f);
+    const float kind=12.f+std::clamp(strength,0.f,1.f)*.49f;
+    for(int i=0;i<10;++i)triangle(v,center,points[(i+1)%10],points[i],kind);
+}
+void waterFan(std::vector<Vertex>& v,float x,float z,float radius,float y,float phase){
+    constexpr int sides=28;
+    const Vec3 center{x,y,z};
+    for(int i=0;i<sides;++i){
+        const float a=2.f*PI*float(i)/float(sides);
+        const float b=2.f*PI*float(i+1)/float(sides);
+        const float ra=radius*(.91f+.06f*std::sin(a*3.f+phase));
+        const float rb=radius*(.91f+.06f*std::sin(b*3.f+phase));
+        Vec3 p0{x+std::cos(a)*ra,y+.012f*std::sin(a*4.f+phase),z+std::sin(a)*ra*.82f};
+        Vec3 p1{x+std::cos(b)*rb,y+.012f*std::sin(b*4.f+phase),z+std::sin(b)*rb*.82f};
+        triangle(v,center,p1,p0,11.f);
+    }
+}
+void addMudFootprints(const FastFrame& f){
+    for(int i=0;i<32;++i){
+        const int at=i*4;
+        muddyFootprint(objectsMesh,f.footprints[at],f.footprints[at+1],
+                       f.footprints[at+2],f.footprints[at+3]);
+    }
+}
 void irregularRock(std::vector<Vertex>& v,float x,float z,float radius,float scale,float kind,int seed=0){
     constexpr int sides=9;
     float h=surfaceHeight(x,z);
@@ -73,6 +115,115 @@ void irregularRock(std::vector<Vertex>& v,float x,float z,float radius,float sca
         Vec3 shoulder1{x+std::cos(b)*r1*.7f,h+radius*scale*(.45f+.05f*std::sin(float(i+1)+seed)),z+std::sin(b)*r1*.65f};
         quad(v,base0,base1,shoulder1,shoulder0,kind);
         triangle(v,shoulder0,shoulder1,centerTop,kind);
+    }
+}
+void addWater(const FastFrame& scene){
+    for(int i=0;i<2;++i){
+        const float* water=scene.waters+i*4;
+        const float level=std::clamp(water[3],0.f,1.f);
+        if(level<.015f)continue;
+        const float x=water[0],z=water[1];
+        const float radius=water[2]*(.40f+.60f*level);
+        const float y=surfaceHeight(x,z)+.10f+.08f*level;
+        waterFan(objectsMesh,x,z,radius,y,scene.animationTime*.55f+float(i));
+        // Loose limestone at the changing shoreline gives the pool a bank.
+        for(int k=0;k<7;++k){
+            const float a=2.f*PI*float(k)/7.f+float(i)*.4f;
+            const float r=radius*1.12f;
+            irregularRock(objectsMesh,x+std::cos(a)*r,z+std::sin(a)*r*.82f,
+                          .10f,.42f,2.f,k+i*7);
+        }
+    }
+}
+Vec3 animalPoint(float x,float z,float groundY,float heading,float lx,float ly,float lz){
+    const float c=std::cos(heading),s=std::sin(heading);
+    return {x+lx*c+lz*s,groundY+ly,z-lx*s+lz*c};
+}
+void ellipsoid(std::vector<Vertex>& v,float x,float z,float groundY,float heading,
+               float lx,float ly,float lz,float rx,float ry,float rz,float material){
+    constexpr int rings=8,sides=16;
+    Vec3 points[rings+1][sides]{};
+    for(int r=0;r<=rings;++r){
+        const float latitude=-.5f*PI+PI*float(r)/float(rings);
+        const float radial=std::cos(latitude),vertical=std::sin(latitude);
+        for(int s=0;s<sides;++s){
+            const float longitude=2.f*PI*float(s)/float(sides);
+            points[r][s]=animalPoint(x,z,groundY,heading,
+                lx+rx*radial*std::cos(longitude),
+                ly+ry*vertical,
+                lz+rz*radial*std::sin(longitude));
+        }
+    }
+    for(int r=0;r<rings;++r)for(int s=0;s<sides;++s){
+        const int next=(s+1)%sides;
+        const Vec3 a=points[r][s],b=points[r+1][s];
+        const Vec3 c=points[r+1][next],d=points[r][next];
+        triangle(v,a,b,c,material);triangle(v,a,c,d,material);
+    }
+}
+void addWildlife(const FastFrame& scene){
+    for(int i=0;i<8;++i){
+        const float* animal=scene.animals+i*6;
+        if(animal[3]<.5f)continue;
+        const float x=animal[0],z=animal[1],kind=animal[2];
+        const bool thirsty=animal[4]>35.f,moving=thirsty||animal[5]>45.f;
+        float targetX=x,targetZ=z+1.f,best=1.0e12f;
+        if(thirsty){
+            for(int w=0;w<2;++w){
+                const float* water=scene.waters+w*4;
+                if(water[3]<=.015f)continue;
+                const float dx=water[0]-x,dz=water[1]-z,d=dx*dx+dz*dz;
+                if(d<best){best=d;targetX=water[0];targetZ=water[1];}
+            }
+        }else if(kind<.5f){
+            for(int g=0;g<4;++g){
+                const float* grass=scene.grass+g*5;
+                if(grass[2]<=.01f)continue;
+                const float dx=grass[0]-x,dz=grass[1]-z,d=dx*dx+dz*dz;
+                if(d<best){best=d;targetX=grass[0];targetZ=grass[1];}
+            }
+        }else{
+            for(int j=0;j<8;++j){
+                const float* prey=scene.animals+j*6;
+                if(prey[3]<.5f||prey[2]>.5f)continue;
+                const float dx=prey[0]-x,dz=prey[1]-z,d=dx*dx+dz*dz;
+                if(d>1.0e-6f&&d<best){best=d;targetX=prey[0];targetZ=prey[1];}
+            }
+        }
+        const float heading=std::atan2(targetX-x,targetZ-z);
+        const float ground=surfaceHeight(x,z);
+        const float scale=kind>.5f?.88f:1.0f;
+        const float coat=kind>.5f?5.f:7.f;
+        const float sway=moving?.19f:.025f;
+        const float phase=scene.animationTime*4.1f+float(i)*1.7f;
+        ellipsoid(objectsMesh,x,z,ground,heading,0.f,.70f,0.f,
+                  .38f*scale,.29f*scale,.67f*scale,coat);
+        axisBar(objectsMesh,animalPoint(x,z,ground,heading,0,.72f,.40f*scale),
+                animalPoint(x,z,ground,heading,0,.88f,.63f*scale),.14f*scale,coat,7);
+        ellipsoid(objectsMesh,x,z,ground,heading,0.f,.94f,.75f*scale,
+                  .22f*scale,.20f*scale,.28f*scale,coat);
+        ellipsoid(objectsMesh,x,z,ground,heading,0.f,.84f,1.00f*scale,
+                  .12f*scale,.10f*scale,.12f*scale,2.f);
+        for(int side=-1;side<=1;side+=2){
+            ellipsoid(objectsMesh,x,z,ground,heading,.17f*scale*side,.99f,.86f*scale,
+                      .028f,.028f,.028f,2.f);
+            axisBar(objectsMesh,animalPoint(x,z,ground,heading,.13f*scale*side,1.08f,.65f*scale),
+                    animalPoint(x,z,ground,heading,.18f*scale*side,1.19f,.62f*scale),
+                    .035f*scale,coat,5);
+        }
+        axisBar(objectsMesh,animalPoint(x,z,ground,heading,0,.69f,-.61f*scale),
+                animalPoint(x,z,ground,heading,0,.40f,-.91f*scale),.033f*scale,coat,5);
+        for(int leg=0;leg<4;++leg){
+            const float side=(leg%2==0)?-1.f:1.f;
+            const bool front=leg<2;
+            const float hipZ=(front?.38f:-.40f)*scale;
+            const float stride=std::sin(phase+(front?0.f:PI)+(side>0?PI:0.f))*sway;
+            const Vec3 hip=animalPoint(x,z,ground,heading,side*.23f*scale,.53f,hipZ);
+            const Vec3 knee=animalPoint(x,z,ground,heading,side*.24f*scale,.29f,hipZ+stride*.45f);
+            const Vec3 hoof=animalPoint(x,z,ground,heading,side*.24f*scale,.045f,hipZ+stride);
+            axisBar(objectsMesh,hip,knee,.071f*scale,coat,6);
+            axisBar(objectsMesh,knee,hoof,.046f*scale,coat,6);
+        }
     }
 }
 float cliffZ(float x,float y){return 3.63f+.13f*std::sin(x*.74f+y*.28f)+.12f*std::sin(x*2.3f+y*2.1f);}
@@ -225,6 +376,29 @@ void addBuildings(const FastFrame& scene){
         }
     }
 }
+void addWaterCollector(const FastFrame& scene){
+    if(scene.collectorStage<.5f)return;
+    constexpr float x=1.0f,z=-3.4f;
+    const float h=surfaceHeight(x,z);
+    for(int ix=0;ix<2;++ix)for(int iz=0;iz<2;++iz){
+        const float px=x-.66f+float(ix)*1.32f;
+        const float pz=z-.43f+float(iz)*.86f;
+        axisBar(objectsMesh,{px,surfaceHeight(px,pz)+.08f,pz},
+                {px,h+1.48f,pz},.075f,3.f,6);
+    }
+    axisBar(objectsMesh,{x-.72f,h+1.43f,z-.46f},{x+.72f,h+1.43f,z-.46f},.07f,3.f,6);
+    axisBar(objectsMesh,{x-.72f,h+1.43f,z+.46f},{x+.72f,h+1.43f,z+.46f},.07f,3.f,6);
+    if(scene.collectorStage>1.5f){
+        // The leaf roof slopes toward a shallow stone trough; rain collection
+        // and its stored-water amount are simulated by the same World state.
+        quad(objectsMesh,{x-.79f,h+1.48f,z-.55f},{x+.79f,h+1.48f,z-.55f},
+             {x+.79f,h+1.24f,z+.57f},{x-.79f,h+1.24f,z+.57f},4.f);
+        irregularRock(objectsMesh,x+.98f,z+.34f,.31f,.24f,2.f,11);
+        if(scene.collectorWater>.005f)
+            waterFan(objectsMesh,x+.98f,z+.34f,.12f,
+                     surfaceHeight(x+.98f,z+.34f)+.075f,scene.animationTime*.8f);
+    }
+}
 void addPlayerAndNpcs(const FastFrame& scene){
     // No white mannequins or rod people. The animated, source-skinned humanoids
     // are drawn by RealModels; a missing asset reports an import error.
@@ -250,17 +424,19 @@ layout(location=2) in float materialId;
 uniform mat4 u_viewProjection;
 out vec3 wPos;
 out vec3 wNorm;
+out float materialValue;
 flat out int matId;
 void main(){
     wPos=position;
     wNorm=normal;
+    materialValue=materialId;
     matId=int(materialId+.5);
     gl_Position=u_viewProjection*vec4(position,1.);
 })GLSL";
 const char* FRAG=R"GLSL(#version 300 es
 precision mediump float;
-in vec3 wPos;in vec3 wNorm;flat in int matId;
-uniform float u_rain;uniform float u_mud;uniform float u_clock;
+in vec3 wPos;in vec3 wNorm;in float materialValue;flat in int matId;
+uniform float u_rain;uniform float u_mud;uniform float u_clock;uniform float u_animationTime;
 uniform sampler2D u_groundTexture;
 uniform sampler2D u_cliffTexture;
 out vec4 fragColor;
@@ -295,6 +471,17 @@ void main(){
     }else if(matId==7){base=vec3(.70,.61,.39);}
     else if(matId==8){base=vec3(.46,.62,.52);}
     else if(matId==9){base=vec3(.57,.60,.73);}
+    else if(matId==11){
+        float ripple=.5+.5*sin(u_animationTime*2.1+wPos.x*3.2+sin(wPos.z*4.3));
+        float glint=pow(max(0.,sin(u_animationTime*1.2+wPos.x*1.7-wPos.z*2.1)),10.);
+        base=mix(vec3(.035,.115,.12),vec3(.12,.31,.29),ripple*.72);
+        base+=vec3(.18,.21,.17)*glint;
+    }
+    else if(matId==12){
+        float imprint=clamp((materialValue-12.0)/.49,0.0,1.0);
+        base=mix(vec3(.34,.24,.15),vec3(.15,.10,.065),imprint);
+        base*=1.0-.12*clamp(u_mud,0.0,1.0);
+    }
     else {base=vec3(1.4,.50,.15);}
     vec3 normal=normalize(wNorm);
     float daylight=clamp(1.-abs(mod(u_clock,24.)-13.)/12.,.2,1.);
@@ -340,6 +527,7 @@ bool init(){
     uRain=glGetUniformLocation(program,"u_rain");
     uMud=glGetUniformLocation(program,"u_mud");
     uClock=glGetUniformLocation(program,"u_clock");
+    uAnimation=glGetUniformLocation(program,"u_animationTime");
     uGround=glGetUniformLocation(program,"u_groundTexture");
     uCliff=glGetUniformLocation(program,"u_cliffTexture");
     buildStatic();
@@ -393,7 +581,8 @@ void render(int width,int height,const FastFrame& f){
     Mat4 vp=multiply(orthographic(f.zoom*.99f*aspect,f.zoom*.99f),lookAt(eye,focus));
 
     objectsMesh.clear();
-    addResources(f);addBuildings(f);addPlayerAndNpcs(f);
+    addWater(f);addWildlife(f);addMudFootprints(f);addResources(f);addBuildings(f);
+    addWaterCollector(f);addPlayerAndNpcs(f);
     glViewport(0,0,width,height);
     // Stone Age menu/game atmosphere derives from the actual clock and weather.
     // Never use a fixed blue/neon backdrop: nighttime charcoal, daylight dust,
@@ -413,6 +602,7 @@ void render(int width,int height,const FastFrame& f){
     if(uRain>=0)glUniform1f(uRain,f.rain);
     if(uMud>=0)glUniform1f(uMud,f.mud);
     if(uClock>=0)glUniform1f(uClock,f.clock);
+    if(uAnimation>=0)glUniform1f(uAnimation,f.animationTime);
     glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,terrainTexture[0]);
     if(uGround>=0)glUniform1i(uGround,0);
     glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,terrainTexture[1]);
@@ -427,6 +617,7 @@ void render(int width,int height,const FastFrame& f){
     glBindVertexArray(0);
     taks::RealModels::render(vp.a,f.nodes,f.grass,f.trees,f.verifiedFerns,
         f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,
-        f.playerMoving,f.playerRunning,f.npcs,f.animationTime,f.wind);
+        f.playerMoving,f.playerRunning,f.npcs,f.animationTime,f.windStrength,
+        f.windX,f.windZ,f.wetSeason,f.moisture);
 }
 }

@@ -12,6 +12,8 @@ struct LivingWorld {
     static constexpr int grassCount=4;
     static constexpr int treeCount=3;
     static constexpr int animalCount=8;
+    static constexpr int footprintCount=32;
+    static constexpr int waterBodyCount=2;
     struct Grass {
         double x,z;
         double biomass;      // 0..1, food actually available to grazing animals
@@ -28,6 +30,13 @@ struct LivingWorld {
         int sex;              // deterministic breeding pair constraint
         double x,z,ageDays,energy,hunger,thirst,health,breedingDays;
         bool alive;
+    };
+    struct Footprint {
+        double x=0.0,z=0.0,heading=0.0,intensity=0.0;
+    };
+    struct WaterBody {
+        double x=0.0,z=0.0,radius=1.0,level=0.0,quality=1.0;
+        int source=0; // 0: groundwater-fed pool, 1: seasonal rain pool
     };
     std::array<Grass,grassCount> grass{{
         {-2.5,-4.6,.62,.7,.95},{2.25,-4.2,.57,.66,.9},
@@ -48,13 +57,28 @@ struct LivingWorld {
         {1,0, 0.0, 0.0,0,0,0,0,0,0,false},
         {1,1, 0.0, 0.0,0,0,0,0,0,0,false}
     }};
+    // Recent muddy steps are persistent world marks; intensity fades as the
+    // ground dries or later rain softens the impressions.
+    std::array<Footprint,footprintCount> footprints{};
+    // One shared water state drives wildlife, player actions, rendering and saves.
+    // Coordinates are gameplay placement, not an archaeological survey.
+    std::array<WaterBody,waterBodyCount> waters{{
+        {-4.55,0.82,1.38,.66,.86,0},
+        {4.35,-5.35,1.10,.28,.76,1}
+    }};
+    int nextFootprint=0;
     double temperatureC=22.0, mud=0.0, snowDepth=0.0, ice=0.0;
     double soilWater=.13, simulatedDays=0.0, deadAnimals=0.0;
     // A zero value is an unloaded species/knowledge, NOT a visible fern/vine.
     bool verifiedFerns=false, verifiedVines=false;
 
-    void step(double hours,double precipitation,double moisture,double sunlight,
-              double temperature,double windStrength=0.35);
+    // moistureTarget is an optional external observation; the main World passes
+    // this reservoir's current value so rainfall/evaporation stay single-source.
+    void step(double hours,double precipitation,double moistureTarget,double sunlight,
+              double temperature,double windStrength=0.0);
+    void stampFootstep(double x,double z,double heading);
+    int visibleFootprintCount() const;
+    int nearestWaterBody(double x,double z,double maxDistance=2000.0) const;
     void trampleTrail(double x0,double z0,double x1,double z1,double wetness);
     double walkSpeedFactor() const;
     double slipRisk() const;
@@ -62,7 +86,8 @@ struct LivingWorld {
     int aliveAnimals(int kind=-1) const;
     std::string status() const;
     void write(std::ostream& out) const;
-    bool read(std::istream& in);
+    enum class SaveFormat { Initial, TrampledGrass, Footprints, Water, Combined };
+    bool read(std::istream& in, SaveFormat* loadedFormat=nullptr);
     bool valid() const;
 };
 }

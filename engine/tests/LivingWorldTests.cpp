@@ -16,6 +16,9 @@ int main(){
     assert(e.soilWater>.13);
     assert(e.mud>0);
     assert(e.walkSpeedFactor()<1.);
+    e.stampFootstep(0.0,0.0,0.0);
+    e.stampFootstep(.5,0.0,0.0);
+    assert(e.visibleFootprintCount()==2);
     assert(e.snowDepth==0 && e.ice==0);
     const double speedWet=e.walkSpeedFactor();
     e.step(24,1,1,.4,-8);
@@ -63,9 +66,10 @@ int main(){
     std::istringstream current(out.str());
     std::vector<std::string> legacyTokens;std::string token;
     while(current>>token)legacyTokens.push_back(token);
-    assert(legacyTokens.front()=="ECO2");
+    assert(legacyTokens.front()=="ECO4");
     legacyTokens.front()="ECO1";
-    legacyTokens.resize(legacyTokens.size()-taks::LivingWorld::grassCount);
+    legacyTokens.resize(1+9+taks::LivingWorld::grassCount*5+taks::LivingWorld::treeCount*7+
+                        taks::LivingWorld::animalCount*11);
     std::ostringstream legacyText;
     for(std::size_t i=0;i<legacyTokens.size();++i){if(i)legacyText<<' ';legacyText<<legacyTokens[i];}
     std::istringstream oldSave(legacyText.str());
@@ -73,7 +77,7 @@ int main(){
     assert(legacy.read(oldSave));
     for(const auto& patch:legacy.grass)assert(patch.trampling==0);
     auto original=loaded.grassCover();
-    std::istringstream bad("ECO1 3 x");
+    std::istringstream bad("ECO2 3 x");
     assert(!loaded.read(bad) && loaded.grassCover()==original);
     // Equal hot, dry conditions lose more soil moisture in stronger wind.
     taks::LivingWorld calm,windy;
@@ -81,5 +85,11 @@ int main(){
     calm.step(24,0,.70,1,30,.10);
     windy.step(24,0,.70,1,30,.80);
     assert(windy.soilWater<calm.soilWater);
-    std::cout<<"PASS: grass, trampling recovery, trees, animals, mortality, mud, snow and save/load\n";
+    taks::LivingWorld drying;
+    drying.soilWater=.8;drying.mud=.9;
+    drying.stampFootstep(0,0,0);
+    assert(drying.visibleFootprintCount()==1);
+    for(int day=0;day<5;++day)drying.step(24,0,0,1,30);
+    assert(drying.visibleFootprintCount()==0);
+    std::cout<<"PASS: grass, trees, animals, mortality, mud, footprints, snow and save/load\n";
 }

@@ -25,22 +25,59 @@ double LivingWorld::grassCover() const {
     for(const auto& g:grass)sum+=g.biomass;
     return sum/grass.size();
 }
+int LivingWorld::visibleFootprintCount() const {
+    int count=0;
+    for(const auto& mark:footprints)if(mark.intensity>.025)++count;
+    return count;
+}
+int LivingWorld::nearestWaterBody(double x,double z,double maxDistance) const {
+    if(!number(x,-1000,1000)||!number(z,-1000,1000)||
+       !number(maxDistance,0,2000))return -1;
+    const double limit=maxDistance*maxDistance;
+    double best=limit;
+    int chosen=-1;
+    for(int i=0;i<waterBodyCount;++i){
+        const auto& water=waters[i];
+        if(water.level<=.015)continue;
+        const double dx=x-water.x,dz=z-water.z,distance=dx*dx+dz*dz;
+        if(distance<=best){best=distance;chosen=i;}
+    }
+    return chosen;
+}
+void LivingWorld::stampFootstep(double x,double z,double heading) {
+    if(!number(x,-1000,1000)||!number(z,-1000,1000)||
+       !number(heading,-1000000,1000000)||mud<.24)return;
+    const int previous=(nextFootprint+footprintCount-1)%footprintCount;
+    const auto& last=footprints[previous];
+    const double dx=x-last.x,dz=z-last.z;
+    // Movement updates arrive at frame rate. Leave a natural stride gap rather
+    // than stacking dozens of impressions at one point.
+    if(last.intensity>.025&&dx*dx+dz*dz<.34*.34)return;
+    const double side=(nextFootprint%2==0)?-.5:.5;
+    const double sideX=std::cos(heading),sideZ=-std::sin(heading);
+    Footprint& mark=footprints[nextFootprint];
+    mark.x=x+sideX*.12*side;
+    mark.z=z+sideZ*.12*side;
+    mark.heading=heading;
+    mark.intensity=bound(mud,0,1);
+    nextFootprint=(nextFootprint+1)%footprintCount;
+}
 int LivingWorld::aliveAnimals(int kind) const {
     int result=0;
     for(const auto& a:animals)if(a.alive&&(kind<0||a.kind==kind))++result;
     return result;
 }
-void LivingWorld::step(double hours,double precipitation,double moisture,double sunlight,
+void LivingWorld::step(double hours,double precipitation,double moistureTarget,double sunlight,
                        double temperature,double windStrength){
     if(!number(hours,0,24)||hours==0||!number(precipitation,0,1)||
-       !number(moisture,0,1)||!number(sunlight,0,1)||
-       !number(temperature,-60,60)||!number(windStrength,0,1))return;
+       !number(moistureTarget,0,1)||!number(sunlight,0,1)||!number(temperature,-60,60)||
+       !number(windStrength,0,1))return;
     const double days=hours/24.0;
     simulatedDays+=days;
     temperatureC=temperature;
     soilWater=bound(soilWater+.30*precipitation*days
-                   +.25*(moisture-soilWater)*days
-                   -.065*(.4+sunlight)*(.65+.70*windStrength)*days,0,1);
+                   +.25*(moistureTarget-soilWater)*days
+                   -.065*(.4+sunlight)*(1.0+.34*windStrength)*days,0,1);
     if(temperature<=-.5){
         snowDepth=bound(snowDepth+precipitation*.18*days,0,1.5);
         ice=bound(ice+(snowDepth>.03?.28:.04)*days,0,1);
@@ -50,6 +87,28 @@ void LivingWorld::step(double hours,double precipitation,double moisture,double 
         ice=bound(ice-thaw*.75,0,1);
     }
     mud=bound((soilWater-.27)*1.7+precipitation*.16-ice*.15,0,1);
+    // Rain, excess surface runoff, groundwater and evaporation share one finite
+    // water state. The second basin is seasonal; only the first has a weak seep.
+    const double runoff=std::max(0.0,soilWater-.32)*.28*days;
+    for(auto& water:waters){
+        const double rainIn=precipitation*(water.source==0?.24:.34)*days;
+        const double seep=water.source==0?.009*bound((soilWater-.12)/.50,0,1)*days:0.0;
+        const double runoffIn=runoff*(water.source==0?.22:.55);
+        const double evaporation=(.004+sunlight*.020+
+                                  std::max(0.0,temperature)*.00012)*
+                                  (1.0+.30*windStrength)*days;
+        water.level=bound(water.level+rainIn+seep+runoffIn-evaporation,0,1);
+        const double sediment=runoffIn*.16+precipitation*days*.006;
+        water.quality=bound(water.quality+precipitation*days*.004-
+                            sediment-days*.0005,.05,1);
+    }
+    // Footprints are a reversible ground effect, not permanent terrain paint.
+    // Dry sunlight removes them gradually; strong later rain softens them faster.
+    for(auto& mark:footprints){
+        if(mark.intensity<=0)continue;
+        const double fadePerHour=.0015+sunlight*.002+precipitation*.015+(mud<.18?.012:0.);
+        mark.intensity=bound(mark.intensity-hours*fadePerHour,0,1);
+    }
     // Grass remains a finite living food store: grazing removes biomass.
     for(auto& g:grass){
         const double warmth=bound((temperature+3)/21,0,1);
@@ -58,7 +117,8 @@ void LivingWorld::step(double hours,double precipitation,double moisture,double 
                            *(1.0-.55*g.trampling);
         const double stress=days*((soilWater<.10?.025:0.)+
                                   (temperature<0?.013:0.)+
-                                  (temperature>40?.020:0.));
+                                  (temperature>40?.020:0.)+
+                                  (soilWater<.20&&windStrength>.65?.012*(windStrength-.65):0.));
         g.biomass=bound(g.biomass+growth-stress,0,1);
         g.health=bound(g.health+days*(soilWater>.22?.002:-.004),0,1);
         g.seedBank=bound(g.seedBank+days*(g.biomass>.4?.001:-.002),0,1);
@@ -72,7 +132,9 @@ void LivingWorld::step(double hours,double precipitation,double moisture,double 
         const double suitable=soilWater>.17&&temperature>3&&temperature<39?1.:0.;
         tree.heightM=bound(tree.heightM+days*.004*suitable*sunlight*tree.health,0,30);
         tree.seeds=bound(tree.seeds+days*.0008*suitable,0,1);
-        tree.health=bound(tree.health+days*(suitable?.0006:-.006),0,1);
+        const double dryWindStress=(soilWater<.16&&windStrength>.72)?
+                                   .0018*(windStrength-.72):0.;
+        tree.health=bound(tree.health+days*(suitable?.0006:-.006)-days*dryWindStress,0,1);
         if(tree.health<=0){tree.alive=false;}
     }
     // Animals consume only available biomass. Predators cannot conjure prey.
@@ -81,8 +143,30 @@ void LivingWorld::step(double hours,double precipitation,double moisture,double 
         a.ageDays+=days;
         a.breedingDays+=days;
         a.hunger=bound(a.hunger+days*6.0,0,100);
-        a.thirst=bound(a.thirst+days*8.0,0,100);
+        a.thirst=bound(a.thirst+days*8.0*(1.0+.22*windStrength),0,100);
         a.energy=bound(a.energy-days*1.5,0,100);
+        if(a.thirst>35){
+            const int waterIndex=nearestWaterBody(a.x,a.z);
+            if(waterIndex>=0){
+                auto& water=waters[waterIndex];
+                const double dx=water.x-a.x,dz=water.z-a.z;
+                const double distance=std::sqrt(dx*dx+dz*dz);
+                const double stoppingDistance=std::max(.48,water.radius*.58);
+                if(distance>stoppingDistance){
+                    const double move=std::min(distance-stoppingDistance,
+                                               days*5.0*walkSpeedFactor());
+                    if(distance>0){a.x+=dx/distance*move;a.z+=dz/distance*move;}
+                    a.energy=bound(a.energy-move*.45,0,100);
+                }else{
+                    const double drink=std::min(water.level,
+                                                std::min(.18,days*.10+a.thirst*.001));
+                    water.level=bound(water.level-drink,0,1);
+                    a.thirst=bound(a.thirst-days*42.0,0,100);
+                    a.energy=bound(a.energy+days*2.0,0,100);
+                }
+                continue;
+            }
+        }
         if(a.kind==0){
             int target=-1;double best=1e12;
             for(int i=0;i<grassCount;++i){
@@ -184,14 +268,18 @@ std::string LivingWorld::status() const {
     int flattened=0;for(const auto& g:grass)if(g.trampling>.05)++flattened;
     os<<livingTrees<<"/"<<treeCount<<" · letaposott fűfoltok "<<flattened<<"/"<<grassCount
       <<" · növényevők "<<aliveAnimals(0)
-      <<" · ragadozók "<<aliveAnimals(1)<<" · elhullott "<<deadAnimals
+      <<" · látható lábnyomok "<<visibleFootprintCount()<<" · ragadozók "<<aliveAnimals(1)<<" · elhullott "<<deadAnimals
       <<"\nTALAJ: nedvesség "<<soilWater*100.<<"% · sár "<<mud*100.
       <<"% · hó "<<snowDepth<<" m · jég "<<ice*100.
-      <<"% · mozgássebesség "<<walkSpeedFactor()*100.<<"%";
+      <<"% · mozgássebesség "<<walkSpeedFactor()*100.
+      <<"%\nFELSZÍNI VÍZ: forrásmedence "<<waters[0].level*100.
+      <<"% (tisztaság "<<waters[0].quality*100.
+      <<"%) · időszakos medence "<<waters[1].level*100.
+      <<"% (tisztaság "<<waters[1].quality*100.<<"%)";
     return os.str();
 }
 void LivingWorld::write(std::ostream& out) const {
-    out<<" ECO2 "<<temperatureC<<' '<<mud<<' '<<snowDepth<<' '<<ice
+    out<<" ECO4 "<<temperatureC<<' '<<mud<<' '<<snowDepth<<' '<<ice
        <<' '<<soilWater<<' '<<simulatedDays<<' '<<deadAnimals
        <<' '<<(verifiedFerns?1:0)<<' '<<(verifiedVines?1:0);
     for(const auto& g:grass)out<<' '<<g.x<<' '<<g.z<<' '<<g.biomass<<' '<<g.seedBank<<' '<<g.health;
@@ -200,13 +288,19 @@ void LivingWorld::write(std::ostream& out) const {
     for(const auto& a:animals)out<<' '<<a.kind<<' '<<a.sex<<' '<<a.x<<' '<<a.z
         <<' '<<a.ageDays<<' '<<a.energy<<' '<<a.hunger<<' '<<a.thirst
         <<' '<<a.health<<' '<<a.breedingDays<<' '<<(a.alive?1:0);
+    out<<' '<<nextFootprint;
+    for(const auto& mark:footprints)
+        out<<' '<<mark.x<<' '<<mark.z<<' '<<mark.heading<<' '<<mark.intensity;
+    for(const auto& water:waters)
+        out<<' '<<water.x<<' '<<water.z<<' '<<water.radius<<' '<<water.level
+           <<' '<<water.quality<<' '<<water.source;
     for(const auto& g:grass)out<<' '<<g.trampling;
 }
-bool LivingWorld::read(std::istream& in){
+bool LivingWorld::read(std::istream& in,SaveFormat* loadedFormat){
     LivingWorld copy;
     std::string version;
     int fern=0,vine=0;
-    if(!(in>>version)||(version!="ECO1"&&version!="ECO2"))return false;
+    if(!(in>>version)||(version!="ECO1"&&version!="ECO2"&&version!="ECO3"&&version!="ECO4"))return false;
     if(!(in>>copy.temperatureC>>copy.mud>>copy.snowDepth>>copy.ice
          >>copy.soilWater>>copy.simulatedDays>>copy.deadAnimals>>fern>>vine))return false;
     if((fern!=0&&fern!=1)||(vine!=0&&vine!=1))return false;
@@ -225,15 +319,52 @@ bool LivingWorld::read(std::istream& in){
         if(alive!=0&&alive!=1)return false;
         a.alive=alive!=0;
     }
-    if(version=="ECO2")for(auto& g:copy.grass)if(!(in>>g.trampling))return false;
+    // Both development lines used ECO2. Its short form ends after the four
+    // trampling values (at EOF or the ledger tag). The long form contains
+    // the footprint cursor and 32 records. Later formats are unambiguous.
+    SaveFormat format=SaveFormat::Initial;
+    int firstMark=0;
+    if(version=="ECO2"){
+        std::array<double,4> first{};
+        for(auto& value:first)if(!(in>>value))return false;
+        in>>std::ws;
+        if(in.eof() || in.peek()=='L'){
+            format=SaveFormat::TrampledGrass;
+            for(std::size_t i=0;i<first.size();++i)copy.grass[i].trampling=first[i];
+        }else{
+            format=SaveFormat::Footprints;
+            if(!number(first[0],0,footprintCount-1)||std::floor(first[0])!=first[0])return false;
+            copy.nextFootprint=static_cast<int>(first[0]);
+            copy.footprints[0]={first[1],first[2],first[3],0.0};
+            if(!(in>>copy.footprints[0].intensity))return false;
+            firstMark=1;
+        }
+    }else if(version=="ECO3"||version=="ECO4"){
+        format=version=="ECO4"?SaveFormat::Combined:SaveFormat::Water;
+        if(!(in>>copy.nextFootprint))return false;
+    }
+    if(format==SaveFormat::Footprints||format==SaveFormat::Water||format==SaveFormat::Combined){
+        for(int i=firstMark;i<footprintCount;++i){
+            auto& mark=copy.footprints[i];
+            if(!(in>>mark.x>>mark.z>>mark.heading>>mark.intensity))return false;
+        }
+    }
+    if(format==SaveFormat::Water||format==SaveFormat::Combined){
+        for(auto& water:copy.waters)
+            if(!(in>>water.x>>water.z>>water.radius>>water.level>>water.quality>>water.source))return false;
+    }
+    if(format==SaveFormat::Combined)
+        for(auto& g:copy.grass)if(!(in>>g.trampling))return false;
     if(!copy.valid())return false;
+    if(loadedFormat)*loadedFormat=format;
     *this=copy;
     return true;
 }
 bool LivingWorld::valid() const {
     if(!number(temperatureC,-60,60)||!number(mud,0,1)||
        !number(snowDepth,0,1.5)||!number(ice,0,1)||!number(soilWater,0,1)||
-       !number(simulatedDays,0,1e9)||!number(deadAnimals,0,1e8))return false;
+       !number(simulatedDays,0,1e9)||!number(deadAnimals,0,1e8)||
+       nextFootprint<0||nextFootprint>=footprintCount)return false;
     for(const auto& g:grass){
         if(!number(g.x,-1000,1000)||!number(g.z,-1000,1000)||
            !number(g.biomass,0,1)||!number(g.seedBank,0,1)||!number(g.health,0,1)||
@@ -250,6 +381,15 @@ bool LivingWorld::valid() const {
            !number(a.ageDays,0,1e9)||!number(a.energy,0,100)||
            !number(a.hunger,0,100)||!number(a.thirst,0,100)||
            !number(a.health,0,100)||!number(a.breedingDays,0,1e9))return false;
+    }
+    for(const auto& mark:footprints){
+        if(!number(mark.x,-1000,1000)||!number(mark.z,-1000,1000)||
+           !number(mark.heading,-1000000,1000000)||!number(mark.intensity,0,1))return false;
+    }
+    for(const auto& water:waters){
+        if(!number(water.x,-1000,1000)||!number(water.z,-1000,1000)||
+           !number(water.radius,.05,100)||!number(water.level,0,1)||
+           !number(water.quality,.05,1)||(water.source!=0&&water.source!=1))return false;
     }
     return true;
 }

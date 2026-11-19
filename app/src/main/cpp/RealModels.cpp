@@ -22,7 +22,8 @@ std::array<Model,7> models;
 HumanRig human;
 GLuint shader=0;
 GLint uVP=-1,uModel=-1,uTexture=-1,uCutoff=-1,uDaylight=-1,uRain=-1,uTint=-1;
-GLint uAnimationTime=-1,uWindStrength=-1,uSwayAmount=-1;
+GLint uWindStrength=-1,uWindDirection=-1,uAnimationTime=-1,uFoliage=-1;
+GLint uWetSeason=-1,uSoilMoisture=-1,uSwayAmount=-1;
 GLint uBones=-1;
 std::string error;
 constexpr float PI=3.14159265358979323846f;
@@ -36,10 +37,11 @@ layout(location=4) in vec4 aWeights;
 uniform mat4 uViewProjection;
 uniform mat4 uModel;
 uniform mat4 uBones[53];
-uniform float uAlphaCutoff;
-uniform float uAnimationTime;
+uniform float uFoliage;
 uniform float uWindStrength;
+uniform vec2 uWindDirection;
 uniform float uSwayAmount;
+uniform float uAnimationTime;
 out highp vec3 vNormal;
 out highp vec3 vWorld;
 out highp vec2 vUV;
@@ -50,20 +52,17 @@ void main() {
    skin=uBones[aJoints.x]*aWeights.x+uBones[aJoints.y]*aWeights.y+
         uBones[aJoints.z]*aWeights.z+uBones[aJoints.w]*aWeights.w;
  }
- vec3 localPosition=aPosition;
- // Authored grass/fern/tree meshes deform from their rooted base to their tips.
- // The same saved-world wind value also controls soil, timber and fire changes.
- if(uSwayAmount>0.001 && uAlphaCutoff>0.40){
-   float height=max(localPosition.y,0.0);
-   float phase=uAnimationTime*(1.1+uWindStrength*2.0)
-              +uModel[3][0]*.71+uModel[3][2]*.53;
-   float gust=.65+.35*sin(uAnimationTime*.37+uModel[3][0]*.19-uModel[3][2]*.23);
-   float bend=height*uSwayAmount*uWindStrength*gust;
-   localPosition.x+=bend*.18*sin(phase+height*2.1);
-   localPosition.z+=bend*.11*cos(phase*.83+height*1.7);
- }
- vec4 skinned=skin*vec4(localPosition,1.0);
+ vec4 skinned=skin*vec4(aPosition,1.0);
  vec4 p=uModel*skinned;
+ if(uFoliage>0.5 && uWindStrength>0.001){
+   // World-space bending keeps rotated clumps aligned with the same gust.
+   // The planted base stays fixed. Trampled, shorter blades sway less.
+   float height=max(p.y-uModel[3].y,0.0);
+   vec2 direction=uWindDirection/max(length(uWindDirection),0.001);
+   float phase=uAnimationTime*(1.35+uWindStrength*1.1)+dot(p.xz,direction)*1.65;
+   float gust=0.28+0.72*sin(phase)+0.18*sin(phase*0.53+1.7);
+   p.xz+=direction*(height*0.27*uSwayAmount*uWindStrength*gust);
+ }
  vWorld=p.xyz;
  vNormal=normalize(mat3(uModel)*mat3(skin)*aNormal);
  vUV=aTexCoord;
@@ -80,6 +79,9 @@ uniform float uAlphaCutoff;
 uniform float uDaylight;
 uniform float uRain;
 uniform vec3 uTint;
+uniform float uFoliage;
+uniform float uWetSeason;
+uniform float uSoilMoisture;
 out vec4 fragColor;
 void main(){
   // True photographic diffuse texture sampled at model UV coordinates.
@@ -87,6 +89,10 @@ void main(){
   // Alpha-masked photographic leaf/frond geometry, no solid billboard cards.
   if(texel.a<uAlphaCutoff)discard;
   vec3 albedo=texel.rgb*uTint;
+  if(uFoliage>0.5){
+    float drought=clamp((0.62-uWetSeason)*0.50+(0.34-uSoilMoisture)*0.36,0.0,0.52);
+    albedo*=mix(vec3(1.0),vec3(1.10,0.84,0.61),drought);
+  }
   vec3 n=normalize(vNormal);
   vec3 sun=normalize(vec3(-0.55,1.10,-0.7));
   float diffuse=max(dot(n,sun),0.0);
@@ -330,12 +336,17 @@ bool init(){
  uDaylight=glGetUniformLocation(shader,"uDaylight");
  uRain=glGetUniformLocation(shader,"uRain");
  uTint=glGetUniformLocation(shader,"uTint");
- uAnimationTime=glGetUniformLocation(shader,"uAnimationTime");
  uWindStrength=glGetUniformLocation(shader,"uWindStrength");
  uSwayAmount=glGetUniformLocation(shader,"uSwayAmount");
+ uWindDirection=glGetUniformLocation(shader,"uWindDirection");
+ uAnimationTime=glGetUniformLocation(shader,"uAnimationTime");
+ uFoliage=glGetUniformLocation(shader,"uFoliage");
+ uWetSeason=glGetUniformLocation(shader,"uWetSeason");
+ uSoilMoisture=glGetUniformLocation(shader,"uSoilMoisture");
  uBones=glGetUniformLocation(shader,"uBones[0]");
  if(uVP<0||uModel<0||uTexture<0||uCutoff<0||uDaylight<0||uRain<0||uTint<0||
-    uAnimationTime<0||uWindStrength<0||uSwayAmount<0||uBones<0){error="3D modellshader uniform hiány";shutdown();return false;}
+    uSwayAmount<0||uWindStrength<0||uWindDirection<0||uAnimationTime<0||uFoliage<0||
+    uWetSeason<0||uSoilMoisture<0||uBones<0){error="3D modellshader uniform hiány";shutdown();return false;}
  return true;
 }
 bool upload(int id,const std::uint8_t* bytes,std::size_t size,
@@ -396,7 +407,8 @@ void render(const float* viewProjection,const float* worldNodes,
             const float* grass,const float* trees,bool fernApproved,
             float worldClock,float rain,float playerX,float playerZ,
             float playerHeading,bool playerMoving,bool playerRunning,
-            const float* npcPositions,float animationTime,float windStrength){
+            const float* npcPositions,float animationTime,float windStrength,
+            float windX,float windZ,float wetSeason,float soilMoisture){
  if(!shader||!viewProjection||!worldNodes||!grass||!trees||!npcPositions||!complete())return;
  glUseProgram(shader);
  glUniformMatrix4fv(uVP,1,GL_FALSE,viewProjection);
@@ -407,7 +419,10 @@ void render(const float* viewProjection,const float* worldNodes,
  glUniform1f(uRain,std::clamp(rain,0.f,1.f));
  glUniform1f(uAnimationTime,animationTime);
  glUniform1f(uWindStrength,std::clamp(windStrength,0.f,1.f));
- glUniform1f(uSwayAmount,0.f);
+ glUniform2f(uWindDirection,windX,windZ);
+ glUniform1f(uWetSeason,std::clamp(wetSeason,0.f,1.f));
+ glUniform1f(uSoilMoisture,std::clamp(soilMoisture,0.f,1.f));
+ glUniform1f(uFoliage,0.f);
  glUniform1f(uCutoff,0.f);
  glUniform3f(uTint,1.f,1.f,1.f);
  glActiveTexture(GL_TEXTURE0);
@@ -451,6 +466,7 @@ void render(const float* viewProjection,const float* worldNodes,
  }
  // Genuine published botanical geometry; no generated tube/ball foliage.
  if(models[3].vao && models[3].texture){
+    glUniform1f(uFoliage,1.f);
     glUniform1f(uCutoff,.42f);
     glUniform1f(uSwayAmount,1.f);
     for(int i=0;i<4;++i){
@@ -487,6 +503,7 @@ void render(const float* viewProjection,const float* worldNodes,
     }
  }
  if(models[5].vao && models[5].texture){
+    glUniform1f(uFoliage,1.f);
     glUniform1f(uCutoff,.42f);
     glUniform1f(uSwayAmount,.22f);
     for(int i=0;i<3;++i){
@@ -497,11 +514,13 @@ void render(const float* viewProjection,const float* worldNodes,
     }
  }
  if(fernApproved && models[4].vao && models[4].texture){
+    glUniform1f(uFoliage,1.f);
     glUniform1f(uCutoff,.42f);
     glUniform1f(uSwayAmount,1.1f);
     // This biome plant is only visible when ecological verification is explicit.
     if(grass[2]>.12f)draw(models[4],grass[0]+.72f,grass[1]-.25f,.85f,.6f);
  }
+ glUniform1f(uFoliage,0.f);
  // Real source skin weights and the 53-bone rig drive every person on the GPU.
  glUniform1f(uSwayAmount,0.f);
  // Clip changes blend over 280 ms; the source remains a general humanoid, not a

@@ -29,7 +29,9 @@ struct World {
     int groundWood=14, groundStone=8, groundTinder=5;
     int carriedWood=0, carriedStone=0, carriedTinder=0;
     double hours=6.0, humidity=0.40, rainIntensity=0.0;
-    double woodMoisture=0.13, groundMoisture=0.13, stamina=100.0, fireFuel=0.0;
+    double woodMoisture=0.13;
+    // Persisted mirror for save/JNI compatibility; ecology.soilWater is canonical.
+    double groundMoisture=0.13, stamina=100.0, fireFuel=0.0;
     bool hearthBuilt=false, fireLit=false;
     // Anyagok, feldolgozott alkatrészek és megőrzött munkafázisok.
     int groundLeaves=18, carriedLeaves=0;
@@ -40,6 +42,11 @@ struct World {
     int siteCount=0;
     Structure structure; // F2: alkatrészes szerkezetek (cölöp, gerenda, kő, deszka)
     double playerWetness=0.10;
+    double playerThirst=18.0;
+    int waterCollectorStage=0; // 0 nincs, 1 tartóváz, 2 fedett esővízgyűjtő
+    double storedRainwater=0.0; // finite liters; capacity 60
+    static constexpr double waterCollectorX=1.0;
+    static constexpr double waterCollectorZ=-3.4;
     bool underShelter=false;
     double playerX=0.0,playerZ=-5.2,walkPhase=0.0;
     static constexpr int resourceCount=12;

@@ -6,14 +6,19 @@ struct FastFrame {
     float yaw=0.785398f, pitch=0.615480f, zoom=10.0f;
     float playerX=0,playerZ=-5.2f,walkPhase=0,playerHeading=0;
     bool playerMoving=false,playerRunning=false;
-    float rain=0, moisture=0, mud=0, wind=0.25f, clock=8, animationTime=0;
+    float rain=0, moisture=0, mud=0, clock=8,animationTime=0;
+    float wetSeason=0,windStrength=0,windX=1,windZ=0,temperatureC=20;
     float hearth=0, fire=0;
     float nodes[48]={};
     float grass[20]={}; // [x,z,biomass,health,trampling] x4
     float trees[12]={}; // [x,z,real height,alive] x3
+    float footprints[128]={}; // [x,z,heading,impression strength] x32
+    float waters[8]={}; // [x,z,radius,level] x2; follows LivingWorld's saved water state
+    float animals[48]={}; // [x,z,kind,alive,thirst,hunger] x8; species remain unverified
     bool verifiedFerns=false;
     float npcs[16]={};
     float sites[12]={};
+    float collectorStage=0,collectorWater=0;
 };
 namespace FastScene {
     bool init();

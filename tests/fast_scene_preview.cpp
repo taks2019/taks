@@ -144,7 +144,6 @@ int main(){
     loadRealModel(2,"namaqualand_cliff_01");
     loadRealModel(3,"grass_bermuda_01");
     loadRealModel(4,"fern_02");
-    loadRiggedHuman();
     // Tree candidate awaits true mobile LOD; not silently replaced.
     loadActualTerrainPhoto(0,"ground_sandy_gravel");
     loadActualTerrainPhoto(1,"wall_cliff_side");
@@ -194,6 +193,17 @@ int main(){
         check(nonBlank>W*H/20,"frame appears blank");
         return hash;
     };
+    // Keep the camera, clock and animal state fixed. Before the rig loads,
+    // no other mesh can animate between these two frames.
+    const auto initialFrame=frame;
+    frame.playerX=-2.5f;frame.playerZ=-4.6f;frame.zoom=7.f;
+    frame.rain=0;frame.animationTime=2.4f;frame.windStrength=0;
+    const auto calmFoliage=render("15-szelcsendes-noveny.ppm");
+    frame.windStrength=.78f;
+    const auto windyFoliage=render("16-szelmozgatott-noveny.ppm");
+    check(calmFoliage!=windyFoliage,"wind must deform the visible rooted grass mesh");
+    frame=initialFrame;
+    loadRiggedHuman();
     const auto iso=render("01-izometrikus-35fok.ppm");
     frame.yaw=2.3f;
     const auto rotated=render("02-forgatott-kamera.ppm");
@@ -243,17 +253,6 @@ int main(){
     std::this_thread::sleep_for(std::chrono::milliseconds(320));
     const auto runPose=render("14-skinned-embermodellek-futas.ppm");
     check(walkPose!=runPose,"walk-to-run animation transition must alter actual GLES pixels");
-    // Same real grass mesh, different shared wind/time inputs: pixels must move.
-    std::copy(grass,grass+20,frame.grass);
-    frame.playerMoving=false;frame.playerRunning=false;
-    frame.playerX=-5.2f;frame.playerZ=-1.7f;frame.zoom=8.2f;
-    frame.pitch=.615480f;frame.yaw=.785398f;
-    frame.animationTime=1.1f;frame.wind=.08f;
-    const auto calmFoliage=render("15-szelcsendes-noveny.ppm");
-    frame.animationTime=2.4f;frame.wind=.78f;
-    const auto windyFoliage=render("16-szelmozgatott-noveny.ppm");
-    check(calmFoliage!=windyFoliage,
-          "shared wind and animation time must deform actual plant geometry in the GPU image");
     taks::FastScene::shutdown();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroyContext(display,context);eglDestroySurface(display,surface);

@@ -10,8 +10,8 @@ from pathlib import Path
 
 ROOT=Path("ui-evidence")
 ROOT.mkdir(parents=True, exist_ok=True)
-PACKAGE="hu.taks.world.livinguitest"
-APK="android/TAKS_World_0_11_ELO_MENU_ANDROID_TESZT.apk"
+PACKAGE="hu.taks.world.windseasons"
+APK="android/TAKS_World_0_14_Android.apk"
 
 def adb(*args, check=True):
     result=subprocess.run(["adb",*args],stdout=subprocess.PIPE,
@@ -187,14 +187,14 @@ time.sleep(1)
 nodes=dump("movement-before")
 before=position(nodes)
 click(nodes,"X")
-size=adb("shell","wm","size").decode(errors="replace")
-density=adb("shell","wm","density").decode(errors="replace")
-sm=re.search(r"(\d+)x(\d+)",size);dm=re.search(r"(\d+)",density)
-assert sm and dm,"Cannot derive Android touch-test coordinates"
-scale=int(dm.group(1))/160.0
-screen_height=min(int(sm.group(1)),int(sm.group(2)))
-x1=round(59*scale);x2=round(83*scale);y=round((screen_height/scale-66)*scale)
-adb("shell","input","swipe",str(x1),str(y),str(x2),str(y),"900")
+controls=dump("movement-pad")
+pad=next((node for node in controls if node.get("content-desc")=="Mozgásvezérlő"), None)
+assert pad, "The Android movement pad was not accessible"
+left,top,right,bottom=map(int,re.findall(r"-?\d+",pad["bounds"]))
+# Hold the stick at its right edge for a full stride, using its visible bounds.
+x=round(left+(right-left)*.86)
+y=(top+bottom)//2
+adb("shell","input","swipe",str(x),str(y),str(x),str(y),"1800")
 time.sleep(1)
 click(dump("movement-after-touch"),"TÁSKA")
 time.sleep(1)
@@ -256,7 +256,7 @@ picture("11-android-jatekmenu")
 click(nodes,"Mentés")
 time.sleep(1)
 saved=adb("shell","run-as",PACKAGE,"cat","shared_prefs/taks_native_save_v1.xml")
-assert b'name="state"' in saved and b'TAKS_NATIVE_' in saved, \
+assert b'name="state"' in saved and b'TAKS_NATIVE_10' in saved, \
     "The save button did not persist a native world-state snapshot"
 picture("12-android-mentes-ellenorizve")
 print("PASS: Android launch, 53-bone rig load, menu/navigation, touch movement, save persistence, settings and exit.",flush=True)

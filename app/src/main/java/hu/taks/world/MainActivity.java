@@ -424,6 +424,9 @@ public final class MainActivity extends Activity {
             content.addView(caption("4 · TŰZ ÉS MELEG",12,0xFF9EC9B9));
             addVertical(content,"Tűzhely építése · 3 faág + 2 kő",()->act("hearth"));
             addVertical(content,"Tűzgyújtás · 2 faág + gyújtós",()->act("ignite"));
+            content.addView(caption("5 · ESŐVÍZ ÉS KÉSZLETEZÉS",12,0xFF9EC9B9));
+            addVertical(content,"Vízgyűjtő tartóváza · 2 cölöp + 2 kő",()->act("catchment_frame"));
+            addVertical(content,"Vízgyűjtő fedése · 6 leveles ág",()->act("catchment_roof"));
         }else if(which==3){
             content.addView(caption("A társak véges lelőhelyekről, önállóan szállítanak a táborba.",12,0xFFDDCBAC));
             TextView camp=caption(nativeCampStatus(),12,0xFFE2D9BD);
@@ -442,6 +445,7 @@ public final class MainActivity extends Activity {
             status.setLineSpacing(4,1f);content.addView(status);
             addVertical(content,"Behúzódás a menedék alá",()->act("shelter_enter"));
             addVertical(content,"Menedék elhagyása",()->act("shelter_exit"));
+            addVertical(content,"Ivás a közeli vízből",()->act("drink"));
             addVertical(content,"Pihenés · 1 játékóra",()->act("rest"));
             addVertical(content,"1 játékóra előreléptetése",()->{
                 nativeAdvance();say("Egy játékóra eltelt: nedvesség és tűzállapot újraszámítva.");
@@ -979,6 +983,7 @@ public final class MainActivity extends Activity {
 
         TextView movePad=caption("MOZGÁS\n  ◉",13,0xFFF4E8D2);
         movePad.setGravity(Gravity.CENTER);
+        movePad.setContentDescription("Mozgásvezérlő");
         movePad.setBackground(panelBackground(0x9713211D,48));
         movePad.setOnTouchListener((v,e)->touch(e,true));
         FrameLayout.LayoutParams moveParams=new FrameLayout.LayoutParams(dp(96),dp(96),Gravity.LEFT|Gravity.BOTTOM);

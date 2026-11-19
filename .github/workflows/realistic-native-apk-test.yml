@@ -1,7 +1,7 @@
-name: TAKS World 0.11 living UI causal logo and menus Android
+name: TAKS World 0.14 Android
 on:
   push:
-    branches: [taks-world-living-ui-step-6]
+    branches: ['codex/taks-world-0-14-github-build']
   workflow_dispatch:
 permissions:
   contents: read
@@ -110,7 +110,7 @@ jobs:
           python3 tests/ppm_to_png.py
       - uses: actions/upload-artifact@v4
         with:
-          name: TAKS-World-0.11-Living-UI-GPU-Testkepek
+          name: TAKS-World-0.14-GPU-Testkepek
           path: build-previews/*.png
           if-no-files-found: error
           retention-days: 14
@@ -154,6 +154,11 @@ jobs:
           assert menu[:4]==b'RIFF' and menu[8:12]==b'WEBP' and len(menu)>100000
           print('Wonderwerk main-menu background verified:',len(menu),'bytes')
           PY
+      - name: Keep the Android test signing key across builds of this branch
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: taks-world-windseasons-debug-key-v1
       - name: Build real native Android APK (not web)
         run: gradle --no-daemon :app:assembleDebug --stacktrace
       - name: Verify all real assets are physically embedded in installable APK
@@ -192,12 +197,20 @@ jobs:
               print('VERIFIED RIGGED 53-BONE HUMANOID AND 7 CLIPS EMBEDDED IN APK')
               print('TAKS NATIVE ANDROID REAL-3D TEST APK VERIFIED:',f.stat().st_size,'bytes')
           PY
-      - name: Prepare named test APK for phone
-        run: cp app/build/outputs/apk/debug/app-debug.apk TAKS_World_0_11_ELO_MENU_ANDROID_TESZT.apk
+      - name: Check the phone package, architecture, version and signature
+        shell: bash
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk TAKS_World_0_14_Android.apk
+          apk=TAKS_World_0_14_Android.apk
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          "$tools/apksigner" verify --verbose "$apk"
+          "$tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/taks-package.txt"
+          grep -F "package: name='hu.taks.world.windseasons' versionCode='14' versionName='0.14.0'" "$RUNNER_TEMP/taks-package.txt"
+          grep -F 'lib/arm64-v8a/libtaks_engine.so' <(unzip -Z1 "$apk")
       - uses: actions/upload-artifact@v4
         with:
-          name: TAKS-World-0.11-Living-UI-Native-Android-TEST-APK
-          path: TAKS_World_0_11_ELO_MENU_ANDROID_TESZT.apk
+          name: TAKS-World-0.14-Android-APK
+          path: TAKS_World_0_14_Android.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -210,7 +223,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: TAKS-World-0.11-Living-UI-Native-Android-TEST-APK
+          name: TAKS-World-0.14-Android-APK
           path: android/
       - uses: actions/setup-java@v4
         with:
@@ -246,7 +259,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: TAKS-World-0.11-Android-Menu-Es-Beallitasok-Valodi-Kepek
+          name: TAKS-World-0.14-Android-kepek
           path: ui-evidence/
           if-no-files-found: warn
           retention-days: 10
@@ -263,17 +276,22 @@ jobs:
           path: package-input/models/
       - uses: actions/download-artifact@v4
         with:
-          name: TAKS-World-0.11-Living-UI-Native-Android-TEST-APK
+          name: TAKS-World-0.14-Android-APK
           path: package-input/apk/
       - uses: actions/download-artifact@v4
         with:
-          name: TAKS-World-0.11-Living-UI-GPU-Testkepek
+          name: TAKS-World-0.14-GPU-Testkepek
           path: package-input/gpu/
       - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
-          name: TAKS-World-0.11-Android-Menu-Es-Beallitasok-Valodi-Kepek
+          name: TAKS-World-0.14-Android-kepek
           path: package-input/android-ui/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install the reference image reader
+        run: python -m pip install 'Pillow>=10,<13'
       - name: Assemble one source, assets, APK and evidence package
         env:
           SOURCE_COMMIT: ${{ github.sha }}
@@ -281,6 +299,7 @@ jobs:
           mkdir -p TAKS_WORLD_ANDROID/source/app/src/main/assets/models
           mkdir -p TAKS_WORLD_ANDROID/apk TAKS_WORLD_ANDROID/tests/gpu TAKS_WORLD_ANDROID/tests/android-ui
           git archive --format=tar HEAD | tar -xf - -C TAKS_WORLD_ANDROID/source
+          python3 TAKS_WORLD_ANDROID/source/scripts/export_reference_crops.py
           cp -a package-input/models/. TAKS_WORLD_ANDROID/source/app/src/main/assets/models/
           cp -a package-input/apk/. TAKS_WORLD_ANDROID/apk/
           cp -a package-input/gpu/. TAKS_WORLD_ANDROID/tests/gpu/
@@ -307,3 +326,30 @@ jobs:
           path: TAKS_WORLD_ANDROID_TELJES_CSOMAG.zip
           if-no-files-found: error
           retention-days: 14
+
+  phone-download:
+    needs: [android-apk, android-ui-evidence, real-gpu-screenshots]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: TAKS-World-0.14-Android-APK
+          path: phone
+      - name: Publish the tested APK as a direct phone download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="taks-world-0.14-test-${GITHUB_SHA:0:7}"
+          apk=phone/TAKS_World_0_14_Android.apk
+          if gh release view "$tag" >/dev/null 2>&1; then
+            tmp="$(mktemp -d)"
+            gh release download "$tag" --pattern TAKS_World_0_14_Android.apk --dir "$tmp"
+            cmp "$apk" "$tmp/TAKS_World_0_14_Android.apk"
+          else
+            gh release create "$tag" "$apk" --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "TAKS World 0.14 – Android tesztkiadás" \
+              --notes "A natív androidos tesztváltozat az alábbi APK-fájllal telepíthető. Az indítást, a mozgást és a mentést Android 35 emulátoron ellenőrzi a build."
+          fi

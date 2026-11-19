@@ -27,4 +27,13 @@ if(TAKS_BUILD_TESTS)
     target_compile_options(taks_era_tests PRIVATE -UNDEBUG)
   endif()
   add_test(NAME taks_era COMMAND taks_era_tests)
+  add_executable(taks_save_compatibility_tests tests/SaveCompatibilityTests.cpp)
+  target_link_libraries(taks_save_compatibility_tests PRIVATE taks_cause)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(taks_save_compatibility_tests PRIVATE -UNDEBUG)
+    target_compile_options(taks_living_world_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME taks_save_compatibility COMMAND taks_save_compatibility_tests
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/world-v9-ledger.txt"
+    "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/world-v8-water.txt")
 endif()
