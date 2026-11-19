@@ -128,6 +128,7 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         }
     }
     public void refreshText(){
+        environment.setEditableScript(labels);
         for(Hotspot h:hotspots){
             String text=labels.get("menu",(String)h.control.getTag(),"");
             h.control.setText(text);
