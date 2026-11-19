@@ -22,6 +22,7 @@ public final class LivingWonderwerkOverlay extends View {
     private final byte[] waterMask=new byte[W*H];
     private Bitmap fern,canopy;
     private MenuClimate weather;
+    private float fernDegrees=9.3f,rainThreshold=.045f,waterVisibility=1.f;
     private boolean running=true;
     private long startNanos=SystemClock.elapsedRealtimeNanos();
 
@@ -67,6 +68,13 @@ public final class LivingWonderwerkOverlay extends View {
                 master.recycle();
             }
         }catch(Exception ex){android.util.Log.w("TAKS_WORLD","Approved poster masks unavailable",ex);}
+    }
+    /** Visual multipliers are editable; actual rain/wind still come ONLY from saved World. */
+    public void setEditableScript(EditableGameScript config){
+        if(config==null)return;
+        fernDegrees=config.decimal("environment","fern_sway_degrees",9.3f);
+        rainThreshold=config.decimal("environment","rain_visual_threshold",.045f);
+        waterVisibility=config.decimal("environment","water_ripple_visibility",1.f);
     }
     public void setClimate(MenuClimate next) {
         weather=next;
@@ -121,10 +129,10 @@ public final class LivingWonderwerkOverlay extends View {
         float sign=c.windX<0?-1f:1f;
         if(sway>.003f) {
             drawWindLeaves(canvas,canopy,202,0,260,4,t,sign*sway*2.4f,1.2f);
-            drawWindLeaves(canvas,fern,806,481,892,616,t,sign*sway*9.3f,2.4f);
+            drawWindLeaves(canvas,fern,806,481,892,616,t,sign*sway*fernDegrees,2.4f);
         }
         // ONLY reflecting blue water pixels react; fixed banks/rocks are never transformed.
-        float ripple=c.waterMotion();
+        float ripple=c.waterMotion()*waterVisibility;
         if(ripple>.01f){
             canvas.save();canvas.clipPath(stream);
             paint.reset();paint.setStyle(Paint.Style.STROKE);
@@ -148,7 +156,7 @@ public final class LivingWonderwerkOverlay extends View {
             canvas.restore();
         }
         // Rainfall is visible when the saved world actually reports rain.
-        if(c.rain>.045f){
+        if(c.rain>rainThreshold){
             canvas.save();canvas.clipOutRect(520,0,870,315);
             paint.reset();paint.setStrokeCap(Paint.Cap.ROUND);
             paint.setStrokeWidth(.65f+c.rain*.65f);
