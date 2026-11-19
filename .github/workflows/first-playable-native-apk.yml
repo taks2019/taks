@@ -1,4 +1,4 @@
-name: TAKS World - First installable native Android trial
+name: TAKS World - Approved video native Android APK
 on:
   push:
     branches: ['codex/taks-world-elfogadott-menu-mp4-2026-11-19']
@@ -120,10 +120,20 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Disclose temporary approved-binary limitation
+      - name: Install the EXACT approved natural Wonderwerk video and all PNGs
         run: |
-          echo "Approved wide menu/characters remain in user ZIP, not yet in GitHub."
-          echo "Building native functionality-first APK using only existing repo art."
+          python3 -m pip install --disable-pip-version-check 'Pillow>=10,<13'
+          python3 scripts/install_approved_android_game_assets.py
+      - name: Never deliver stale static poster as the accepted video
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from hashlib import sha256
+          path=Path('app/src/main/assets/menu/WONDERWERK_APPROVED_NATURE_NO_RAIN.mp4')
+          assert path.is_file() and path.stat().st_size>7_000_000
+          assert sha256(path.read_bytes()).hexdigest()=='12cac3685ae24638b2ca9db036b454083fdc9eb2dae46ba171eccac1f7aea15c'
+          print('Approved NO RAIN 1664x768 8-second video is included!')
+          PY
       - uses: actions/download-artifact@v4
         with:
           name: TAKS-World-Real-Geology-Flora-Human-Assets
@@ -200,6 +210,18 @@ jobs:
               import struct
               magic,vertices,joints,clips=struct.unpack_from('<4sIII',rig)
               assert magic==b'TKS1' and vertices>30000 and joints==53 and clips==7
+              clip='assets/menu/WONDERWERK_APPROVED_NATURE_NO_RAIN.mp4'
+              assert clip in names and z.getinfo(clip).file_size==7567169
+              import hashlib
+              assert hashlib.sha256(z.read(clip)).hexdigest()=='12cac3685ae24638b2ca9db036b454083fdc9eb2dae46ba171eccac1f7aea15c', 'Wrong video in APK!'
+              assert 'assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png' in names
+              for key in ('WATER_MASK','FERN_MASK','GRASS_MASK','CLOUD_MASK'):
+                  assert 'assets/menu/'+key+'.png' in names
+              for pose in ('idle','crouch'):
+                  for direction in ('N','NE','E','SE','S','SW','W','NW'):
+                      suffix='iso' if pose=='idle' else 'p00'
+                      assert 'assets/characters/actor_m01_'+pose+'_'+direction+'_'+suffix+'.png' in names
+              print('ACCEPTED 8s MP4 + ALL 16 RGBA ACTORS actually embedded')
               print('VERIFIED RIGGED 53-BONE HUMANOID AND 7 CLIPS EMBEDDED IN APK')
               print('TAKS NATIVE ANDROID REAL-3D TEST APK VERIFIED:',f.stat().st_size,'bytes')
           PY
