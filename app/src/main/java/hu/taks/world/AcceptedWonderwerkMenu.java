@@ -83,9 +83,9 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         }
         if(backdrop==null||backdrop.getWidth()!=DESIGN_W||backdrop.getHeight()!=DESIGN_H)
             throw new IOException("Approved 1664x768 wide text-free background missing");
-        // Use the whole available Android landscape screen, not a centered
-        // 16:9 plate with black/blurred side gutters. The approved source
-        // bitmap itself stays untouched; FIT_XY is presentation only.
+        // Preserve the complete approved cave artwork at its original aspect ratio.
+        // The parent view stays fullscreen; on narrower tablets, show neutral side
+        // bands rather than stretching/cropping the immutable master image.
         content=new FrameLayout(host);
         ImageView still=new ImageView(host);
         still.setImageBitmap(backdrop);
@@ -165,7 +165,8 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         super.onSizeChanged(w,h,oldw,oldh);
         if(w<=0||h<=0)return;
         float s=Math.min(w/(float)DESIGN_W,h/(float)DESIGN_H);
-        int cw=w,ch=h;
+        int cw=Math.max(1,Math.round(DESIGN_W*s));
+        int ch=Math.max(1,Math.round(DESIGN_H*s));
         content.setLayoutParams(new FrameLayout.LayoutParams(cw,ch,Gravity.CENTER));
         for(Hotspot item:hotspots){
             Button b=item.control;
