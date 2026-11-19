@@ -10,7 +10,7 @@ from pathlib import Path
 
 ROOT=Path("ui-evidence")
 ROOT.mkdir(parents=True, exist_ok=True)
-PACKAGE="hu.taks.world.windseasons"
+PACKAGE="hu.taks.world.wonderwerk"
 APK="android/TAKS_World_0_15_Android.apk"
 
 def adb(*args, check=True):
@@ -80,6 +80,7 @@ adb("install","-r",APK)
 # AOSP's first-run immersive explanation blocks real app controls in a fresh
 # emulator. Android-shell may mark the user confirmation as acknowledged.
 adb("shell","settings","put","secure","immersive_mode_confirmations","confirmed",check=False)
+adb("shell","am","force-stop","com.google.android.apps.nexuslauncher",check=False)
 launch=adb("shell","am","start","-W","-n",PACKAGE+"/hu.taks.world.MainActivity",check=False)
 print("Android activity launch:\n"+launch.decode(errors="replace"),flush=True)
 pid=b""
@@ -116,10 +117,15 @@ assert b"Rigged skinned humanoid asset unavailable" not in runtime_log, \
 
 # A fresh Android emulator shows a one-time OS-level full-screen prompt.
 # This prompt is NOT the TAKS interface; dismiss before screenshots/tests.
-for attempt in range(5):
+for attempt in range(10):
     nodes=dump("system-start-"+str(attempt))
     if attempt==0:
         picture("00-diagnosztika-fullscreen")
+    if find(nodes,"Pixel Launcher",contains=True) and find(nodes,"Close app"):
+        click(nodes,"Close app")
+        adb("shell","am","start","-n",PACKAGE+"/hu.taks.world.MainActivity",check=False)
+        time.sleep(1)
+        continue
     if find(nodes,"Got it"):
         # Different emulator display density/rotation may make UIAutomator
         # bounds unusable for input tap. Use secure acknowledgement and BACK.

@@ -158,7 +158,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
-          key: taks-world-windseasons-debug-key-v1
+          key: taks-world-wonderwerk-debug-key-v1
       - name: Build real native Android APK (not web)
         run: gradle --no-daemon :app:assembleDebug --stacktrace
       - name: Verify all real assets are physically embedded in installable APK
@@ -207,7 +207,7 @@ jobs:
           tools="$ANDROID_HOME/build-tools/35.0.0"
           "$tools/apksigner" verify --verbose "$apk"
           "$tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/taks-package.txt"
-          grep -F "package: name='hu.taks.world.windseasons' versionCode='15' versionName='0.15.0'" "$RUNNER_TEMP/taks-package.txt"
+          grep -F "package: name='hu.taks.world.wonderwerk' versionCode='15' versionName='0.15.0'" "$RUNNER_TEMP/taks-package.txt"
           grep -F 'lib/arm64-v8a/libtaks_engine.so' <(unzip -Z1 "$apk")
       - uses: actions/upload-artifact@v4
         with:
