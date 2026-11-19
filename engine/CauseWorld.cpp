@@ -160,7 +160,7 @@ std::string World::causalReport() const {
     out<<"ÉLŐ OK → OKOZAT\n"
        <<"Csapadék "<<rainIntensity*100<<"% → talajnedvesség "
        <<ecology.soilWater*100<<"% → sár "<<ecology.mud*100
-       <<"% → járási sebesség "<<ecology.walkSpeedFactor()*100<<"%\n"
+       <<"% → lassabb járás: sebesség "<<ecology.walkSpeedFactor()*100<<"%\n"
        <<"Szél "<<windStrength()*100<<"% → növények lengése és tűz tüzelőanyag-fogyása\n"
        <<"Fű "<<ecology.grassCover()*100<<"% → állatok legelési lehetősége\n"
        <<"Tűz: "<<(fireLit?"ég, valós tüzelőanyagot használ":"nem ég")
