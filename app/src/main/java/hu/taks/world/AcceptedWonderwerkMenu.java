@@ -48,9 +48,11 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
     }
     public static AcceptedWonderwerkMenu tryCreate(Activity host,
           Runnable onNew,Runnable onSettings,Runnable onCreator,Runnable onExit){
-        try(InputStream v=host.getAssets().open(VIDEO);
-            InputStream p=host.getAssets().open(POSTER)){
-            if(v.read()==-1||p.read()==-1)return null;
+        // The accepted poster is the immutable master for this runtime copy.
+        // A prerendered video is deliberately NOT needed: it made the rock
+        // appear to move with the stream and could never react to actual rain.
+        try(InputStream p=host.getAssets().open(POSTER)){
+            if(p.read()==-1)return null;
             return new AcceptedWonderwerkMenu(host,onNew,onSettings,onCreator,onExit);
         }catch(IOException e){
             android.util.Log.w("TAKS_MENU","Accepted media absent; previous menu remains available",e);
@@ -77,18 +79,10 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         still.setImageBitmap(backdrop);
         still.setScaleType(ImageView.ScaleType.FIT_XY);
         content.addView(still,new FrameLayout.LayoutParams(-1,-1));
+        // Never run the old MP4: its pre-baked wave transforms the rocks.
+        // The game-saved weather drives the overlay on the immutable poster.
         video=new VideoView(host);
-        video.setBackgroundColor(Color.TRANSPARENT);
-        video.setOnPreparedListener(mp->{
-            mp.setLooping(true);
-            mp.setVolume(0f,0f);
-            if(!released)video.start();
-        });
-        video.setOnErrorListener((mp,what,extra)->{
-            android.util.Log.w("TAKS_MENU","Video unavailable; keep approved static poster");
-            video.setVisibility(View.GONE);return true;
-        });
-        content.addView(video,new FrameLayout.LayoutParams(-1,-1));
+        video.setVisibility(View.GONE);
         environment=new LivingWonderwerkOverlay(host);
         content.addView(environment,new FrameLayout.LayoutParams(-1,-1));
         addHit(host,"Új Játék",.390f,.442f,.280f,.116f,onNew);
@@ -96,9 +90,7 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         addHit(host,"Készítő",.390f,.685f,.280f,.115f,onCreator);
         addHit(host,"Kilépés",.390f,.806f,.280f,.117f,onExit);
         addView(content,new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER));
-        File mp4=copyToCache(host.getAssets(),VIDEO,
-            new File(host.getCacheDir(),"TAKS_MENU_30FPS_APPROVED.mp4"));
-        video.setVideoURI(Uri.fromFile(mp4));
+        // No video stream or external loading. Ready immediately and offline.
     }
     private void addHit(Activity host,String label,float x,float y,float w,float h,
                         Runnable action){
@@ -148,13 +140,13 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         }
     }
     public void setClimate(MenuClimate next){if(!released)environment.setClimate(next);}
-    public void play(){if(!released){environment.resume();if(video.getVisibility()==View.VISIBLE)video.start();}}
-    public void pause(){if(!released){environment.pause();if(video.isPlaying())video.pause();}}
+    public void play(){if(!released)environment.resume();}
+    public void pause(){if(!released)environment.pause();}
     public void release(){
         if(released)return;
         released=true;
         environment.release();
-        video.stopPlayback();
+        // The old MP4 decoder was never opened.
     }
     @Override protected void onDetachedFromWindow(){
         release();
