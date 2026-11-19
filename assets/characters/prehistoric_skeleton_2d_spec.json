@@ -1,0 +1,307 @@
+{
+  "schema": "taks-world/skeletal-png-rig/1",
+  "asset": "TAKS_CHR_PREHISTORIC_BASE_001",
+  "reference_pose": "front standing 000 degrees",
+  "coordinate_convention": "x rightward, y downward, normalized PNG cell; ground approximately y=0.98",
+  "angles_degrees": [
+    0,
+    45,
+    90,
+    135,
+    180,
+    225,
+    270,
+    315
+  ],
+  "joints": [
+    {
+      "name": "root",
+      "parent": null,
+      "position01": [
+        0.5,
+        0.56
+      ]
+    },
+    {
+      "name": "pelvis",
+      "parent": "root",
+      "position01": [
+        0.5,
+        0.55
+      ]
+    },
+    {
+      "name": "spine_lower",
+      "parent": "pelvis",
+      "position01": [
+        0.5,
+        0.44
+      ]
+    },
+    {
+      "name": "spine_upper",
+      "parent": "spine_lower",
+      "position01": [
+        0.5,
+        0.31
+      ]
+    },
+    {
+      "name": "neck",
+      "parent": "spine_upper",
+      "position01": [
+        0.5,
+        0.19
+      ]
+    },
+    {
+      "name": "head",
+      "parent": "neck",
+      "position01": [
+        0.5,
+        0.1
+      ]
+    },
+    {
+      "name": "shoulder_L",
+      "parent": "spine_upper",
+      "position01": [
+        0.39,
+        0.27
+      ]
+    },
+    {
+      "name": "upper_arm_L",
+      "parent": "shoulder_L",
+      "position01": [
+        0.34,
+        0.36
+      ]
+    },
+    {
+      "name": "elbow_L",
+      "parent": "upper_arm_L",
+      "position01": [
+        0.29,
+        0.46
+      ]
+    },
+    {
+      "name": "wrist_L",
+      "parent": "elbow_L",
+      "position01": [
+        0.28,
+        0.56
+      ]
+    },
+    {
+      "name": "hand_L",
+      "parent": "wrist_L",
+      "position01": [
+        0.28,
+        0.62
+      ]
+    },
+    {
+      "name": "shoulder_R",
+      "parent": "spine_upper",
+      "position01": [
+        0.61,
+        0.27
+      ]
+    },
+    {
+      "name": "upper_arm_R",
+      "parent": "shoulder_R",
+      "position01": [
+        0.66,
+        0.36
+      ]
+    },
+    {
+      "name": "elbow_R",
+      "parent": "upper_arm_R",
+      "position01": [
+        0.71,
+        0.46
+      ]
+    },
+    {
+      "name": "wrist_R",
+      "parent": "elbow_R",
+      "position01": [
+        0.72,
+        0.56
+      ]
+    },
+    {
+      "name": "hand_R",
+      "parent": "wrist_R",
+      "position01": [
+        0.72,
+        0.62
+      ]
+    },
+    {
+      "name": "hip_L",
+      "parent": "pelvis",
+      "position01": [
+        0.44,
+        0.55
+      ]
+    },
+    {
+      "name": "knee_L",
+      "parent": "hip_L",
+      "position01": [
+        0.43,
+        0.74
+      ]
+    },
+    {
+      "name": "ankle_L",
+      "parent": "knee_L",
+      "position01": [
+        0.42,
+        0.93
+      ]
+    },
+    {
+      "name": "foot_L",
+      "parent": "ankle_L",
+      "position01": [
+        0.4,
+        0.97
+      ]
+    },
+    {
+      "name": "hip_R",
+      "parent": "pelvis",
+      "position01": [
+        0.56,
+        0.55
+      ]
+    },
+    {
+      "name": "knee_R",
+      "parent": "hip_R",
+      "position01": [
+        0.57,
+        0.74
+      ]
+    },
+    {
+      "name": "ankle_R",
+      "parent": "knee_R",
+      "position01": [
+        0.58,
+        0.93
+      ]
+    },
+    {
+      "name": "foot_R",
+      "parent": "ankle_R",
+      "position01": [
+        0.6,
+        0.97
+      ]
+    }
+  ],
+  "ik": [
+    {
+      "name": "left_arm",
+      "joints": [
+        "shoulder_L",
+        "elbow_L",
+        "wrist_L",
+        "hand_L"
+      ],
+      "targets": [
+        "grip",
+        "gather",
+        "build"
+      ]
+    },
+    {
+      "name": "right_arm",
+      "joints": [
+        "shoulder_R",
+        "elbow_R",
+        "wrist_R",
+        "hand_R"
+      ],
+      "targets": [
+        "grip",
+        "gather",
+        "build"
+      ]
+    },
+    {
+      "name": "left_leg",
+      "joints": [
+        "hip_L",
+        "knee_L",
+        "ankle_L",
+        "foot_L"
+      ],
+      "targets": [
+        "ground_contact",
+        "climb"
+      ]
+    },
+    {
+      "name": "right_leg",
+      "joints": [
+        "hip_R",
+        "knee_R",
+        "ankle_R",
+        "foot_R"
+      ],
+      "targets": [
+        "ground_contact",
+        "climb"
+      ]
+    }
+  ],
+  "clothing_bindings": {
+    "torso": [
+      "spine_lower",
+      "spine_upper",
+      "shoulder_L",
+      "shoulder_R"
+    ],
+    "legs": [
+      "pelvis",
+      "hip_L",
+      "hip_R"
+    ],
+    "feet": [
+      "ankle_L",
+      "ankle_R",
+      "foot_L",
+      "foot_R"
+    ],
+    "head": [
+      "neck",
+      "head"
+    ],
+    "belt": [
+      "pelvis"
+    ],
+    "back": [
+      "spine_upper"
+    ],
+    "hands": [
+      "hand_L",
+      "hand_R"
+    ]
+  },
+  "status": "Design-only skeleton landmarks; pixel-accurate joint mapping and IK solver not implemented",
+  "integration_gate": [
+    "calibrate all 8 directions",
+    "segment limbs into PNG layers",
+    "author extreme action poses",
+    "per-frame clothing occlusion and ordering",
+    "ground contact and collision tests"
+  ]
+}
