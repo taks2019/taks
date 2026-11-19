@@ -52,6 +52,7 @@ public final class MainActivity extends Activity {
     private native float[] nativeMenuClimate();
     private native boolean nativeUploadRealModel(int slot,byte[] model,int[] argb,int width,int height);
     private native boolean nativeUploadTerrainTexture(int slot,int[] pixels,int width,int height);
+    private native boolean nativeUploadActorSprite(int view,int[] argb,int width,int height);
 
     private GLSurfaceView surface;
     private SharedPreferences saves;
@@ -183,6 +184,39 @@ public final class MainActivity extends Activity {
             android.util.Log.e("TAKS_MODEL","Missing or invalid CC0 scanned model: "+name,exception);
             return false;
         }
+    }
+    /** Eight DISTINCT photos at 45-degree camera-relative angles. The originals are preserved. */
+    private boolean loadEightDirectionPngActor(){
+        final String[] angles={"N","NE","E","SE","S","SW","W","NW"};
+        boolean all=true;
+        for(int view=0;view<angles.length;view++){
+            final String filename="characters/actor_m01_idle_"+angles[view]+"_iso.png";
+            try(InputStream in=getAssets().open(filename)){
+                BitmapFactory.Options options=new BitmapFactory.Options();
+                options.inScaled=false;
+                Bitmap sprite=BitmapFactory.decodeStream(in,null,options);
+                if(sprite==null)throw new java.io.IOException("PNG decode failed");
+                int w=sprite.getWidth(),h=sprite.getHeight();
+                if(w!=512||h!=512||!sprite.hasAlpha()){
+                    sprite.recycle();throw new java.io.IOException("Not 512x512 true-alpha PNG");
+                }
+                int[] argb=new int[w*h];
+                sprite.getPixels(argb,0,w,0,0,w,h);
+                sprite.recycle();
+                boolean clear=false,solid=false;
+                for(int c:argb){
+                    int a=c>>>24;
+                    if(a==0)clear=true;
+                    if(a>=220)solid=true;
+                }
+                if(!clear||!solid||!nativeUploadActorSprite(view,argb,w,h))
+                    throw new java.io.IOException("Missing alpha or native GL upload failed");
+            }catch(Exception failure){
+                android.util.Log.e("TAKS_PNG","Character direction unavailable: "+filename,failure);
+                all=false;
+            }
+        }
+        return all;
     }
     private boolean loadRiggedHumanAsset(){
         try(InputStream meshStream=getAssets().open("models/makehuman_rigged.tks");
@@ -942,11 +976,16 @@ public final class MainActivity extends Activity {
                 boolean grassOk=loadAuthenticRockAsset(3,"models/grass_bermuda_01");
                 boolean fernOk=loadAuthenticRockAsset(4,"models/fern_02");
                 boolean humanOk=loadRiggedHumanAsset();
+                boolean pngHumanOk=loadEightDirectionPngActor();
                 boolean treeOk=loadAuthenticRockAsset(5,"wonderwerk/akac");
                 boolean groundOk=loadRealPbrSurface(0,"wonderwerk/talaj");
                 boolean cliffOk=loadRealPbrSurface(1,"wonderwerk/dolomit");
                 runOnUiThread(()->{
                     String err=nativeRendererError();
+                    if(!pngHumanOk){
+                        say("A nyolcirányú karakter-PNG nincs teljesen a játékba csomagolva. "
+                            +"A PNG-karakter még nem aktív: "+(err==null?"":err));
+                    }
                     if(!rockOk||!bouldersOk||!cliffModelOk||!grassOk||!fernOk||!treeOk||!humanOk||!groundOk||!cliffOk||err!=null&&!err.isEmpty()){
                         say("Valódi 3D modellhiba: "+(err==null?"":err)+
                             " · Az APK modellcsomagja sérült vagy hiányzik.");
