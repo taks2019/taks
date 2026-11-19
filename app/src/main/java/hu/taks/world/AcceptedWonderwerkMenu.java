@@ -1,75 +1,72 @@
 package hu.taks.world;
 
 import android.app.Activity;
-import android.content.res.AssetManager;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.PorterDuff;
+import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.RippleDrawable;
-import android.net.Uri;
 import android.view.Gravity;
 import android.view.View;
+import android.util.TypedValue;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
-import android.widget.VideoView;
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Approved 2026-11-19 image presented as smooth silent MP4.
- * Button glyphs are pixels in the immutable artwork, while the
- * invisible Android hit zones are fully functional native controls.
- * If the two binary assets are absent, MainActivity uses its original menu.
+ * Real interactive TEXT over a TEXT-FREE approved Wonderwerk background.
+ * The sacred logo remains raster and absolutely unchanged. Menu captions
+ * are real, selectable/accessible Android TextView glyphs, sourced from a
+ * UTF-8 JSON script. Nothing written into the menu photograph.
  */
 public final class AcceptedWonderwerkMenu extends FrameLayout {
-    private static final String VIDEO="menu/wonderwerk_menu_30fps.mp4";
-    private static final String POSTER="menu/wonderwerk_menu_UJ_JATEK_JAVITOTT.png";
-    private static final int DESIGN_W=1280, DESIGN_H=720;
+    public static final String TEXT_FREE="menu/wonderwerk_menu_NO_TEXT.png";
+    private static final int DESIGN_W=1280,DESIGN_H=720;
     private final FrameLayout content;
-    private final VideoView video;
     private final LivingWonderwerkOverlay environment;
     private final List<Hotspot> hotspots=new ArrayList<>();
+    private final EditableGameScript labels;
     private boolean released=false;
 
     private static final class Hotspot {
-        final Button view;
+        final Button control;
         final float x,y,w,h;
-        Hotspot(Button v,float x,float y,float w,float h){
-            view=v;this.x=x;this.y=y;this.w=w;this.h=h;
+        Hotspot(Button c,float px,float py,float width,float height){
+            control=c;x=px;y=py;w=width;h=height;
         }
     }
     public static AcceptedWonderwerkMenu tryCreate(Activity host,
-          Runnable onNew,Runnable onSettings,Runnable onCreator,Runnable onExit){
-        // The accepted poster is the immutable master for this runtime copy.
-        // A prerendered video is deliberately NOT needed: it made the rock
-        // appear to move with the stream and could never react to actual rain.
-        try(InputStream p=host.getAssets().open(POSTER)){
+        EditableGameScript labels,Runnable onNew,Runnable onSettings,
+        Runnable onCreator,Runnable onExit){
+        // NEVER fall back to baked-text art as though it were editable.
+        try(InputStream p=host.getAssets().open(TEXT_FREE)){
             if(p.read()==-1)return null;
-            return new AcceptedWonderwerkMenu(host,onNew,onSettings,onCreator,onExit);
+            return new AcceptedWonderwerkMenu(host,labels,onNew,onSettings,onCreator,onExit);
         }catch(IOException e){
-            android.util.Log.w("TAKS_MENU","Accepted media absent; previous menu remains available",e);
+            android.util.Log.e("TAKS_MENU","Text-free accepted background missing; not displaying false editable labels",e);
             return null;
         }
     }
-    private AcceptedWonderwerkMenu(Activity host,
+    private AcceptedWonderwerkMenu(Activity host,EditableGameScript script,
             Runnable onNew,Runnable onSettings,Runnable onCreator,Runnable onExit)
-            throws IOException {
+            throws IOException{
         super(host);
+        labels=script;
         setBackgroundColor(0xFF21180F);
-        ImageView edges=new ImageView(host);
         Bitmap backdrop;
-        try(InputStream in=host.getAssets().open(POSTER)){
+        try(InputStream in=host.getAssets().open(TEXT_FREE)){
             backdrop=BitmapFactory.decodeStream(in);
         }
-        if(backdrop==null)throw new IOException("Missing approved poster");
+        if(backdrop==null||backdrop.getWidth()!=DESIGN_W||backdrop.getHeight()!=DESIGN_H)
+            throw new IOException("Approved 1280x720 text-free background missing");
+        ImageView edges=new ImageView(host);
         edges.setImageBitmap(backdrop);
         edges.setScaleType(ImageView.ScaleType.CENTER_CROP);
         edges.setColorFilter(0x99201612,PorterDuff.Mode.MULTIPLY);
@@ -79,64 +76,61 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         still.setImageBitmap(backdrop);
         still.setScaleType(ImageView.ScaleType.FIT_XY);
         content.addView(still,new FrameLayout.LayoutParams(-1,-1));
-        // Never run the old MP4: its pre-baked wave transforms the rocks.
-        // The game-saved weather drives the overlay on the immutable poster.
-        video=new VideoView(host);
-        video.setVisibility(View.GONE);
         environment=new LivingWonderwerkOverlay(host);
         content.addView(environment,new FrameLayout.LayoutParams(-1,-1));
-        addHit(host,"Új Játék",.390f,.442f,.280f,.116f,onNew);
-        addHit(host,"Beállítások",.390f,.558f,.280f,.119f,onSettings);
-        addHit(host,"Készítő",.390f,.685f,.280f,.115f,onCreator);
-        addHit(host,"Kilépés",.390f,.806f,.280f,.117f,onExit);
+        addButton(host,"new_game",.390f,.442f,.280f,.116f,onNew);
+        addButton(host,"settings",.390f,.558f,.280f,.119f,onSettings);
+        addButton(host,"creator",.390f,.685f,.280f,.115f,onCreator);
+        addButton(host,"exit",.390f,.806f,.280f,.117f,onExit);
         addView(content,new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER));
-        // No video stream or external loading. Ready immediately and offline.
     }
-    private void addHit(Activity host,String label,float x,float y,float w,float h,
-                        Runnable action){
-        Button b=new Button(host);
-        b.setText("");
-        b.setContentDescription(label);
-        b.setAllCaps(false);
-        b.setBackground(new RippleDrawable(ColorStateList.valueOf(0x77F4C979),
-                           new ColorDrawable(Color.TRANSPARENT),null));
-        b.setOnClickListener(v->{if(!released)action.run();});
-        b.setSoundEffectsEnabled(true);
-        hotspots.add(new Hotspot(b,x,y,w,h));
-        content.addView(b,new FrameLayout.LayoutParams(1,1));
+    private void addButton(Activity host,String key,float x,float y,float w,float h,
+                           Runnable action){
+        Button button=new Button(host);
+        button.setTag(key);
+        button.setText(labels.get("menu",key,key));
+        button.setAllCaps(false);
+        button.setSingleLine(true);
+        button.setTypeface(Typeface.create("serif",Typeface.BOLD));
+        button.setTextColor(0xFFF9E3B6);
+        button.setIncludeFontPadding(false);
+        button.setGravity(Gravity.CENTER);
+        button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x46D8B16C),
+                     new ColorDrawable(Color.TRANSPARENT),null));
+        button.setContentDescription(button.getText().toString());
+        button.setOnClickListener(v->{if(!released)action.run();});
+        button.setSoundEffectsEnabled(true);
+        hotspots.add(new Hotspot(button,x,y,w,h));
+        content.addView(button,new FrameLayout.LayoutParams(1,1));
     }
-    private static File copyToCache(AssetManager asset,String path,File target)
-            throws IOException{
-        long expected=0;
-        try(InputStream scan=asset.open(path)){
-            byte[] block=new byte[65536];int n;
-            while((n=scan.read(block))!=-1)expected+=n;
-        }
-        if(expected<1000)throw new IOException("Empty approved video");
-        if(target.isFile()&&target.length()==expected)return target;
-        File tmp=new File(target.getPath()+".tmp");
-        try(InputStream in=asset.open(path);
-            FileOutputStream out=new FileOutputStream(tmp)){
-            byte[] block=new byte[32768];int n;
-            while((n=in.read(block))!=-1)out.write(block,0,n);
-            out.getFD().sync();
-        }
-        if(target.exists()&&!target.delete())throw new IOException("Cannot replace old menu cache");
-        if(!tmp.renameTo(target))throw new IOException("Cannot install approved menu cache");
-        return target;
-    }
-    @Override protected void onSizeChanged(int w,int h,int ow,int oh){
-        super.onSizeChanged(w,h,ow,oh);
+    @Override protected void onSizeChanged(int w,int h,int oldw,int oldh){
+        super.onSizeChanged(w,h,oldw,oldh);
         if(w<=0||h<=0)return;
         float s=Math.min(w/(float)DESIGN_W,h/(float)DESIGN_H);
         int cw=Math.round(DESIGN_W*s),ch=Math.round(DESIGN_H*s);
         content.setLayoutParams(new FrameLayout.LayoutParams(cw,ch,Gravity.CENTER));
-        for(Hotspot p:hotspots){
+        for(Hotspot item:hotspots){
+            Button b=item.control;
             FrameLayout.LayoutParams params=new FrameLayout.LayoutParams(
-                Math.round(cw*p.w),Math.round(ch*p.h),Gravity.TOP|Gravity.LEFT);
-            params.leftMargin=Math.round(cw*p.x);
-            params.topMargin=Math.round(ch*p.y);
-            p.view.setLayoutParams(params);
+                Math.round(cw*item.w),Math.round(ch*item.h),Gravity.TOP|Gravity.LEFT);
+            params.leftMargin=Math.round(cw*item.x);
+            params.topMargin=Math.round(ch*item.y);
+            b.setLayoutParams(params);
+            // The original stone carving occupied the right of the icon.
+            b.setPadding(Math.round(87*s),0,Math.round(4*s),0);
+            float maxFont=Math.max(15f,50f*s);
+            b.setTextSize(TypedValue.COMPLEX_UNIT_PX,maxFont);
+            b.setShadowLayer(Math.max(1,2f*s),1*s,2*s,0xFF2E170C);
+            b.setAutoSizeTextTypeUniformWithConfiguration(
+                Math.max(13,Math.round(23*s)),Math.max(17,Math.round(50*s)),1,
+                TypedValue.COMPLEX_UNIT_PX);
+        }
+    }
+    public void refreshText(){
+        for(Hotspot h:hotspots){
+            String text=labels.get("menu",(String)h.control.getTag(),"");
+            h.control.setText(text);
+            h.control.setContentDescription(text);
         }
     }
     public void setClimate(MenuClimate next){if(!released)environment.setClimate(next);}
@@ -146,10 +140,6 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         if(released)return;
         released=true;
         environment.release();
-        // The old MP4 decoder was never opened.
     }
-    @Override protected void onDetachedFromWindow(){
-        release();
-        super.onDetachedFromWindow();
-    }
+    @Override protected void onDetachedFromWindow(){release();super.onDetachedFromWindow();}
 }
