@@ -23,6 +23,10 @@ struct FastFrame {
 namespace FastScene {
     bool init();
     bool uploadTerrainTexture(int slot,const std::uint32_t* argb,int width,int height);
+    // True RGBA-PNG upload, 8 views of the same actor at 45 degree increments.
+    // Upload from the active GLES3 thread, AFTER init(), BEFORE render().
+    bool uploadActorSprite(int view,const std::uint32_t* argb,int width,int height);
+    bool actorSpritesComplete();
     void shutdown();
     void render(int width,int height,const FastFrame& scene);
     const std::string& lastError();
