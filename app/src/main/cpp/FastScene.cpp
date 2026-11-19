@@ -1,5 +1,6 @@
 #include "FastScene.h"
 #include "RealModels.h"
+#include "../../../../engine/SpriteOrientation.h"
 #include <GLES3/gl3.h>
 #include <algorithm>
 #include <array>
@@ -19,6 +20,30 @@ std::string error;
 GLuint program=0,staticVAO=0,staticVBO=0,dynamicVAO=0,dynamicVBO=0;
 GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uAnimation=-1,uWind=-1,uGround=-1,uCliff=-1;
 GLuint terrainTexture[2]={0,0};
+// Dedicated world-space 2D asset renderer (NOT a second browser/game engine).
+GLuint actorProgram=0,actorVAO=0,actorVBO=0;
+GLuint actorTextures[8]={};
+GLint actorVP=-1,actorSampler=-1,actorLight=-1;
+const char* ACTOR_VERT=R"GLSL(#version 300 es
+precision highp float;
+layout(location=0) in vec3 inPosition;
+layout(location=1) in vec2 inUv;
+uniform mat4 uVP;
+out vec2 vUv;
+void main(){vUv=inUv;gl_Position=uVP*vec4(inPosition,1.0);}
+)GLSL";
+const char* ACTOR_FRAG=R"GLSL(#version 300 es
+precision mediump float;
+in vec2 vUv;
+uniform sampler2D uSprite;
+uniform float uLight;
+out vec4 color;
+void main(){
+    vec4 c=texture(uSprite,vUv);
+    if(c.a<0.075)discard;
+    color=vec4(c.rgb*uLight,c.a);
+}
+)GLSL";
 std::vector<Vertex> terrainMesh,objectsMesh,weatherMesh;
 Vec3 add(Vec3 a,Vec3 b){return {a.x+b.x,a.y+b.y,a.z+b.z};}
 Vec3 sub(Vec3 a,Vec3 b){return {a.x-b.x,a.y-b.y,a.z-b.z};}
@@ -574,6 +599,12 @@ void main(){
 const std::string& lastError(){return error;}
 void shutdown(){
     if(terrainTexture[0]||terrainTexture[1])glDeleteTextures(2,terrainTexture);
+    glDeleteTextures(8,actorTextures);
+    std::fill(std::begin(actorTextures),std::end(actorTextures),0u);
+    if(actorVBO)glDeleteBuffers(1,&actorVBO);
+    if(actorVAO)glDeleteVertexArrays(1,&actorVAO);
+    if(actorProgram)glDeleteProgram(actorProgram);
+    actorVBO=actorVAO=actorProgram=0;
     terrainTexture[0]=terrainTexture[1]=0;
     if(staticVBO)glDeleteBuffers(1,&staticVBO);
     if(dynamicVBO)glDeleteBuffers(1,&dynamicVBO);
@@ -611,6 +642,34 @@ bool init(){
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
     glDisable(GL_CULL_FACE);
+    // Shader/program for the eight actual alpha PNGs, with GPU depth test.
+    GLuint vs=compile(GL_VERTEX_SHADER,ACTOR_VERT);
+    GLuint fs=compile(GL_FRAGMENT_SHADER,ACTOR_FRAG);
+    if(!vs||!fs){
+        if(vs)glDeleteShader(vs);
+        if(fs)glDeleteShader(fs);
+        shutdown();return false;
+    }
+    actorProgram=glCreateProgram();
+    glAttachShader(actorProgram,vs);glAttachShader(actorProgram,fs);
+    glLinkProgram(actorProgram);
+    glDeleteShader(vs);glDeleteShader(fs);
+    GLint actorLinked=GL_FALSE;
+    glGetProgramiv(actorProgram,GL_LINK_STATUS,&actorLinked);
+    if(!actorLinked){error="Az átlátszó karakter-PNG GPU shaderje hibás.";shutdown();return false;}
+    actorVP=glGetUniformLocation(actorProgram,"uVP");
+    actorSampler=glGetUniformLocation(actorProgram,"uSprite");
+    actorLight=glGetUniformLocation(actorProgram,"uLight");
+    glGenVertexArrays(1,&actorVAO);
+    glBindVertexArray(actorVAO);
+    glGenBuffers(1,&actorVBO);
+    glBindBuffer(GL_ARRAY_BUFFER,actorVBO);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(float)*30,nullptr,GL_STREAM_DRAW);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,5*sizeof(float),(void*)0);
+    glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,5*sizeof(float),(void*)(3*sizeof(float)));
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glBindVertexArray(0);
     if(!taks::RealModels::init()){error=taks::RealModels::errorMessage();return false;}
     return glGetError()==GL_NO_ERROR;
 }
@@ -641,6 +700,84 @@ bool uploadTerrainTexture(int slot,const std::uint32_t* argb,int width,int heigh
         error="A telefon GPU-ja nem tudta feltölteni a valódi PBR alapanyagtextúrát.";return false;
     }
     return true;
+}
+bool uploadActorSprite(int view,const std::uint32_t* argb,int width,int height){
+    if(view<0||view>=8||!argb||width<128||height<128||width>2048||height>2048||!actorProgram)
+        return false;
+    bool anyOpaque=false,anyClear=false;
+    const std::size_t n=std::size_t(width)*std::size_t(height);
+    std::vector<std::uint8_t> rgba(n*4);
+    for(std::size_t i=0;i<n;++i){
+        const std::uint32_t color=argb[i];
+        const std::uint8_t alpha=static_cast<std::uint8_t>(color>>24);
+        rgba[i*4+0]=static_cast<std::uint8_t>(color>>16);
+        rgba[i*4+1]=static_cast<std::uint8_t>(color>>8);
+        rgba[i*4+2]=static_cast<std::uint8_t>(color);
+        rgba[i*4+3]=alpha;
+        anyOpaque|=alpha>220;
+        anyClear|=alpha==0;
+    }
+    if(!anyOpaque||!anyClear){error="A karakter-PNG nem rendelkezik valódi alfa-kivágással.";return false;}
+    if(actorTextures[view])glDeleteTextures(1,&actorTextures[view]);
+    actorTextures[view]=0;
+    glGenTextures(1,&actorTextures[view]);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D,actorTextures[view]);
+    glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_SRGB8_ALPHA8,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE,rgba.data());
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D,0);
+    if(glGetError()!=GL_NO_ERROR){
+        glDeleteTextures(1,&actorTextures[view]);actorTextures[view]=0;
+        error="A telefon GPU-ja visszautasította az izometrikus karakter-PNG-t.";return false;
+    }
+    return true;
+}
+bool actorSpritesComplete(){
+    if(!actorProgram)return false;
+    for(GLuint t:actorTextures)if(!t)return false;
+    return true;
+}
+void drawActorSprite(const Mat4& vp,const FastFrame& f,Vec3 right){
+    if(!actorSpritesComplete())return; // never show half a character.
+    const int dir=taks::SpriteOrientation::cameraRelativeDirection(f.yaw,f.playerHeading);
+    const float y=surfaceHeight(f.playerX,f.playerZ)+.08f;
+    // 512px atlas padded by source; character feet remain at one world-space position.
+    const Vec3 base{f.playerX,y,f.playerZ};
+    constexpr float quadW=2.13f,quadH=2.18f;
+    const Vec3 left=mul(right,-quadW*.5f),rightHalf=mul(right,quadW*.5f);
+    const Vec3 bl=add(base,left),br=add(base,rightHalf);
+    const Vec3 tl=add(bl,{0,quadH,0}),tr=add(br,{0,quadH,0});
+    const float v[30]={
+        tl.x,tl.y,tl.z, 0.f,0.f,
+        bl.x,bl.y,bl.z, 0.f,1.f,
+        br.x,br.y,br.z, 1.f,1.f,
+        tl.x,tl.y,tl.z, 0.f,0.f,
+        br.x,br.y,br.z, 1.f,1.f,
+        tr.x,tr.y,tr.z, 1.f,0.f
+    };
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    glUseProgram(actorProgram);
+    glUniformMatrix4fv(actorVP,1,GL_FALSE,vp.a);
+    const float tod=std::fmod(std::fmod(f.clock,24.f)+24.f,24.f);
+    const float sun=std::clamp(1.f-std::abs(tod-13.f)/11.f,.38f,1.f);
+    glUniform1f(actorLight,sun*(1.f-.18f*std::clamp(f.rain,0.f,1.f)));
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D,actorTextures[dir]);
+    glUniform1i(actorSampler,2);
+    glBindVertexArray(actorVAO);
+    glBindBuffer(GL_ARRAY_BUFFER,actorVBO);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(v),v,GL_STREAM_DRAW);
+    glDrawArrays(GL_TRIANGLES,0,6);
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D,0);
+    glDisable(GL_BLEND);
 }
 void render(int width,int height,const FastFrame& f){
     if(!program)return;
@@ -695,8 +832,9 @@ void render(int width,int height,const FastFrame& f){
     glBindVertexArray(0);
     taks::RealModels::render(vp.a,f.nodes,f.grass,f.trees,f.verifiedFerns,
         f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,
-        f.playerMoving,f.playerRunning,f.npcs,f.animationTime,f.windStrength,
-        f.windX,f.windZ,f.wetSeason,f.moisture);
+        !actorSpritesComplete(),f.playerMoving,f.playerRunning,f.npcs,
+        f.animationTime,f.windStrength,f.windX,f.windZ,f.wetSeason,f.moisture);
+    drawActorSprite(vp,f,right);
     if(!weatherMesh.empty()){
         glUseProgram(program);
         glEnable(GL_BLEND);
