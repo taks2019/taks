@@ -184,7 +184,7 @@ std::string World::campStatus() const {
 }
 std::string World::npcStatus() const {
     static const char* roleNames[]={"Fa gyűjtése","Kő keresése","Levél gyűjtése","Gyújtós keresése"};
-    static const char* taskNames[]={"Készülődik","Lelőhelyhez tart","Táborba szállít","Pihen","Nincs szabad anyag"};
+    static const char* taskNames[]={"Készülődik","Lelőhelyhez tart","Táborba szállít","Pihen","Nincs szabad anyag","Veszély elől menekül","Vízhez tart"};
     std::ostringstream out;out<<std::fixed<<std::setprecision(1);
     for(int i=0;i<npcCount;++i){
         const auto& npc=npcs[i];
@@ -193,13 +193,18 @@ std::string World::npcStatus() const {
            <<" · pozíció "<<npc.x<<", "<<npc.z
            <<" · erő "<<npc.energy<<"%"
            <<" · éhség "<<npc.hunger<<"%"
+           <<" · szomjúság "<<npc.thirst<<"%"
+           <<" · félelem "<<npc.fear*100<<"%"
            <<" · szállít "<<npc.carrying
            <<" · leadott "<<npc.delivered
            <<" · megismert "<<npc.discoveries
            <<" · hallomás "<<npc.rumorsHeard
            <<" · tanult út "<<npc.completedTrips
            <<" · téves nyom "<<npc.falseLeads
-           <<" · vizes munka "<<npc.wetTrips;
+           <<" · vizes munka "<<npc.wetTrips
+           <<" · elkerült veszély "<<npc.fleeEvents
+           <<" · itatások "<<npc.waterTrips
+           <<" · veszélytapasztalat "<<npc.dangerExperience;
         if(i+1<npcCount)out<<"\n";
     }
     return out.str();
@@ -212,13 +217,97 @@ void World::updateNpcs(double dt){
     const int roles[4]={0,1,3,2};
     const double wind=africanWeatherAt(hours).windStrength;
     constexpr double tick=0.04;
+    auto walkNpc=[this](Npc& npc,double tx,double tz,double pace){
+        const double dx=tx-npc.x,dz=tz-npc.z;
+        const double distance=std::hypot(dx,dz);
+        if(distance<1.e-8)return;
+        const double distanceMoved=std::min(distance,pace*ecology.walkSpeedFactor()*
+                                               (npc.wetness>.6?.65:1.));
+        npc.x=clamp(npc.x+dx/distance*distanceMoved,-7.45,7.45);
+        npc.z=clamp(npc.z+dz/distance*distanceMoved,-7.45,12.95);
+        npc.walkPhase+=distanceMoved*5;
+        const double practice=std::min(npc.completedTrips,12)/12.0;
+        npc.energy=clamp(npc.energy-distanceMoved*.44*(1.0-.16*practice),0,100);
+    };
     int loopGuard=0;
     while(npcSimulatedHours+1.e-9>=tick && loopGuard++<600){
         npcSimulatedHours-=tick;
         for(int i=0;i<npcCount;++i){
             Npc& npc=npcs[i];const int type=roles[npc.role];
             npc.hunger=clamp(npc.hunger+0.11,0,100);
+            npc.thirst=clamp(npc.thirst+.085+.025*std::max(0.,ecology.temperatureC-30.)/10.,0,100);
+            npc.fear=clamp(npc.fear-.035,0,1);
             npc.wetness=clamp(npc.wetness+rainIntensity*.027-.005*(1.0+.55*wind),0,1);
+
+            // Survival over routine: only predators within visual range can
+            // trigger immediate flight. Personal experience widens detection.
+            const LivingWorld::Animal* threat=nullptr;
+            double nearestDanger=1e9;
+            const double sight=3.1+std::min(npc.dangerExperience,10)*.12;
+            for(const auto& animal:ecology.animals){
+                if(!animal.alive||animal.kind!=1)continue;
+                const double dx=npc.x-animal.x,dz=npc.z-animal.z;
+                const double d2=dx*dx+dz*dz;
+                if(d2<sight*sight&&d2<nearestDanger){
+                    threat=&animal;nearestDanger=d2;
+                }
+            }
+            if(threat){
+                // A visible encounter updates saved experience once per danger
+                // episode, while repeated ticks retain the physical response.
+                if(npc.task!=5){
+                    ++npc.fleeEvents;
+                    npc.dangerExperience=std::min(100,npc.dangerExperience+1);
+                    ++eventCounter;
+                    logCause("Társ "+std::to_string(i+1)+
+                             ": ragadozó észlelve → menekülés → veszélyhely emléke");
+                }
+                npc.lastDangerX=threat->x;
+                npc.lastDangerZ=threat->z;
+                npc.dangerMemoryUntil=hours+.65;
+                npc.fear=clamp(npc.fear+.22,0,1);
+                npc.task=5;
+                double dx=npc.x-threat->x,dz=npc.z-threat->z;
+                if(dx*dx+dz*dz<.01){dx=(i%2==0?1.:-1.);dz=-.6;}
+                const double distance=std::hypot(dx,dz);
+                walkNpc(npc,npc.x+dx/distance*2.,npc.z+dz/distance*2.,.42);
+                continue;
+            }
+            // Urgent drinking uses the SAME finite water as the player and
+            // animals. Empty pools cannot magically reset thirst.
+            if(npc.thirst>=64.0){
+                int source=-1;
+                double nearest=1e12;
+                for(int w=0;w<LivingWorld::waterBodyCount;++w){
+                    const auto& water=ecology.waters[w];
+                    if(water.level<.055)continue;
+                    const double dx=water.x-npc.x,dz=water.z-npc.z;
+                    const double distSq=dx*dx+dz*dz;
+                    if(distSq<nearest){source=w;nearest=distSq;}
+                }
+                if(source>=0){
+                    auto& water=ecology.waters[source];
+                    const double distance=std::sqrt(nearest);
+                    if(distance<=water.radius+.35){
+                        const double used=std::min(.025,water.level);
+                        water.level=clamp(water.level-used,0,1);
+                        npc.thirst=clamp(npc.thirst-35.,0,100);
+                        npc.fear=clamp(npc.fear-.05,0,1);
+                        ++npc.waterTrips;++eventCounter;
+                        logCause("Társ "+std::to_string(i+1)+
+                                 ": szomjúság → természetes vízivás → medence vízszintje csökkent");
+                        npc.task=0;
+                    }else{
+                        npc.task=6;
+                        walkNpc(npc,water.x,water.z,.25);
+                    }
+                    continue;
+                }
+                // None left: no fictitious drink, recovery or resource.
+                if(npc.thirst>90)npc.energy=clamp(npc.energy-.20,0,100);
+                npc.task=3;
+                continue;
+            }
             if(npc.hunger>=96){npc.task=3;continue;} // élelem nélkül nem végtelen munkagépek
             if(npc.energy<=17){
                 npc.task=3;
@@ -296,7 +385,10 @@ void World::updateNpcs(double dt){
                 const double dx=node.x-npc.x,dz=node.z-npc.z;
                 const double distSq=dx*dx+dz*dz;
                 // Heard reports are less reliable than direct observation.
-                const double score=distSq+(recollection==-2?8.0:0.0);
+                double score=distSq+(recollection==-2?8.0:0.0);
+                const double rx=node.x-npc.lastDangerX,rz=node.z-npc.lastDangerZ;
+                if(hours<npc.dangerMemoryUntil&&rx*rx+rz*rz<3.2*3.2)
+                    score+=150.0; // Learned avoidance, not global predator knowledge.
                 if(score<best){chosen=j;best=score;}
             }
             if(chosen<0){
@@ -308,6 +400,13 @@ void World::updateNpcs(double dt){
                 };
                 constexpr int patrolCount=int(sizeof(patrol)/sizeof(patrol[0]));
                 if(npc.scoutSteps>=patrolCount){npc.task=4;continue;}
+                // Skip a remembered unsafe patrol point until the evidence ages.
+                const double px=patrol[npc.scoutSteps][0]-npc.lastDangerX;
+                const double pz=patrol[npc.scoutSteps][1]-npc.lastDangerZ;
+                if(hours<npc.dangerMemoryUntil&&px*px+pz*pz<3.2*3.2){
+                    ++npc.scoutSteps;
+                    continue;
+                }
                 npc.task=1;
                 const double dx=patrol[npc.scoutSteps][0]-npc.x;
                 const double dz=patrol[npc.scoutSteps][1]-npc.z;
@@ -861,7 +960,7 @@ double World::windStrength() const {
 }
 std::string World::save() const {
     std::ostringstream o;o<<std::setprecision(17);
-    o<<"TAKS_NATIVE_11 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
+    o<<"TAKS_NATIVE_12 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
      <<carriedWood<<' '<<carriedStone<<' '<<carriedTinder<<' '
      <<hours<<' '<<humidity<<' '<<rainIntensity<<' '<<woodMoisture<<' '
      <<groundMoisture<<' '<<stamina<<' '<<fireFuel<<' '
@@ -882,6 +981,12 @@ std::string World::save() const {
          <<' '<<n.falseLeads<<' '<<n.wetTrips<<' '<<n.scoutSteps;
         for(int observation:n.rememberedAmounts)o<<' '<<observation;
     }
+    o<<" NPCSURV1";
+    for(const auto& n:npcs){
+        o<<' '<<n.thirst<<' '<<n.fear<<' '<<n.dangerExperience
+         <<' '<<n.fleeEvents<<' '<<n.waterTrips
+         <<' '<<n.lastDangerX<<' '<<n.lastDangerZ<<' '<<n.dangerMemoryUntil;
+    }
     o<<' '<<siteCount;
     for(const auto& site:sites)
         o<<' '<<site.x<<' '<<site.z<<' '<<site.stage<<' '<<site.condition;
@@ -898,8 +1003,8 @@ bool World::load(const std::string& data) {
     if(!(is>>header) ||
        header.rfind("TAKS_NATIVE_",0)!=0)return false;
     int version=1;
-    while(version<=11&&header!="TAKS_NATIVE_"+std::to_string(version))++version;
-    if(version>11)return false;
+    while(version<=12&&header!="TAKS_NATIVE_"+std::to_string(version))++version;
+    if(version>12)return false;
     if(!(is>>tmp.groundWood>>tmp.groundStone>>tmp.groundTinder
       >>tmp.carriedWood>>tmp.carriedStone>>tmp.carriedTinder
       >>tmp.hours>>tmp.humidity>>tmp.rainIntensity>>tmp.woodMoisture
@@ -927,6 +1032,15 @@ bool World::load(const std::string& data) {
             if(!(is>>n.discoveries>>n.rumorsHeard>>n.completedTrips
                  >>n.falseLeads>>n.wetTrips>>n.scoutSteps))return false;
             for(int& observed:n.rememberedAmounts)if(!(is>>observed))return false;
+        }
+    }
+    if(version>=12){
+        std::string survivalTag;
+        if(!(is>>survivalTag)||survivalTag!="NPCSURV1")return false;
+        for(auto& n:tmp.npcs){
+            if(!(is>>n.thirst>>n.fear>>n.dangerExperience>>n.fleeEvents
+                 >>n.waterTrips>>n.lastDangerX>>n.lastDangerZ
+                 >>n.dangerMemoryUntil))return false;
         }
     }
     if(version>=5){
@@ -1008,7 +1122,7 @@ bool World::load(const std::string& data) {
         for(int i=0;i<npcCount;++i){
             const auto& n=tmp.npcs[i];
             if(n.role!=i||n.carrying<0||n.carrying>1||n.delivered<0||n.delivered>100000||
-               n.task<0||n.task>4||
+               n.task<0||n.task>(version>=12?6:4)||
                !std::isfinite(n.x)||n.x<-7.5||n.x>7.5||
                !std::isfinite(n.z)||n.z<-7.5||n.z>13.0||
                !std::isfinite(n.energy)||n.energy<0||n.energy>100||
@@ -1020,7 +1134,16 @@ bool World::load(const std::string& data) {
                n.completedTrips<0||n.completedTrips>100000||
                n.falseLeads<0||n.falseLeads>100000||
                n.wetTrips<0||n.wetTrips>100000||
-               n.scoutSteps<0||n.scoutSteps>8)return false;
+               n.scoutSteps<0||n.scoutSteps>8||
+               !std::isfinite(n.thirst)||n.thirst<0||n.thirst>100||
+               !std::isfinite(n.fear)||n.fear<0||n.fear>1||
+               n.dangerExperience<0||n.dangerExperience>100||
+               n.fleeEvents<0||n.fleeEvents>100000||
+               n.waterTrips<0||n.waterTrips>100000||
+               !std::isfinite(n.lastDangerX)||n.lastDangerX< -7.5||n.lastDangerX>7.5||
+               !std::isfinite(n.lastDangerZ)||n.lastDangerZ< -7.5||n.lastDangerZ>13||
+               !std::isfinite(n.dangerMemoryUntil)||n.dangerMemoryUntil<0||
+               n.dangerMemoryUntil>tmp.hours+1)return false;
             for(int observed:n.rememberedAmounts)
                 if(observed< -2||observed>100000)return false;
         }

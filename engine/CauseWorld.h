@@ -12,12 +12,17 @@ struct ResourceNode { int type; double x,z; int amount; };
 struct Npc {
     double x,z,energy=90.0,hunger=10.0,wetness=0.08;
     int role=0; // 0: fa, 1: kő, 2: levél, 3: gyújtós
-    int carrying=0, task=0, delivered=0; // task: 0 indul,1 odamegy,2 hazavisz,3 pihen,4 nincs anyag
+    int carrying=0, task=0, delivered=0; // 0 indul,1 lelőhely,2 hazavisz,3 pihen,4 nincs anyag,5 menekül,6 vízhez megy
     double walkPhase=0.0;
     // NPCLEARN1: -1 unseen, -2 other person's unverified report,
     // >=0 personally observed amount (0 = empty). No omniscient map lookup.
     std::array<int,12> rememberedAmounts{{-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1}};
     int discoveries=0,rumorsHeard=0,completedTrips=0,falseLeads=0,wetTrips=0,scoutSteps=0;
+    // NPCSURV1: genuine finite-water survival and remembered local predator risk.
+    // Memory expires; NPCs never know about unseen predators or invisible water.
+    double thirst=18.0, fear=0.0;
+    int dangerExperience=0, fleeEvents=0, waterTrips=0;
+    double lastDangerX=0.0,lastDangerZ=0.0,dangerMemoryUntil=0.0;
 };
 struct BuildSite {
     double x=0.0,z=0.0;

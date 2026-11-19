@@ -7,6 +7,13 @@
 #include <string>
 #include <sstream>
 #include <vector>
+static void removeNpcSurvivalFields(std::vector<std::string>& tokens){
+    const auto tag=std::find(tokens.begin(),tokens.end(),"NPCSURV1");
+    if(tag==tokens.end())return;
+    constexpr std::size_t count=4*8;
+    assert(std::size_t(tokens.end()-tag)>count);
+    tokens.erase(tag,tag+1+count);
+}
 static void removeNewLearningFields(std::vector<std::string>& tokens){
     const auto tag=std::find(tokens.begin(),tokens.end(),"NPCLEARN1");
     if(tag==tokens.end())return;
@@ -130,7 +137,7 @@ int main(){
     taks::World old1,old2;
     assert(old1.load("TAKS_NATIVE_1 14 8 5 0 0 0 6 0.4 0 0.13 0.13 100 0 0 0 0"));
     assert(old2.load("TAKS_NATIVE_2 12 7 4 1 1 1 8 0.4 0 0.13 0.13 88 0 0 0 3 15 2 6 1 0 1 0.12 0"));
-    assert(old1.save().find("TAKS_NATIVE_11")==0);
+    assert(old1.save().find("TAKS_NATIVE_12")==0);
     assert(old2.groundWood==12 && old2.groundStone==7 && old2.groundLeaves==15);
     assert(old2.nodes[0].amount<=3);
     const auto stable=old2.save();
@@ -202,7 +209,7 @@ int main(){
     }
     assert(legacy3.load(v3));
     assert(legacy3.npcs[0].role==0);
-    assert(legacy3.save().find("TAKS_NATIVE_11")==0);
+    assert(legacy3.save().find("TAKS_NATIVE_12")==0);
     // A társakkal helyben lehet beszélni, távolról nincs mágikus kommunikáció.
     taks::World talk;
     assert(talk.act("npc_talk").find("Nincs beszélgetési")!=std::string::npos);
@@ -267,6 +274,7 @@ int main(){
     const auto ecoBegin=std::find(oldFields.begin(),oldFields.end(),"ECO4");
     assert(ecoBegin!=oldFields.end());
     oldFields.erase(ecoBegin,oldFields.end());
+    removeNpcSurvivalFields(oldFields);
     removeNewLearningFields(oldFields);
     oldFields[0]="TAKS_NATIVE_4";
     oldFields.resize(oldFields.size()-13); // v5 build sites -> old v4 save
@@ -280,7 +288,7 @@ int main(){
     assert(migratedOld.siteCount==1 && migratedOld.sites[0].stage==3);
     assert(std::abs(migratedOld.sites[0].x-3.1)<1e-6);
     assert(std::abs(migratedOld.sites[0].z+1.55)<1e-6);
-    assert(migratedOld.save().find("TAKS_NATIVE_11")==0);
+    assert(migratedOld.save().find("TAKS_NATIVE_12")==0);
     // A saved 0.8 / v5 world loads without creating animals or losing inventory.
     auto oldV5Fields=oldFields;
     {
@@ -294,6 +302,7 @@ int main(){
         }
     }
     assert(oldV5Fields.size()>13);
+    removeNpcSurvivalFields(oldV5Fields);
     removeNewLearningFields(oldV5Fields);
     oldV5Fields[0]="TAKS_NATIVE_5";
     std::ostringstream oldV5Text;
@@ -303,7 +312,7 @@ int main(){
     }
     taks::World upgraded;
     assert(upgraded.load(oldV5Text.str()));
-    assert(upgraded.save().find("TAKS_NATIVE_11")==0);
+    assert(upgraded.save().find("TAKS_NATIVE_12")==0);
     assert(upgraded.ledgerConsistent());
     assert(upgraded.ecology.aliveAnimals()==4);
     // V6 ECO1 and V7 ECO2 remain readable; V8 adds saved hydrology.
@@ -317,6 +326,7 @@ int main(){
                                   taks::LivingWorld::animalCount*11;
     assert(v6Fields.size()>=ecoIndex+1+eco1Payload);
     v6Fields.resize(ecoIndex+1+eco1Payload);
+    removeNpcSurvivalFields(v6Fields);
     removeNewLearningFields(v6Fields);
     const auto originalEco=std::find(v6Fields.begin(),v6Fields.end(),"ECO4");
     assert(originalEco!=v6Fields.end());
@@ -325,7 +335,7 @@ int main(){
     for(std::size_t i=0;i<v6Fields.size();++i){if(i)oldV6Text<<' ';oldV6Text<<v6Fields[i];}
     taks::World oldV6;
     assert(oldV6.load(oldV6Text.str()));
-    assert(oldV6.save().find("TAKS_NATIVE_11")==0);
+    assert(oldV6.save().find("TAKS_NATIVE_12")==0);
     assert(oldV6.ecology.visibleFootprintCount()==0);
     taks::World muddySteps;
     muddySteps.ecology.soilWater=.8;muddySteps.ecology.mud=.9;muddySteps.groundMoisture=.8;
@@ -383,7 +393,7 @@ int main(){
         assert(loggedStone);
         // Mentés/betöltés megtartja az azonosítókat.
         const std::string saved=w.save();
-        assert(saved.find("TAKS_NATIVE_11")==0 && saved.find(" LEDG1 ")!=std::string::npos);
+        assert(saved.find("TAKS_NATIVE_12")==0 && saved.find(" LEDG1 ")!=std::string::npos);
         taks::World back;assert(back.load(saved));
         assert(back.items.size()==w.items.size() && back.nextItemId==w.nextItemId && back.ledgerConsistent());
         for(size_t i=0;i<w.items.size();++i)assert(back.items[i].id==w.items[i].id && back.items[i].where==w.items[i].where);
@@ -551,6 +561,7 @@ int main(){
         std::vector<std::string> old10;
         std::string tok;
         while(scan>>tok)old10.push_back(tok);
+        removeNpcSurvivalFields(old10);
         removeNewLearningFields(old10);
         old10[0]="TAKS_NATIVE_10";
         std::ostringstream legacy;
@@ -558,8 +569,65 @@ int main(){
         taks::World oldLoaded;
         assert(oldLoaded.load(legacy.str()));
         assert(oldLoaded.npcs[0].rememberedAmounts[0]==-1);
-        assert(oldLoaded.save().find("TAKS_NATIVE_11")==0);
+        assert(oldLoaded.save().find("TAKS_NATIVE_12")==0);
         std::cout<<"PASS: NPC discovery, learning persistence, invalid data and v10 migration"<<std::endl;
+    }
+    // New NPCSURV1 is independently validated, while v11 migrates intact.
+    {
+        taks::World survival;
+        survival.forceRainForTest(0.0);
+        for(auto& n:survival.npcs)n.hunger=100; // no extra resource gathering
+        auto& n=survival.npcs[0];
+        n.thirst=84.;
+        n.x=survival.ecology.waters[0].x+.05;
+        n.z=survival.ecology.waters[0].z+.05;
+        const double waterBefore=survival.ecology.waters[0].level;
+        survival.step(.04);
+        assert(n.waterTrips==1&&n.thirst<84);
+        assert(survival.ecology.waters[0].level<waterBefore);
+        assert(survival.ledgerConsistent());
+        // No water, no miraculous refilling.
+        for(auto& water:survival.ecology.waters)water.level=0.;
+        n.thirst=96.;const int drinksBefore=n.waterTrips;
+        survival.step(.04);
+        assert(n.waterTrips==drinksBefore&&n.thirst>=96);
+        // An actual nearby predator forces a real displacement, saved memory.
+        taks::World danger;
+        danger.forceRainForTest(0.0);
+        auto& fleeing=danger.npcs[0];
+        fleeing.x=5.0;fleeing.z=0.0;
+        const double originalX=fleeing.x;
+        const int initialEncounters=fleeing.fleeEvents;
+        danger.step(.04);
+        assert(fleeing.task==5&&fleeing.fleeEvents==initialEncounters+1);
+        assert(fleeing.x<originalX&&fleeing.dangerMemoryUntil>danger.hours);
+        assert(fleeing.dangerExperience>0);
+        taks::World resumed;
+        const auto saved=danger.save();
+        assert(resumed.load(saved)&&resumed.save()==saved);
+        assert(resumed.npcs[0].fleeEvents==fleeing.fleeEvents);
+        assert(resumed.npcs[0].lastDangerX==fleeing.lastDangerX);
+        // Version 11 needs no survival trailer; default needs remain.
+        std::istringstream original(taks::World().save());
+        std::vector<std::string> v11;
+        std::string word;
+        while(original>>word)v11.push_back(word);
+        removeNpcSurvivalFields(v11);
+        v11[0]="TAKS_NATIVE_11";
+        std::ostringstream old;
+        for(const auto& value:v11)old<<value<<' ';
+        taks::World upgraded11;
+        assert(upgraded11.load(old.str()));
+        assert(upgraded11.npcs[0].thirst==18.0);
+        assert(upgraded11.save().find("TAKS_NATIVE_12")==0);
+        // Truncating new survival fields must not corrupt a valid world.
+        const auto unchanged=resumed.save();
+        std::string truncated=unchanged;
+        const auto pos=truncated.find(" NPCSURV1 ");
+        assert(pos!=std::string::npos);
+        truncated=truncated.substr(0,pos+10);
+        assert(!resumed.load(truncated)&&resumed.save()==unchanged);
+        std::cout<<"PASS: autonomous finite-water drinking, predator flight, NPCSURV1 save and v11 migration"<<std::endl;
     }
     std::cout<<"PASS: F2 structure wired into world, materials, save v8\n";
     std::cout<<"PASS: F1 unique item ledger, causal log, v7 save and v6 migration\n";
