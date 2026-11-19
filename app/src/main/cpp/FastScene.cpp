@@ -746,7 +746,8 @@ void drawActorSprite(const Mat4& vp,const FastFrame& f,Vec3 right){
     if(!actorSpritesComplete()||taks::RealModels::hasRealHuman())return;
     // PNG fallback only when an actual skinned 3D body cannot be loaded.
     const int dir=taks::SpriteOrientation::cameraRelativeDirection(f.yaw,f.playerHeading);
-    const float y=surfaceHeight(f.playerX,f.playerZ)+.08f;
+    const float y=surfaceHeight(f.playerX,f.playerZ)+.08f+
+                  std::clamp(f.playerJumpHeight,0.f,2.f);
     // 512px atlas padded by source; character feet remain at one world-space position.
     const Vec3 base{f.playerX,y,f.playerZ};
     constexpr float quadW=2.13f,quadH=2.18f;
@@ -833,7 +834,7 @@ void render(int width,int height,const FastFrame& f){
     glDrawArrays(GL_TRIANGLES,0,(GLsizei)objectsMesh.size());
     glBindVertexArray(0);
     taks::RealModels::render(vp.a,f.nodes,f.grass,f.trees,f.verifiedFerns,
-        f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,
+        f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,f.playerJumpHeight,
         true,f.playerMoving,f.playerRunning,f.npcs,
         f.animationTime,f.windStrength,f.windX,f.windZ,f.wetSeason,f.moisture);
     drawActorSprite(vp,f,right);

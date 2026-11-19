@@ -1,4 +1,5 @@
 #include "../CauseWorld.h"
+#include "../PlayerTraversal.h"
 #include <cassert>
 #include <algorithm>
 #include <cmath>
@@ -457,6 +458,30 @@ int main(){
     calmFire.fireFuel=gustyFire.fireFuel=10.0;
     calmFire.step(.5);gustyFire.step(.5);
     assert(gustyFire.fireFuel<calmFire.fireFuel);
+    // Jump is physically bounded, costs stamina, cannot launch while swimming,
+    // and never writes ghost footprints or tramples grass while airborne.
+    taks::World jumper;
+    jumper.forceRainForTest(0);
+    const auto beforeJumpSave=jumper.save();
+    const double beforeJumpStamina=jumper.stamina;
+    assert(jumper.act("jump")=="Elrugaszkodtál a talajról.");
+    assert(jumper.stamina<beforeJumpStamina);
+    assert(jumper.save()!=beforeJumpSave);
+    taks::PlayerJump arc;
+    assert(arc.launch(100.0,3.0));
+    assert(arc.airborne(100.15));
+    assert(arc.height(100.15)>0.0);
+    assert(!arc.launch(100.2,3.0));
+    assert(!arc.airborne(101.0));
+    assert(arc.height(101.0)==0.0);
+    jumper.playerX=1.0;jumper.playerZ=-5.4;
+    const int oldTracks=jumper.ecology.visibleFootprintCount();
+    jumper.move(.2,.1,true);
+    assert(jumper.ecology.visibleFootprintCount()==oldTracks);
+    jumper.playerX=jumper.ecology.waters[0].x;
+    jumper.playerZ=jumper.ecology.waters[0].z;
+    assert(jumper.act("jump").find("mély vízben")!=std::string::npos);
+    std::cout<<"PASS: bounded terrain-dependent 3D jump and airborne footprints"<<std::endl;
     std::cout<<"PASS: F2 structure wired into world, materials, save v8\n";
     std::cout<<"PASS: F1 unique item ledger, causal log, v7 save and v6 migration\n";
     std::cout<<"TAKS spatial game, construction and save migration tests PASSED\n";

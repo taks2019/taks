@@ -299,13 +299,15 @@ void draw(const Model& m,float x,float z,float scale,float radians){
  if(!m.skinned){glVertexAttribI4ui(3,0,0,0,0);glVertexAttrib4f(4,0,0,0,0);}
  glDrawArrays(GL_TRIANGLES,0,m.count);
 }
-void drawHuman(float x,float z,float scale,float radians,int actor,int clipIndex,double now){
+void drawHuman(float x,float z,float scale,float radians,int actor,int clipIndex,double now,
+                float elevation=0.f){
  const Model& model=models[6];if(!model.vao||!human.valid||uBones<0)return;
  const Pose pose=poseForActor(actor,clipIndex,now);evaluateBones(pose);
  glUniformMatrix4fv(uBones,53,GL_FALSE,boneMatrices[0].a);
  float c=std::cos(radians),s=std::sin(radians);
  const float matrix[16]={scale*c,0.f,-scale*s,0.f,0.f,scale,0.f,0.f,
-                         scale*s,0.f,scale*c,0.f,x,surfaceHeight(x,z)-.014f,z,1.f};
+                         scale*s,0.f,scale*c,0.f,x,surfaceHeight(x,z)-.014f+
+                         std::clamp(elevation,0.f,2.f),z,1.f};
  glUniformMatrix4fv(uModel,1,GL_FALSE,matrix);
  glBindTexture(GL_TEXTURE_2D,model.texture);glBindVertexArray(model.vao);
  glDrawArrays(GL_TRIANGLES,0,model.count);
@@ -409,7 +411,7 @@ const char* errorMessage(){return error.c_str();}
 void render(const float* viewProjection,const float* worldNodes,
             const float* grass,const float* trees,bool fernApproved,
             float worldClock,float rain,float playerX,float playerZ,
-            float playerHeading,bool drawPlayer,bool playerMoving,bool playerRunning,
+            float playerHeading,float playerJumpHeight,bool drawPlayer,bool playerMoving,bool playerRunning,
             const float* npcPositions,float animationTime,float windStrength,
             float windX,float windZ,float wetSeason,float soilMoisture){
  renderedHumans=0;
@@ -535,7 +537,8 @@ void render(const float* viewProjection,const float* worldNodes,
     // follow a more natural daylight range on phone displays.
     glUniform3f(uTint,1.02f,.90f,.77f);
     const int playerClip=playerRunning?4:(playerMoving?3:0);
-    if(drawPlayer)drawHuman(playerX,playerZ,1.f,playerHeading,0,playerClip,now);
+    if(drawPlayer)drawHuman(playerX,playerZ,1.f,playerHeading,0,playerClip,now,
+                             playerJumpHeight);
     // Each companion has its own gait phase; no synchronized zombie walk.
     for(int i=0;i<4;++i){
         const float* n=npcPositions+i*4;

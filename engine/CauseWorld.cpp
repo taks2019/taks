@@ -272,7 +272,7 @@ std::string World::nearby() const{
     else out<<" · menj közelebb";
     return out.str();
 }
-std::string World::move(double dx,double dz){
+std::string World::move(double dx,double dz,bool airborne){
     if(!std::isfinite(dx)||!std::isfinite(dz))return "Érvénytelen mozgás.";
     const double requested=std::hypot(dx,dz);
     if(requested<0.00001)return "A karakter helyben maradt.";
@@ -283,10 +283,11 @@ std::string World::move(double dx,double dz){
     double wadingFactor=1.0;
     for(const auto& water:ecology.waters){
         const double wx=playerX-water.x,wz=playerZ-water.z;
-        if(water.level>.28&&wx*wx+wz*wz<water.radius*water.radius)
+        if(!airborne&&water.level>.28&&wx*wx+wz*wz<water.radius*water.radius)
             wadingFactor=std::min(wadingFactor,.72);
     }
-    const double factor=std::min(1.0,0.75/requested)*ecology.walkSpeedFactor()*wadingFactor;
+    const double factor=std::min(1.0,0.75/requested)*
+                        (airborne?.65:ecology.walkSpeedFactor())*wadingFactor;
     dx*=factor;dz*=factor;
     const double distance=std::hypot(dx,dz);
     const int slices=std::max(1,static_cast<int>(std::ceil(distance/.10)));
@@ -331,9 +332,11 @@ std::string World::move(double dx,double dz){
     }
     const double oldX=playerX,oldZ=playerZ;
     playerX=mx;playerZ=mz;
-    ecology.trampleTrail(oldX,oldZ,playerX,playerZ,clamp(ecology.mud+groundMoisture*.45,0,1));
+    if(!airborne){
+        ecology.trampleTrail(oldX,oldZ,playerX,playerZ,clamp(ecology.mud+groundMoisture*.45,0,1));
+        ecology.stampFootstep(playerX,playerZ,std::atan2(dx,dz));
+    }
     walkPhase+=traveled*5.5;
-    ecology.stampFootstep(playerX,playerZ,std::atan2(dx,dz));
     stamina=clamp(stamina-traveled*(0.50+groundMoisture*.65+ecology.mud*.8+
                    ecology.snowDepth*.35+ecology.slipRisk()*.4),0.0,100.0);
     step(traveled*.013);
@@ -343,6 +346,18 @@ std::string World::move(double dx,double dz){
 }
 std::string World::act(const std::string& action) {
     ensureLedger();
+    if(action=="jump"){
+        for(const auto& water:ecology.waters){
+            const double dx=playerX-water.x,dz=playerZ-water.z;
+            if(water.level>.38&&dx*dx+dz*dz<water.radius*water.radius)
+                return "A mély vízben nem tudsz elrugaszkodni; előbb érj a partra.";
+        }
+        const double cost=8.0+ecology.mud*4.0;
+        if(stamina<cost)return "Nincs elég állóképesség az ugráshoz; pihenj meg.";
+        stamina-=cost;
+        ++eventCounter;
+        return "Elrugaszkodtál a talajról.";
+    }
     if(action=="drink"){
         if(playerThirst<15.0)return "Most nem vagy szomjas; a vízkészletet nem használtad fel.";
         if(waterCollectorStage>=2&&storedRainwater>.05&&

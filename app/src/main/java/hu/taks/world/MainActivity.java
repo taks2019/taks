@@ -38,6 +38,7 @@ public final class MainActivity extends Activity {
     private native String nativeBuildState();
     private native int nativeSiteStage();
     private native String nativeMove(float dx,float dz);
+    private native String nativeJump();
     private native boolean nativeLogoUnlocked();
     private native String nativeNearby();
     private native String nativeGoal();
@@ -83,8 +84,7 @@ public final class MainActivity extends Activity {
     };
     private final ArrayList<View> gameHud=new ArrayList<>();
     private boolean inMainMenu=true;
-    private Button pickupButton;
-    private float orbit=-.785398f,cameraPitch=.615480f,zoom=19f,lastX=0,lastY=0,lastSpan=0;
+        private float orbit=-.785398f,cameraPitch=.615480f,zoom=19f,lastX=0,lastY=0,lastSpan=0;
     private int activePanel=0;
     private final Handler worldHandler=new Handler(Looper.getMainLooper());
     private final Handler renderHandler=new Handler(Looper.getMainLooper());
@@ -385,8 +385,7 @@ public final class MainActivity extends Activity {
     private void refreshNearby(){
         final String nearby=nativeNearby();
         if(proximity!=null)proximity.setText(nearby);
-        if(pickupButton!=null)pickupButton.setVisibility(nearby.contains("FELVEHETŐ")?View.VISIBLE:View.GONE);
-    }
+            }
     private void say(String msg){if(notice!=null){notice.setText(msg);notice.setVisibility(View.VISIBLE);}}
     private void act(String cmd){say(nativeDo(cmd));refreshNearby();refreshScene();if(activePanel!=0)showPanel(activePanel);refreshLivingSkin();}
     private void save(){saves.edit().putString("state",nativeSave()).apply();say("Világállapot mentve az eszközön.");}
@@ -1111,12 +1110,14 @@ public final class MainActivity extends Activity {
         root.addView(crouchButton,crouchParams);
         gameHud.add(crouchButton);
 
-        // Kontextuális FELVESZ – csak akkor van a képernyőn, ha tényleg van elérhető tárgy.
-        pickupButton=button("FELVESZ",()->act("gather"),true);
-        FrameLayout.LayoutParams collectLayout=new FrameLayout.LayoutParams(dp(98),dp(43),Gravity.BOTTOM|Gravity.RIGHT);
-        collectLayout.setMargins(0,0,dp(16),dp(72));
-        root.addView(pickupButton,collectLayout);
-        gameHud.add(pickupButton);
+        // No floating FELVESZ overlay. Gathering remains in the build panel.
+        // Jump is a genuine native physics impulse, not an endless actor loop.
+        Button jump=button("UGRÁS",()->say(nativeJump()),true);
+        jump.setContentDescription("Ugrás: állóképesség- és terepfüggő elrugaszkodás");
+        FrameLayout.LayoutParams jumpLayout=new FrameLayout.LayoutParams(
+            dp(67),dp(41),Gravity.LEFT|Gravity.BOTTOM);
+        jumpLayout.setMargins(dp(116),0,0,dp(87));
+        root.addView(jump,jumpLayout);gameHud.add(jump);
 
         // Kompakt, jobb alsó kezelősáv. A világ képernyőjét nem takarja 5 óriásgomb.
         LinearLayout bottom=new LinearLayout(this);bottom.setGravity(Gravity.CENTER);

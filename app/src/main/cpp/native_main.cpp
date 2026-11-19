@@ -6,6 +6,7 @@
 #include "AfricanClimate.h"
 #include "FastScene.h"
 #include "RealModels.h"
+#include "../../../../engine/PlayerTraversal.h"
 #include <vector>
 #include <string>
 #include <mutex>
@@ -20,6 +21,10 @@ GLuint program=0, vertexArray=0;
 float orbit=-0.785398f, pitch=0.615480f, zoom=19.0f;
 float playerHeading=0.0f;
 bool playerCrouching=false;
+taks::PlayerJump playerJump;
+double monotonicSeconds(){
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 std::chrono::steady_clock::time_point playerMovementDeadline{};
 std::chrono::steady_clock::time_point playerRunDeadline{};
 std::array<float,8> npcPrevious{};
@@ -62,7 +67,8 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeDo(JN
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeMove(JNIEnv* env,jobject,jfloat dx,jfloat dz){
     std::lock_guard<std::mutex> guard(worldLock);
     const double beforeX=world.playerX,beforeZ=world.playerZ;
-    const std::string result=world.move(static_cast<double>(dx),static_cast<double>(dz));
+    const std::string result=world.move(static_cast<double>(dx),static_cast<double>(dz),
+                                          playerJump.airborne(monotonicSeconds()));
     const double deltaX=world.playerX-beforeX,deltaZ=world.playerZ-beforeZ;
     if(std::hypot(deltaX,deltaZ)>.00001){
         playerHeading=static_cast<float>(std::atan2(deltaX,deltaZ));
@@ -76,6 +82,19 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetCrouc
     JNIEnv*,jobject,jboolean crouch){
     std::lock_guard<std::mutex> guard(worldLock);
     playerCrouching=(crouch==JNI_TRUE);
+}
+extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeJump(JNIEnv* env,jobject){
+    std::lock_guard<std::mutex> guard(worldLock);
+    const double now=monotonicSeconds();
+    if(playerCrouching)return toJava(env,"Ugrás előtt állj fel.");
+    if(playerJump.airborne(now))return toJava(env,"Még a levegőben vagy.");
+    const std::string response=world.act("jump");
+    if(response=="Elrugaszkodtál a talajról."){
+        const double impulse=std::clamp(3.85-world.ecology.mud*1.2-world.playerWetness*.28,
+                                       2.0,4.0);
+        playerJump.launch(now,impulse);
+    }
+    return toJava(env,response);
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeGoal(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
@@ -136,12 +155,13 @@ extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeLoad
     if(txt)env->ReleaseStringUTFChars(payload,txt);
     std::lock_guard<std::mutex> guard(worldLock);
     const bool loaded=world.load(raw);
-    if(loaded)npcInterpolationReady=false;
+    if(loaded){npcInterpolationReady=false;playerJump.reset();playerCrouching=false;}
     return loaded?JNI_TRUE:JNI_FALSE;
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeReset(JNIEnv*,jobject){
     std::lock_guard<std::mutex> guard(worldLock);world=taks::World();
     playerMovementDeadline=playerRunDeadline=std::chrono::steady_clock::time_point{};
+    playerJump.reset();playerCrouching=false;
     npcInterpolationReady=false;
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetView(JNIEnv*,jobject,jfloat yaw,jfloat cameraPitch,jfloat scale){
@@ -268,6 +288,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         f.walkPhase=static_cast<float>(world.walkPhase);
         f.playerHeading=playerHeading;
         f.playerCrouching=playerCrouching;
+        f.playerJumpHeight=static_cast<float>(playerJump.height(monotonicSeconds()));
         const auto frameNow=std::chrono::steady_clock::now();
         f.animationTime=static_cast<float>(std::fmod(std::chrono::duration<double>(frameNow.time_since_epoch()).count(),4096.0));
         f.playerMoving=frameNow<playerMovementDeadline;

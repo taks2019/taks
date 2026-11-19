@@ -80,7 +80,7 @@ struct World {
     int currentEra() const { return eraFor(eraEvidence()); }
     bool logoUnlocked() const { return logoUnlockedFor(currentEra()); }
     std::string act(const std::string& action);
-    std::string move(double dx,double dz);
+    std::string move(double dx,double dz,bool airborne=false);
     std::string nearby() const;
     std::string nextObjective() const;
     std::string npcStatus() const;
