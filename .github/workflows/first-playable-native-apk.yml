@@ -4,7 +4,7 @@ on:
     branches: ['codex/taks-world-elfogadott-menu-mp4-2026-11-19']
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   assets:
     runs-on: ubuntu-latest
@@ -242,5 +242,26 @@ jobs:
           path: TAKS_World_Android_KIPROBALO.apk
           if-no-files-found: error
           retention-days: 14
+      - name: Publish direct standalone APK download (preview release)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="taks-world-android-0.15-wonderwerk-preview"
+          file="TAKS_World_Android_KIPROBALO.apk"
+          test -s "$file"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "$file" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$tag" "$file" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "TAKS World 0.15 – Wonderwerk Android kipróbáló" \
+              --notes "A felhasználó által elfogadott, változatlan MP4-videós főmenü és natív TAKS Engine Android-próbaverzió. A grafika fejlesztés alatt áll; nem teljes játék. A Galaxy A56 és Honor Pad X8 készüléktesztek még szükségesek." \
+              --prerelease \
+              --latest=false
+          fi
+          echo "DIRECT_APK=https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$file" >> "$GITHUB_STEP_SUMMARY"
 
 
