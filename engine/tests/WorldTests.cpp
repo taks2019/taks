@@ -7,6 +7,14 @@
 #include <string>
 #include <sstream>
 #include <vector>
+static void removeNewLearningFields(std::vector<std::string>& tokens){
+    const auto tag=std::find(tokens.begin(),tokens.end(),"NPCLEARN1");
+    if(tag==tokens.end())return;
+    constexpr std::size_t dataCount=4*(6+12);
+    assert(std::size_t(tokens.end()-tag)>dataCount);
+    tokens.erase(tag,tag+1+dataCount);
+}
+
 
 static void walkTo(taks::World& w,double x,double z){
     for(int step=0;step<128;++step){
@@ -122,7 +130,7 @@ int main(){
     taks::World old1,old2;
     assert(old1.load("TAKS_NATIVE_1 14 8 5 0 0 0 6 0.4 0 0.13 0.13 100 0 0 0 0"));
     assert(old2.load("TAKS_NATIVE_2 12 7 4 1 1 1 8 0.4 0 0.13 0.13 88 0 0 0 3 15 2 6 1 0 1 0.12 0"));
-    assert(old1.save().find("TAKS_NATIVE_10")==0);
+    assert(old1.save().find("TAKS_NATIVE_11")==0);
     assert(old2.groundWood==12 && old2.groundStone==7 && old2.groundLeaves==15);
     assert(old2.nodes[0].amount<=3);
     const auto stable=old2.save();
@@ -194,7 +202,7 @@ int main(){
     }
     assert(legacy3.load(v3));
     assert(legacy3.npcs[0].role==0);
-    assert(legacy3.save().find("TAKS_NATIVE_10")==0);
+    assert(legacy3.save().find("TAKS_NATIVE_11")==0);
     // A társakkal helyben lehet beszélni, távolról nincs mágikus kommunikáció.
     taks::World talk;
     assert(talk.act("npc_talk").find("Nincs beszélgetési")!=std::string::npos);
@@ -259,6 +267,7 @@ int main(){
     const auto ecoBegin=std::find(oldFields.begin(),oldFields.end(),"ECO4");
     assert(ecoBegin!=oldFields.end());
     oldFields.erase(ecoBegin,oldFields.end());
+    removeNewLearningFields(oldFields);
     oldFields[0]="TAKS_NATIVE_4";
     oldFields.resize(oldFields.size()-13); // v5 build sites -> old v4 save
     std::ostringstream oldText;
@@ -271,7 +280,7 @@ int main(){
     assert(migratedOld.siteCount==1 && migratedOld.sites[0].stage==3);
     assert(std::abs(migratedOld.sites[0].x-3.1)<1e-6);
     assert(std::abs(migratedOld.sites[0].z+1.55)<1e-6);
-    assert(migratedOld.save().find("TAKS_NATIVE_10")==0);
+    assert(migratedOld.save().find("TAKS_NATIVE_11")==0);
     // A saved 0.8 / v5 world loads without creating animals or losing inventory.
     auto oldV5Fields=oldFields;
     {
@@ -285,6 +294,7 @@ int main(){
         }
     }
     assert(oldV5Fields.size()>13);
+    removeNewLearningFields(oldV5Fields);
     oldV5Fields[0]="TAKS_NATIVE_5";
     std::ostringstream oldV5Text;
     for(std::size_t i=0;i<oldV5Fields.size();++i){
@@ -293,7 +303,7 @@ int main(){
     }
     taks::World upgraded;
     assert(upgraded.load(oldV5Text.str()));
-    assert(upgraded.save().find("TAKS_NATIVE_10")==0);
+    assert(upgraded.save().find("TAKS_NATIVE_11")==0);
     assert(upgraded.ledgerConsistent());
     assert(upgraded.ecology.aliveAnimals()==4);
     // V6 ECO1 and V7 ECO2 remain readable; V8 adds saved hydrology.
@@ -307,12 +317,15 @@ int main(){
                                   taks::LivingWorld::animalCount*11;
     assert(v6Fields.size()>=ecoIndex+1+eco1Payload);
     v6Fields.resize(ecoIndex+1+eco1Payload);
-    v6Fields[0]="TAKS_NATIVE_6";v6Fields[ecoIndex]="ECO1";
+    removeNewLearningFields(v6Fields);
+    const auto originalEco=std::find(v6Fields.begin(),v6Fields.end(),"ECO4");
+    assert(originalEco!=v6Fields.end());
+    v6Fields[0]="TAKS_NATIVE_6";*originalEco="ECO1";
     std::ostringstream oldV6Text;
     for(std::size_t i=0;i<v6Fields.size();++i){if(i)oldV6Text<<' ';oldV6Text<<v6Fields[i];}
     taks::World oldV6;
     assert(oldV6.load(oldV6Text.str()));
-    assert(oldV6.save().find("TAKS_NATIVE_10")==0);
+    assert(oldV6.save().find("TAKS_NATIVE_11")==0);
     assert(oldV6.ecology.visibleFootprintCount()==0);
     taks::World muddySteps;
     muddySteps.ecology.soilWater=.8;muddySteps.ecology.mud=.9;muddySteps.groundMoisture=.8;
@@ -370,7 +383,7 @@ int main(){
         assert(loggedStone);
         // Mentés/betöltés megtartja az azonosítókat.
         const std::string saved=w.save();
-        assert(saved.find("TAKS_NATIVE_10")==0 && saved.find(" LEDG1 ")!=std::string::npos);
+        assert(saved.find("TAKS_NATIVE_11")==0 && saved.find(" LEDG1 ")!=std::string::npos);
         taks::World back;assert(back.load(saved));
         assert(back.items.size()==w.items.size() && back.nextItemId==w.nextItemId && back.ledgerConsistent());
         for(size_t i=0;i<w.items.size();++i)assert(back.items[i].id==w.items[i].id && back.items[i].where==w.items[i].where);
@@ -482,6 +495,44 @@ int main(){
     jumper.playerZ=jumper.ecology.waters[0].z;
     assert(jumper.act("jump").find("mély vízben")!=std::string::npos);
     std::cout<<"PASS: bounded terrain-dependent 3D jump and airborne footprints"<<std::endl;
+    // NPC learning must be non-omniscient, individually persistent and bounded.
+    {
+        taks::World learning;
+        assert(learning.npcs[0].rememberedAmounts[0]==-1);
+        assert(learning.npcs[0].completedTrips==0);
+        learning.step(.04);
+        // Actor 1 starts within 2.8m of node 2, not of remote node 4.
+        assert(learning.npcs[0].rememberedAmounts[2]>=0);
+        assert(learning.npcs[0].rememberedAmounts[3]==-1);
+        const std::string learned=learning.save();
+        taks::World replay;
+        assert(replay.load(learned)&&replay.save()==learned);
+        assert(replay.npcs[0].rememberedAmounts==learning.npcs[0].rememberedAmounts);
+        assert(replay.npcs[0].discoveries==learning.npcs[0].discoveries);
+        // Fabricated knowledge must be rejected without corrupting world state.
+        std::string damaged=learned;
+        auto at=damaged.find(" NPCLEARN1 ");
+        assert(at!=std::string::npos);
+        auto end=damaged.find(' ',at+11);
+        assert(end!=std::string::npos);
+        damaged.replace(at+11,end-(at+11),"9999");
+        const auto beforeReject=replay.save();
+        assert(!replay.load(damaged)&&replay.save()==beforeReject);
+        // Old v10 remains loadable; the missing new learning block is initialized.
+        std::istringstream scan(taks::World().save());
+        std::vector<std::string> old10;
+        std::string tok;
+        while(scan>>tok)old10.push_back(tok);
+        removeNewLearningFields(old10);
+        old10[0]="TAKS_NATIVE_10";
+        std::ostringstream legacy;
+        for(const auto& word:old10)legacy<<word<<' ';
+        taks::World oldLoaded;
+        assert(oldLoaded.load(legacy.str()));
+        assert(oldLoaded.npcs[0].rememberedAmounts[0]==-1);
+        assert(oldLoaded.save().find("TAKS_NATIVE_11")==0);
+        std::cout<<"PASS: NPC discovery, learning persistence, invalid data and v10 migration"<<std::endl;
+    }
     std::cout<<"PASS: F2 structure wired into world, materials, save v8\n";
     std::cout<<"PASS: F1 unique item ledger, causal log, v7 save and v6 migration\n";
     std::cout<<"TAKS spatial game, construction and save migration tests PASSED\n";

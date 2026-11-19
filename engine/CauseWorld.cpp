@@ -173,7 +173,12 @@ std::string World::npcStatus() const {
            <<" · erő "<<npc.energy<<"%"
            <<" · éhség "<<npc.hunger<<"%"
            <<" · szállít "<<npc.carrying
-           <<" · leadott "<<npc.delivered;
+           <<" · leadott "<<npc.delivered
+           <<" · megismert "<<npc.discoveries
+           <<" · hallomás "<<npc.rumorsHeard
+           <<" · tanult út "<<npc.completedTrips
+           <<" · téves nyom "<<npc.falseLeads
+           <<" · vizes munka "<<npc.wetTrips;
         if(i+1<npcCount)out<<"\n";
     }
     return out.str();
@@ -203,6 +208,42 @@ void World::updateNpcs(double dt){
                 npc.energy=clamp(npc.energy+2.4,0,100);
                 continue;
             }
+            // Perception: a location's stock is only reliable when observed.
+            // Walking near a depleted patch corrects remembered or rumored facts.
+            for(int j=0;j<resourceCount;++j){
+                const auto& observed=nodes[j];
+                const double ox=observed.x-npc.x,oz=observed.z-npc.z;
+                if(ox*ox+oz*oz>2.8*2.8)continue;
+                const int old=npc.rememberedAmounts[j];
+                if((old==-1||old==-2)&&observed.amount>0){
+                    ++npc.discoveries;
+                    logCause("Társ "+std::to_string(i+1)+" személyesen megfigyelte a "+std::to_string(j+1)+". lelőhelyet");
+                }
+                if((old>0||old==-2)&&observed.amount==0){
+                    ++npc.falseLeads;
+                    logCause("Társ "+std::to_string(i+1)+" ellenőrzött és elvetett egy korábbi lelőhelyismeretet");
+                }
+                npc.rememberedAmounts[j]=observed.amount;
+            }
+            // Physical encounter at the camp transfers an unverified report,
+            // never a guaranteed fact. Different NPCs can disagree.
+            const double toCampX=npc.x+.30,toCampZ=npc.z+3.40;
+            if(toCampX*toCampX+toCampZ*toCampZ<1.6*1.6){
+                for(int other=0;other<npcCount;++other){
+                    if(other==i)continue;
+                    Npc& listener=npcs[other];
+                    const double hx=listener.x+.30,hz=listener.z+3.40;
+                    if(hx*hx+hz*hz>1.6*1.6)continue;
+                    for(int j=0;j<resourceCount;++j){
+                        if(npc.rememberedAmounts[j]>0&&listener.rememberedAmounts[j]==-1){
+                            listener.rememberedAmounts[j]=-2;
+                            ++listener.rumorsHeard;
+                            logCause("Társ "+std::to_string(other+1)+" hallomást kapott a "+
+                                     std::to_string(j+1)+". lelőhelyről");
+                        }
+                    }
+                }
+            }
             if(npc.carrying>0) {
                 npc.task=2;
                 const double dx=-.30-npc.x,dz=-3.40-npc.z;
@@ -211,34 +252,69 @@ void World::updateNpcs(double dt){
                     if(npc.role<2)moveItem(npc.role,4,-1,i,2,-1,-1,"társ leadja a táborban");
                     campStock[npc.role]+=npc.carrying;
                     npc.delivered+=npc.carrying;
+                    ++npc.completedTrips;
+                    if(npc.wetness>.48)++npc.wetTrips;
                     npc.carrying=0;
                     npc.task=0;
+                    logCause("Társ "+std::to_string(i+1)+" sikeres munkautat tanult");
                     ++eventCounter;
                 }else{
                     const double step=std::min(length,.25*(npc.wetness>.6?.65:1.)*ecology.walkSpeedFactor());
                     npc.x+=dx/length*step;npc.z+=dz/length*step;
                     npc.walkPhase+=step*5;
-                    npc.energy=clamp(npc.energy-step*.42,0,100);
+                    const double practice=std::min(npc.completedTrips,12)/12.0;
+                    npc.energy=clamp(npc.energy-step*.42*(1.0-.16*practice),0,100);
                 }
                 continue;
             }
             int chosen=-1;double best=1.e10;
             for(int j=0;j<resourceCount;++j){
                 const ResourceNode& node=nodes[j];
-                if(node.amount<=0||node.type!=type)continue;
+                const int recollection=npc.rememberedAmounts[j];
+                if(node.type!=type||(recollection<=0&&recollection!=-2))continue;
                 const double dx=node.x-npc.x,dz=node.z-npc.z;
                 const double distSq=dx*dx+dz*dz;
-                if(distSq<best){chosen=j;best=distSq;}
+                // Heard reports are less reliable than direct observation.
+                const double score=distSq+(recollection==-2?8.0:0.0);
+                if(score<best){chosen=j;best=score;}
             }
-            if(chosen<0){npc.task=4;continue;}
+            if(chosen<0){
+                // All NPCs use the same non-magical exploration circuit.
+                // Actual resources become visible only through local sensing.
+                static constexpr double patrol[][2]={
+                    {-1.6,-4.4},{3.4,-3.1},{-3.8,-1.3},{3.8,.35},
+                    {-1.6,1.0},{1.2,-.9},{-4.6,-4.3},{4.6,-5.2}
+                };
+                constexpr int patrolCount=int(sizeof(patrol)/sizeof(patrol[0]));
+                if(npc.scoutSteps>=patrolCount){npc.task=4;continue;}
+                npc.task=1;
+                const double dx=patrol[npc.scoutSteps][0]-npc.x;
+                const double dz=patrol[npc.scoutSteps][1]-npc.z;
+                const double length=std::hypot(dx,dz);
+                if(length<.65){++npc.scoutSteps;continue;}
+                const double pace=.22*(npc.wetness>.6?.65:1.)*ecology.walkSpeedFactor();
+                const double step=std::min(length,pace);
+                npc.x+=dx/length*step;npc.z+=dz/length*step;
+                npc.walkPhase+=step*5;
+                npc.energy=clamp(npc.energy-step*.44,0,100);
+                continue;
+            }
             npc.task=1;
             ResourceNode& node=nodes[chosen];
             const double dx=node.x-npc.x,dz=node.z-npc.z;
             const double length=std::sqrt(dx*dx+dz*dz);
             if(length<.62){
+                if(node.amount<=0){
+                    npc.rememberedAmounts[chosen]=0;
+                    ++npc.falseLeads;
+                    npc.task=0;
+                    logCause("Társ "+std::to_string(i+1)+" üres lelőhelyhez érkezett");
+                    continue;
+                }
                 if(npc.energy<3){npc.task=3;continue;}
                 if(node.type<2)moveItem(node.type,0,chosen,-1,4,-1,i,"társ felveszi");
                 --node.amount;
+                npc.rememberedAmounts[chosen]=node.amount;
                 npc.carrying=1;
                 npc.task=2;
                 npc.energy-=1.8;
@@ -248,7 +324,8 @@ void World::updateNpcs(double dt){
                 const double step=std::min(length,.22*(npc.wetness>.6?.65:1.)*ecology.walkSpeedFactor());
                 npc.x+=dx/length*step;npc.z+=dz/length*step;
                 npc.walkPhase+=step*5;
-                npc.energy=clamp(npc.energy-step*.44,0,100);
+                const double practice=std::min(npc.completedTrips,12)/12.0;
+                npc.energy=clamp(npc.energy-step*.44*(1.0-.16*practice),0,100);
             }
         }
     }
@@ -741,7 +818,7 @@ std::string World::summary() const {
       <<"MENEDÉKEK: "<<siteCount<<" db | LEGFEJLETTEBB: "<<shelterStage<<"/3 | VÉDETT: "<<(underShelter?"igen":"nem")<<"\n"
       <<"TŰZHELY: "<<(hearthBuilt?"felépült":"hiányzik")<<" | TŰZ: "<<(fireLit?"ég":"nem ég")<<"\n"
       <<"TÁBOR: "<<campStatus()<<"\n"
-      <<"KÖZÖSSÉG: 4 társ · önálló munkavégzés\n"
+      <<"KÖZÖSSÉG: 4 társ · önálló munkavégzés és személyes tanulás\n"
       <<"OKOZATI ESEMÉNYEK: "<<eventCounter<<"\n"
       <<ecology.status();
     return os.str();
@@ -751,7 +828,7 @@ double World::windStrength() const {
 }
 std::string World::save() const {
     std::ostringstream o;o<<std::setprecision(17);
-    o<<"TAKS_NATIVE_10 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
+    o<<"TAKS_NATIVE_11 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
      <<carriedWood<<' '<<carriedStone<<' '<<carriedTinder<<' '
      <<hours<<' '<<humidity<<' '<<rainIntensity<<' '<<woodMoisture<<' '
      <<groundMoisture<<' '<<stamina<<' '<<fireFuel<<' '
@@ -765,6 +842,13 @@ std::string World::save() const {
     for(const auto& n:npcs)
         o<<' '<<n.x<<' '<<n.z<<' '<<n.energy<<' '<<n.hunger<<' '<<n.wetness
          <<' '<<n.role<<' '<<n.carrying<<' '<<n.task<<' '<<n.delivered<<' '<<n.walkPhase;
+    // Separate saved learning, after legacy NPC fields: old save formats are unchanged.
+    o<<" NPCLEARN1";
+    for(const auto& n:npcs){
+        o<<' '<<n.discoveries<<' '<<n.rumorsHeard<<' '<<n.completedTrips
+         <<' '<<n.falseLeads<<' '<<n.wetTrips<<' '<<n.scoutSteps;
+        for(int observation:n.rememberedAmounts)o<<' '<<observation;
+    }
     o<<' '<<siteCount;
     for(const auto& site:sites)
         o<<' '<<site.x<<' '<<site.z<<' '<<site.stage<<' '<<site.condition;
@@ -781,8 +865,8 @@ bool World::load(const std::string& data) {
     if(!(is>>header) ||
        header.rfind("TAKS_NATIVE_",0)!=0)return false;
     int version=1;
-    while(version<=10&&header!="TAKS_NATIVE_"+std::to_string(version))++version;
-    if(version>10)return false;
+    while(version<=11&&header!="TAKS_NATIVE_"+std::to_string(version))++version;
+    if(version>11)return false;
     if(!(is>>tmp.groundWood>>tmp.groundStone>>tmp.groundTinder
       >>tmp.carriedWood>>tmp.carriedStone>>tmp.carriedTinder
       >>tmp.hours>>tmp.humidity>>tmp.rainIntensity>>tmp.woodMoisture
@@ -803,6 +887,15 @@ bool World::load(const std::string& data) {
                    >>n.role>>n.carrying>>n.task>>n.delivered>>n.walkPhase))return false;
         }
     }
+    if(version>=11){
+        std::string learnTag;
+        if(!(is>>learnTag)||learnTag!="NPCLEARN1")return false;
+        for(auto& n:tmp.npcs){
+            if(!(is>>n.discoveries>>n.rumorsHeard>>n.completedTrips
+                 >>n.falseLeads>>n.wetTrips>>n.scoutSteps))return false;
+            for(int& observed:n.rememberedAmounts)if(!(is>>observed))return false;
+        }
+    }
     if(version>=5){
         if(!(is>>tmp.siteCount))return false;
         for(auto& site:tmp.sites)
@@ -814,12 +907,12 @@ bool World::load(const std::string& data) {
     const bool classicEcology=format==EcoFormat::Initial||format==EcoFormat::TrampledGrass;
     // Version 7/8 had two writers. Their ecology layouts decide which suffix
     // is mandatory, so truncation cannot turn a damaged ledger into a new one.
-    const bool hasLedger=version==10||(version>=7&&version<=9&&classicEcology);
+    const bool hasLedger=version>=10||(version>=7&&version<=9&&classicEcology);
     const bool hasStruct=hasLedger&&version>=8;
-    const bool hasWater=version==10||(version==8&&format==EcoFormat::Water);
+    const bool hasWater=version>=10||(version==8&&format==EcoFormat::Water);
     if((version==6&&!classicEcology)||(version==7&&!hasLedger&&format!=EcoFormat::Footprints)||
        (version==8&&!hasLedger&&!hasWater)||(version==9&&!hasLedger)||
-       (version==10&&format!=EcoFormat::Combined))return false;
+       (version>=10&&format!=EcoFormat::Combined))return false;
     if(hasWater&&!(is>>tmp.playerThirst>>tmp.waterCollectorStage>>tmp.storedRainwater))return false;
     if(version>=6){
         // V6+ store a second moisture value. Preserve the ecology state on load
@@ -888,7 +981,15 @@ bool World::load(const std::string& data) {
                !std::isfinite(n.energy)||n.energy<0||n.energy>100||
                !std::isfinite(n.hunger)||n.hunger<0||n.hunger>100||
                !std::isfinite(n.wetness)||n.wetness<0||n.wetness>1||
-               !std::isfinite(n.walkPhase)||n.walkPhase<0||n.walkPhase>1e9)return false;
+               !std::isfinite(n.walkPhase)||n.walkPhase<0||n.walkPhase>1e9||
+               n.discoveries<0||n.discoveries>12||
+               n.rumorsHeard<0||n.rumorsHeard>12||
+               n.completedTrips<0||n.completedTrips>100000||
+               n.falseLeads<0||n.falseLeads>100000||
+               n.wetTrips<0||n.wetTrips>100000||
+               n.scoutSteps<0||n.scoutSteps>8)return false;
+            for(int observed:n.rememberedAmounts)
+                if(observed< -2||observed>100000)return false;
         }
     }
     if(version>=3){
