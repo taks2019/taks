@@ -17,9 +17,9 @@ struct Vertex { float x,y,z,nx,ny,nz,kind; };
 struct Mat4 { float a[16]{}; };
 std::string error;
 GLuint program=0,staticVAO=0,staticVBO=0,dynamicVAO=0,dynamicVBO=0;
-GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uAnimation=-1,uEye=-1,uGround=-1,uCliff=-1;
+GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uAnimation=-1,uWind=-1,uEye=-1,uGround=-1,uCliff=-1;
 GLuint terrainTexture[2]={0,0};
-std::vector<Vertex> terrainMesh,objectsMesh;
+std::vector<Vertex> terrainMesh,objectsMesh,weatherMesh;
 Vec3 add(Vec3 a,Vec3 b){return {a.x+b.x,a.y+b.y,a.z+b.z};}
 Vec3 sub(Vec3 a,Vec3 b){return {a.x-b.x,a.y-b.y,a.z-b.z};}
 Vec3 mul(Vec3 v,float s){return {v.x*s,v.y*s,v.z*s};}
@@ -36,7 +36,10 @@ float surfaceHeight(float x,float z){
                  .09f*std::sin(x*.87f+z*.57f)+.065f*std::cos(z*.73f-x*.42f);
     return -.48f+(relief+.48f)*e;
 }
-float top(float x){return 4.45f+.62f*std::sin(x*.29f+.48f)+.37f*std::sin(x*.81f);}
+float top(float x){
+    const float taper=std::sqrt(std::max(0.f,1.f-x*x/(9.4f*9.4f)));
+    return 5.15f*taper+.24f*taper*std::sin(x*.83f);
+}
 void triangle(std::vector<Vertex>& v,Vec3 a,Vec3 b,Vec3 c,float kind){
     Vec3 n=norm(cross(sub(b,a),sub(c,a)));
     v.push_back({a.x,a.y,a.z,n.x,n.y,n.z,kind});
@@ -249,18 +252,28 @@ void buildStatic(){
     const int mx=95,my=34;
     for(int j=0;j<my;++j)for(int i=0;i<mx;++i){
         float x=-9.4f+18.8f*float(i)/mx,xx=-9.4f+18.8f*float(i+1)/mx;
-        float y=5.5f*float(j)/my,yy=5.5f*float(j+1)/my;
-        float midX=(x+xx)*.5f,midY=(y+yy)*.5f;
-        if(cliffOpen(midX,midY))continue;
-        if(midY>top(midX))continue;
-        Vec3 a{x,y,cliffZ(x,y)},b{xx,y,cliffZ(xx,y)},c{xx,yy,cliffZ(xx,yy)},d{x,yy,cliffZ(x,yy)};
+        const float t=float(j)/my,tt=float(j+1)/my;
+        const float y=top(x)*t,yy=top(x)*tt;
+        const float r=top(xx)*t,rr=top(xx)*tt;
+        if(cliffOpen((x+xx)*.5f,(y+yy+r+rr)*.25f))continue;
+        Vec3 a{x,y,cliffZ(x,y)},b{xx,r,cliffZ(xx,r)},c{xx,rr,cliffZ(xx,rr)},d{x,yy,cliffZ(x,yy)};
         quad(terrainMesh,a,b,c,d,1.f);
     }
-    // A fal kap egy felső felszínt és valódi oldalakat.
+    // Close the full rock formation down to the ground behind the entrance.
+    constexpr int depthSegments=30;
     for(int i=0;i<80;++i){
-        float x=-9.4f+18.8f*i/80.f,xx=-9.4f+18.8f*(i+1)/80.f;
-        float y=top(x),yy=top(xx);
-        quad(terrainMesh,{x,y,cliffZ(x,y)},{xx,yy,cliffZ(xx,yy)},{xx,yy-.25f,12.2f},{x,y-.25f,12.2f},1.f);
+        const float x=-9.4f+18.8f*i/80.f,xx=-9.4f+18.8f*(i+1)/80.f;
+        auto crest=[](float x,float t){
+            const float y=top(x);
+            const float z=cliffZ(x,y)+(12.2f-cliffZ(x,y))*t;
+            const float ground=surfaceHeight(x,z);
+            const float ripple=.24f*std::sin(x*1.7f+t*31.f)*std::sin(t*PI);
+            return Vec3{x,ground+(y-ground)*std::cos(t*PI*.5f)+ripple,z};
+        };
+        for(int j=0;j<depthSegments;++j){
+            const float a=float(j)/depthSegments,b=float(j+1)/depthSegments;
+            quad(terrainMesh,crest(x,a),crest(x,b),crest(xx,b),crest(xx,a),1.f);
+        }
     }
     // A barlang sötét belseje az elülső arch mögött található.
     for(int i=0;i<13;++i){
@@ -399,7 +412,33 @@ void addWaterCollector(const FastFrame& scene){
                      surfaceHeight(x+.98f,z+.34f)+.075f,scene.animationTime*.8f);
     }
 }
-void addPlayerAndNpcs(const FastFrame& scene){
+void addWeather(const FastFrame& scene,Vec3 right){
+    weatherMesh.clear();
+    const float gust=scene.windStrength;
+    const int drops=int(scene.rain*260.f);
+    const int dust=int(100.f*gust*(1.f-scene.rain)*
+                       std::clamp((.30f-scene.moisture)*4.f,0.f,1.f));
+    const float time=scene.animationTime;
+    auto fraction=[](float value){return value-std::floor(value);};
+    for(int i=0;i<drops+dust;++i){
+        const bool rain=i<drops;
+        const float seed=float(i+1);
+        const float age=fraction(seed*.618034f+time*(rain?1.24f:.23f));
+        const float travel=age*(rain?1.6f:5.2f)*gust;
+        float x=scene.playerX+24.f*(fraction(seed*.7548777f)-.5f)+scene.windX*travel;
+        float z=scene.playerZ+4.f+22.f*(fraction(seed*.5698403f)-.5f)+scene.windZ*travel;
+        const float y=surfaceHeight(x,z)+(rain?.07f+5.2f*(1.f-age):.08f+.32f*age);
+        if(z>3.7f&&z<12.2f&&std::abs(x)<9.4f&&y<top(x))continue;
+        const Vec3 p{x,y,z};
+        const Vec3 extent=mul(right,rain?.013f:.13f);
+        const Vec3 tip=add(p,rain?Vec3{-scene.windX*gust*.18f,.30f,-scene.windZ*gust*.18f}
+                                 :Vec3{0,.06f,0});
+        quad(weatherMesh,sub(p,extent),add(p,extent),add(tip,extent),sub(tip,extent),
+             rain?13.f:14.f);
+    }
+}
+
+void addHearth(const FastFrame& scene,Vec3 right){
     // No white mannequins or rod people. The animated, source-skinned humanoids
     // are drawn by RealModels; a missing asset reports an import error.
     if(scene.hearth>.5f){
@@ -410,9 +449,28 @@ void addPlayerAndNpcs(const FastFrame& scene){
         }
         axisBar(objectsMesh,{x-.33f,h+.12f,z-.18f},{x+.31f,h+.16f,z+.16f},.056f,3.f,6);
         if(scene.fire>.5f){
-            // Kis lángsík csak valósan égő tűznél jelenik meg.
-            quad(objectsMesh,{x-.09f,h+.16f,z},{x+.09f,h+.16f,z},
-                 {x+.01f,h+.66f,z},{x-.01f,h+.64f,z},10.f);
+            const float gust=scene.windStrength;
+            const Vec3 base{x,h+.16f,z};
+            const float flicker=.42f+.12f*std::sin(scene.animationTime*13.f);
+            const Vec3 tip=add(base,{scene.windX*.46f*gust,flicker,scene.windZ*.46f*gust});
+            const Vec3 width=mul(right,.115f);
+            triangle(objectsMesh,sub(base,width),add(base,width),tip,10.f);
+            for(int i=9;i>=0;--i){
+                const float age=std::fmod(scene.animationTime*.48f+float(i)*.1f,1.f);
+                const float drift=1.7f*age*age*gust;
+                const Vec3 center{x+scene.windX*drift,h+.56f+1.85f*age,z+scene.windZ*drift};
+                const float radius=.061f+.16f*age;
+                const Vec3 side=mul(right,radius);
+                const Vec3 up{0,radius*.54f,0};
+                constexpr int segments=8;
+                for(int j=0;j<segments;++j){
+                    const float a=2.f*PI*j/segments,b=2.f*PI*(j+1)/segments;
+                    const Vec3 edgeA=add(center,add(mul(side,std::cos(a)),mul(up,std::sin(a))));
+                    const Vec3 edgeB=add(center,add(mul(side,std::cos(b)),mul(up,std::sin(b))));
+                    triangle(weatherMesh,center,edgeA,edgeB,15.f);
+                    weatherMesh[weatherMesh.size()-3].kind+=.44f*(1.f-age);
+                }
+            }
         }
     }
 }
@@ -437,6 +495,7 @@ const char* FRAG=R"GLSL(#version 300 es
 precision mediump float;
 in vec3 wPos;in vec3 wNorm;in float materialValue;flat in int matId;
 uniform float u_rain;uniform float u_mud;uniform float u_clock;uniform float u_animationTime;
+uniform vec2 u_wind;
 uniform sampler2D u_groundTexture;
 uniform sampler2D u_cliffTexture;
 out vec4 fragColor;
@@ -445,6 +504,9 @@ void main(){
     float grain=hash(floor(wPos*12.));
     float lines=.5+.5*sin(wPos.y*8.5+sin(wPos.x*.69+wPos.z*.21)*1.8);
     vec3 base;
+    if(matId==13){fragColor=vec4(.63,.73,.78,.36);return;}
+    if(matId==14){fragColor=vec4(.63,.49,.28,.15);return;}
+    if(matId==15){fragColor=vec4(.61,.59,.54,(materialValue-15.)*.39);return;}
     if(matId==0){
         // Two scales of the SAME authentic gravel photograph break up the
         // old coarse diagonal tile pattern. Fine grit stays visible near feet.
@@ -455,9 +517,16 @@ void main(){
         base=mix(macro,micro,blendWeight)*(.90+.10*grain);
         // Soil dampness/mud follows saved ecological simulation and darkens
         // the photographic surface instead of painting a new brown slab.
-        base*=1.0-0.36*clamp(u_mud,0.0,1.0);
+        float drainage=.30*sin(wPos.x*1.54+wPos.z*.81)+.17*sin(wPos.z*3.8-wPos.x*2.9);
+        float patch=smoothstep(.12,.77,u_mud+drainage*.43)*smoothstep(.02,.20,u_mud);
+        base=mix(base,base*vec3(.48,.44,.38),patch);
+        base+=vec3(.065,.058,.049)*patch*patch*pow(.5+.5*sin(lines*6.+wPos.x*3.),4.);
     }else if(matId==1){
-        base=texture(u_cliffTexture,vec2(wPos.x*.25,wPos.y*.34)).rgb * (0.88+0.12*lines);
+        vec3 weights=pow(abs(normalize(wNorm)),vec3(4.));
+        weights/=max(dot(weights,vec3(1.)),.001);
+        base=(texture(u_cliffTexture,wPos.zy*.64).rgb*weights.x+
+              texture(u_cliffTexture,wPos.xz*.64).rgb*weights.y+
+              texture(u_cliffTexture,wPos.xy*.64).rgb*weights.z)*(.88+.12*lines);
     }else if(matId==2){
         base=mix(vec3(.32,.30,.27),vec3(.59,.53,.46),grain*.7);
     }else if(matId==3){
@@ -472,7 +541,10 @@ void main(){
     else if(matId==8){base=vec3(.46,.62,.52);}
     else if(matId==9){base=vec3(.57,.60,.73);}
     else if(matId==11){
-        float ripple=.5+.5*sin(u_animationTime*2.1+wPos.x*3.2+sin(wPos.z*4.3));
+        vec2 direction=normalize(u_wind+vec2(.0001));
+        float crosswind=dot(wPos.xz,vec2(-direction.y,direction.x));
+        float ripple=.5+.5*sin(dot(wPos.xz,direction)*12.-u_animationTime*3.+sin(crosswind*2.1));
+        ripple*=.24+.76*max(length(u_wind),u_rain);
         float glint=pow(max(0.,sin(u_animationTime*1.2+wPos.x*1.7-wPos.z*2.1)),10.);
         base=mix(vec3(.035,.115,.12),vec3(.12,.31,.29),ripple*.72);
         base+=vec3(.18,.21,.17)*glint;
@@ -525,6 +597,7 @@ bool init(){
     if(!linked){error="A gyors 3D motor shaderprogramja nem kapcsolódott.";shutdown();return false;}
     uVP=glGetUniformLocation(program,"u_viewProjection");
     uRain=glGetUniformLocation(program,"u_rain");
+    uWind=glGetUniformLocation(program,"u_wind");
     uMud=glGetUniformLocation(program,"u_mud");
     uClock=glGetUniformLocation(program,"u_clock");
     uAnimation=glGetUniformLocation(program,"u_animationTime");
@@ -558,8 +631,8 @@ bool uploadTerrainTexture(int slot,const std::uint32_t* argb,int width,int heigh
     glTexImage2D(GL_TEXTURE_2D,0,GL_SRGB8_ALPHA8,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE,rgba.data());
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_MIRRORED_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_MIRRORED_REPEAT);
     glGenerateMipmap(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D,0);
     if(glGetError()!=GL_NO_ERROR){
@@ -582,7 +655,9 @@ void render(int width,int height,const FastFrame& f){
 
     objectsMesh.clear();
     addWater(f);addWildlife(f);addMudFootprints(f);addResources(f);addBuildings(f);
-    addWaterCollector(f);addPlayerAndNpcs(f);
+    const Vec3 right{std::cos(yaw),0,std::sin(yaw)};
+    addWeather(f,right);
+    addWaterCollector(f);addHearth(f,right);
     glViewport(0,0,width,height);
     // Stone Age menu/game atmosphere derives from the actual clock and weather.
     // Never use a fixed blue/neon backdrop: nighttime charcoal, daylight dust,
@@ -600,6 +675,7 @@ void render(int width,int height,const FastFrame& f){
     glUseProgram(program);
     glUniformMatrix4fv(uVP,1,GL_FALSE,vp.a);
     if(uRain>=0)glUniform1f(uRain,f.rain);
+    glUniform2f(uWind,f.windX*f.windStrength,f.windZ*f.windStrength);
     if(uMud>=0)glUniform1f(uMud,f.mud);
     if(uClock>=0)glUniform1f(uClock,f.clock);
     if(uAnimation>=0)glUniform1f(uAnimation,f.animationTime);
@@ -619,5 +695,19 @@ void render(int width,int height,const FastFrame& f){
         f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,
         f.playerMoving,f.playerRunning,f.npcs,f.animationTime,f.windStrength,
         f.windX,f.windZ,f.wetSeason,f.moisture);
+    if(!weatherMesh.empty()){
+        glUseProgram(program);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(GL_FALSE);
+        glBindVertexArray(dynamicVAO);
+        glBindBuffer(GL_ARRAY_BUFFER,dynamicVBO);
+        glBufferData(GL_ARRAY_BUFFER,GLsizeiptr(weatherMesh.size()*sizeof(Vertex)),
+                     weatherMesh.data(),GL_STREAM_DRAW);
+        glDrawArrays(GL_TRIANGLES,0,GLsizei(weatherMesh.size()));
+        glBindVertexArray(0);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+    }
 }
 }

@@ -650,7 +650,9 @@ void World::step(double hoursElapsed) {
     ecology.step(hoursElapsed,rainIntensity,ecology.soilWater,sunlight,
                  climate.temperatureC,climate.windStrength);
     groundMoisture=ecology.soilWater;
-    playerThirst=clamp(playerThirst+hoursElapsed*.85,0,100);
+    const double heat=std::max(0.0,climate.temperatureC-26.0);
+    const double heatExposure=underShelter?.35:1.0;
+    playerThirst=clamp(playerThirst+hoursElapsed*(.85+.11*heat*heatExposure),0,100);
     if(waterCollectorStage>=2){
         storedRainwater=clamp(storedRainwater+rainIntensity*hoursElapsed*.72-
                               sunlight*hoursElapsed*.018,0,60);
@@ -676,7 +678,7 @@ void World::step(double hoursElapsed) {
     const double dampPenalty=playerWetness>0.70?1.6*hoursElapsed:0.0;
     const double coldWindPenalty=std::max(0.0,8.0-climate.temperatureC)*
                                  climate.windStrength*(playerWetness>.45?.12:.035)*hoursElapsed;
-    stamina=clamp(stamina+gain-dampPenalty-coldWindPenalty,0.0,100.0);
+    stamina=clamp(stamina+gain-dampPenalty-coldWindPenalty-heat*.05*heatExposure*hoursElapsed,0.0,100.0);
 }
 std::string World::shelterStatus() const {
     std::ostringstream os;os<<std::fixed<<std::setprecision(1);

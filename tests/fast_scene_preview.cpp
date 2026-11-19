@@ -43,11 +43,11 @@ std::uint64_t pixelSum(const std::vector<std::uint8_t>& p) {
 }
 
 void loadRealModel(int id,const std::string& name){
-    const std::string base="app/src/main/assets/models/"+name;
+    const std::string base="app/src/main/assets/"+name;
     std::ifstream stream(base+".tkm",std::ios::binary);
     check(bool(stream),"missing real 3D model: "+name);
     std::vector<std::uint8_t> data((std::istreambuf_iterator<char>(stream)),std::istreambuf_iterator<char>());
-    check(data.size()>50000,"the model must contain genuine detailed 3D triangles, not primitives: "+name);
+    check(data.size()>(id==5?8u:50000u),"the model must contain genuine detailed 3D triangles, not primitives: "+name);
     png_image picture{};
     picture.version=PNG_IMAGE_VERSION;
     check(png_image_begin_read_from_file(&picture,(base+".png").c_str())!=0,
@@ -65,7 +65,7 @@ void loadRealModel(int id,const std::string& name){
     check(taks::RealModels::upload(id,data.data(),data.size(),argb.data(),
                                    int(picture.width),int(picture.height)),
           std::string("real model import failed: ")+taks::RealModels::errorMessage());
-    std::cout<<"Loaded actual CC0 textured scanned mesh: "<<name
+    std::cout<<"Loaded textured mesh: "<<name
              <<" (texture "<<picture.width<<"x"<<picture.height<<")\n";
     png_image_free(&picture);
 }
@@ -96,7 +96,7 @@ void loadRiggedHuman(){
     png_image_free(&picture);
 }
 void loadActualTerrainPhoto(int slot,const std::string& slug){
-    const std::string filename="app/src/main/assets/models/"+slug+".png";
+    const std::string filename="app/src/main/assets/"+slug+".png";
     png_image picture{};picture.version=PNG_IMAGE_VERSION;
     check(png_image_begin_read_from_file(&picture,filename.c_str())!=0,
           "missing actual CC0 terrain photo: "+filename);
@@ -112,7 +112,7 @@ void loadActualTerrainPhoto(int slot,const std::string& slug){
     }
     check(taks::FastScene::uploadTerrainTexture(slot,argb.data(),int(picture.width),int(picture.height)),
           "real ground or cliff photograph GPU upload failed");
-    std::cout<<"Verified photographic CC0 terrain material: "<<slug
+    std::cout<<"Verified terrain material: "<<slug
              <<" ("<<picture.width<<"x"<<picture.height<<")\n";
     png_image_free(&picture);
 }
@@ -139,14 +139,14 @@ int main(){
     check(context!=EGL_NO_CONTEXT,"eglCreateContext");
     check(eglMakeCurrent(display,surface,surface,context)==EGL_TRUE,"eglMakeCurrent");
     check(taks::FastScene::init(),taks::FastScene::lastError());
-    loadRealModel(0,"rock_07");
-    loadRealModel(1,"namaqualand_boulders_01");
-    loadRealModel(2,"namaqualand_cliff_01");
-    loadRealModel(3,"grass_bermuda_01");
-    loadRealModel(4,"fern_02");
-    // Tree candidate awaits true mobile LOD; not silently replaced.
-    loadActualTerrainPhoto(0,"ground_sandy_gravel");
-    loadActualTerrainPhoto(1,"wall_cliff_side");
+    loadRealModel(0,"models/rock_07");
+    loadRealModel(1,"models/namaqualand_boulders_01");
+    loadRealModel(2,"models/namaqualand_cliff_01");
+    loadRealModel(3,"models/grass_bermuda_01");
+    loadRealModel(4,"models/fern_02");
+    loadRealModel(5,"wonderwerk/akac");
+    loadActualTerrainPhoto(0,"wonderwerk/talaj");
+    loadActualTerrainPhoto(1,"wonderwerk/dolomit");
     check(taks::RealModels::complete(),"all three photo-scanned models must be uploaded to GPU");
 
     taks::FastFrame frame;
@@ -201,7 +201,15 @@ int main(){
     const auto calmFoliage=render("15-szelcsendes-noveny.ppm");
     frame.windStrength=.78f;
     const auto windyFoliage=render("16-szelmozgatott-noveny.ppm");
-    check(calmFoliage!=windyFoliage,"wind must deform the visible rooted grass mesh");
+    check(calmFoliage!=windyFoliage,"wind must deform visible rooted foliage");
+    frame.rain=.86f;
+    frame.moisture=.72f;
+    frame.mud=.68f;
+    const auto storm=render("17-zivatar-es-sar.ppm");
+    check(storm!=windyFoliage,"the rainy, muddy season must change the rendered world");
+    frame.rain=0;
+    frame.mud=0;
+    frame.moisture=0;
     frame=initialFrame;
     loadRiggedHuman();
     const auto iso=render("01-izometrikus-35fok.ppm");

@@ -144,7 +144,7 @@ public final class MainActivity extends Activity {
 
 
     private boolean loadRealPbrSurface(int slot,String name){
-        try(InputStream data=getAssets().open("models/"+name+".png")){
+        try(InputStream data=getAssets().open(name+".png")){
             Bitmap bitmap=BitmapFactory.decodeStream(data);
             if(bitmap==null)throw new java.io.IOException("PBR image decoding failed: "+name);
             int width=bitmap.getWidth(),height=bitmap.getHeight();
@@ -161,12 +161,12 @@ public final class MainActivity extends Activity {
     }
     private boolean loadAuthenticRockAsset(int slot,String name){
         // The compressed PNG and mesh are bundled into the APK by the CI import job.
-        try(InputStream meshStream=getAssets().open("models/"+name+".tkm");
+        try(InputStream meshStream=getAssets().open(name+".tkm");
             java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream()){
             byte[] buffer=new byte[8192];int count;
             while((count=meshStream.read(buffer))!=-1)bytes.write(buffer,0,count);
             Bitmap image;
-            try(InputStream imageStream=getAssets().open("models/"+name+".png")){
+            try(InputStream imageStream=getAssets().open(name+".png")){
                 image=BitmapFactory.decodeStream(imageStream);
             }
             if(image==null)throw new java.io.IOException("Photographic texture decode failed: "+name);
@@ -919,21 +919,20 @@ public final class MainActivity extends Activity {
                 nativeOnSurfaceCreated(shaderSource);
                 // A kép nem távoli webes tartalom: a valódi fotogrammetriai modellek
                 // és saját fénykép-textúráik közvetlenül az Android APK assetjeiből töltődnek.
-                boolean rockOk=loadAuthenticRockAsset(0,"rock_07");
-                boolean bouldersOk=loadAuthenticRockAsset(1,"namaqualand_boulders_01");
-                boolean cliffModelOk=loadAuthenticRockAsset(2,"namaqualand_cliff_01");
+                boolean rockOk=loadAuthenticRockAsset(0,"models/rock_07");
+                boolean bouldersOk=loadAuthenticRockAsset(1,"models/namaqualand_boulders_01");
+                boolean cliffModelOk=loadAuthenticRockAsset(2,"models/namaqualand_cliff_01");
                 // Real Poly Haven authored botanical meshes and RGBA atlases.
                 // None is replaced with placeholder tubes, boxes or billboard graphics.
-                boolean grassOk=loadAuthenticRockAsset(3,"grass_bermuda_01");
-                boolean fernOk=loadAuthenticRockAsset(4,"fern_02");
+                boolean grassOk=loadAuthenticRockAsset(3,"models/grass_bermuda_01");
+                boolean fernOk=loadAuthenticRockAsset(4,"models/fern_02");
                 boolean humanOk=loadRiggedHumanAsset();
-                // The 2M-triangle tree awaits a genuine UV-preserving mobile LOD.
-                // No fake tree model is substituted.
-                boolean groundOk=loadRealPbrSurface(0,"ground_sandy_gravel");
-                boolean cliffOk=loadRealPbrSurface(1,"wall_cliff_side");
+                boolean treeOk=loadAuthenticRockAsset(5,"wonderwerk/akac");
+                boolean groundOk=loadRealPbrSurface(0,"wonderwerk/talaj");
+                boolean cliffOk=loadRealPbrSurface(1,"wonderwerk/dolomit");
                 runOnUiThread(()->{
                     String err=nativeRendererError();
-                    if(!rockOk||!bouldersOk||!cliffModelOk||!grassOk||!fernOk||!humanOk||!groundOk||!cliffOk||err!=null&&!err.isEmpty()){
+                    if(!rockOk||!bouldersOk||!cliffModelOk||!grassOk||!fernOk||!treeOk||!humanOk||!groundOk||!cliffOk||err!=null&&!err.isEmpty()){
                         say("Valódi 3D modellhiba: "+(err==null?"":err)+
                             " · Az APK modellcsomagja sérült vagy hiányzik.");
                     }

@@ -1,7 +1,7 @@
-name: TAKS World 0.14 Android
+name: TAKS World 0.15 Android
 on:
   push:
-    branches: ['codex/taks-world-0-14-github-build']
+    branches: ['codex/taks-world-wonderwerk-live']
   workflow_dispatch:
 permissions:
   contents: read
@@ -110,7 +110,7 @@ jobs:
           python3 tests/ppm_to_png.py
       - uses: actions/upload-artifact@v4
         with:
-          name: TAKS-World-0.14-GPU-Testkepek
+          name: TAKS-World-0.15-GPU-Testkepek
           path: build-previews/*.png
           if-no-files-found: error
           retention-days: 14
@@ -190,6 +190,8 @@ jobs:
                            'assets/models/makehuman_rigged.png',
                            'assets/models/makehuman_rigged_source.json'):
                   assert path in names and z.getinfo(path).file_size>1000,path
+              for path in ('akac.tkm', 'akac.png', 'dolomit.png', 'talaj.png'):
+                  assert z.getinfo('assets/wonderwerk/'+path).file_size>100
               rig=z.read('assets/models/makehuman_rigged.tks')
               import struct
               magic,vertices,joints,clips=struct.unpack_from('<4sIII',rig)
@@ -200,17 +202,17 @@ jobs:
       - name: Check the phone package, architecture, version and signature
         shell: bash
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk TAKS_World_0_14_Android.apk
-          apk=TAKS_World_0_14_Android.apk
+          cp app/build/outputs/apk/debug/app-debug.apk TAKS_World_0_15_Android.apk
+          apk=TAKS_World_0_15_Android.apk
           tools="$ANDROID_HOME/build-tools/35.0.0"
           "$tools/apksigner" verify --verbose "$apk"
           "$tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/taks-package.txt"
-          grep -F "package: name='hu.taks.world.windseasons' versionCode='14' versionName='0.14.0'" "$RUNNER_TEMP/taks-package.txt"
+          grep -F "package: name='hu.taks.world.windseasons' versionCode='15' versionName='0.15.0'" "$RUNNER_TEMP/taks-package.txt"
           grep -F 'lib/arm64-v8a/libtaks_engine.so' <(unzip -Z1 "$apk")
       - uses: actions/upload-artifact@v4
         with:
-          name: TAKS-World-0.14-Android-APK
-          path: TAKS_World_0_14_Android.apk
+          name: TAKS-World-0.15-Android-APK
+          path: TAKS_World_0_15_Android.apk
           if-no-files-found: error
           retention-days: 14
 
@@ -223,7 +225,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: TAKS-World-0.14-Android-APK
+          name: TAKS-World-0.15-Android-APK
           path: android/
       - uses: actions/setup-java@v4
         with:
@@ -259,7 +261,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: TAKS-World-0.14-Android-kepek
+          name: TAKS-World-0.15-Android-kepek
           path: ui-evidence/
           if-no-files-found: warn
           retention-days: 10
@@ -276,16 +278,16 @@ jobs:
           path: package-input/models/
       - uses: actions/download-artifact@v4
         with:
-          name: TAKS-World-0.14-Android-APK
+          name: TAKS-World-0.15-Android-APK
           path: package-input/apk/
       - uses: actions/download-artifact@v4
         with:
-          name: TAKS-World-0.14-GPU-Testkepek
+          name: TAKS-World-0.15-GPU-Testkepek
           path: package-input/gpu/
       - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
-          name: TAKS-World-0.14-Android-kepek
+          name: TAKS-World-0.15-Android-kepek
           path: package-input/android-ui/
       - uses: actions/setup-python@v5
         with:
@@ -335,21 +337,21 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: TAKS-World-0.14-Android-APK
+          name: TAKS-World-0.15-Android-APK
           path: phone
       - name: Publish the tested APK as a direct phone download
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          tag="taks-world-0.14-test-${GITHUB_SHA:0:7}"
-          apk=phone/TAKS_World_0_14_Android.apk
+          tag="taks-world-0.15-test-${GITHUB_SHA:0:7}"
+          apk=phone/TAKS_World_0_15_Android.apk
           if gh release view "$tag" >/dev/null 2>&1; then
             tmp="$(mktemp -d)"
-            gh release download "$tag" --pattern TAKS_World_0_14_Android.apk --dir "$tmp"
-            cmp "$apk" "$tmp/TAKS_World_0_14_Android.apk"
+            gh release download "$tag" --pattern TAKS_World_0_15_Android.apk --dir "$tmp"
+            cmp "$apk" "$tmp/TAKS_World_0_15_Android.apk"
           else
             gh release create "$tag" "$apk" --target "$GITHUB_SHA" --prerelease --latest=false \
-              --title "TAKS World 0.14 – Android tesztkiadás" \
+              --title "TAKS World 0.15 – Android tesztkiadás" \
               --notes "A natív androidos tesztváltozat az alábbi APK-fájllal telepíthető. Az indítást, a mozgást és a mentést Android 35 emulátoron ellenőrzi a build."
           fi
