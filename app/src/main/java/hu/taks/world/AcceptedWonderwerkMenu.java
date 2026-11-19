@@ -33,6 +33,7 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
     private final LivingWonderwerkOverlay environment;
     private final List<Hotspot> hotspots=new ArrayList<>();
     private final EditableGameScript labels;
+    private final MainMenuActionRouter actions;
     private boolean released=false;
 
     private static final class Hotspot {
@@ -59,6 +60,7 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
             throws IOException{
         super(host);
         labels=script;
+        actions=new MainMenuActionRouter(onNew,onSettings,onCreator,onExit);
         setBackgroundColor(0xFF21180F);
         Bitmap backdrop;
         try(InputStream in=host.getAssets().open(TEXT_FREE)){
@@ -66,11 +68,9 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         }
         if(backdrop==null||backdrop.getWidth()!=DESIGN_W||backdrop.getHeight()!=DESIGN_H)
             throw new IOException("Approved 1280x720 text-free background missing");
-        ImageView edges=new ImageView(host);
-        edges.setImageBitmap(backdrop);
-        edges.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        edges.setColorFilter(0x99201612,PorterDuff.Mode.MULTIPLY);
-        addView(edges,new FrameLayout.LayoutParams(-1,-1));
+        // Use the whole available Android landscape screen, not a centered
+        // 16:9 plate with black/blurred side gutters. The approved source
+        // bitmap itself stays untouched; FIT_XY is presentation only.
         content=new FrameLayout(host);
         ImageView still=new ImageView(host);
         still.setImageBitmap(backdrop);
@@ -79,14 +79,14 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         environment=new LivingWonderwerkOverlay(host);
         environment.setEditableScript(labels);
         content.addView(environment,new FrameLayout.LayoutParams(-1,-1));
-        addButton(host,"new_game",.390f,.442f,.280f,.116f,onNew);
-        addButton(host,"settings",.390f,.558f,.280f,.119f,onSettings);
-        addButton(host,"creator",.390f,.685f,.280f,.115f,onCreator);
-        addButton(host,"exit",.390f,.806f,.280f,.117f,onExit);
+        addButton(host,"new_game",.390f,.442f,.280f,.116f);
+        addButton(host,"settings",.390f,.558f,.280f,.119f);
+        addButton(host,"creator",.390f,.685f,.280f,.115f);
+        addButton(host,"exit",.390f,.806f,.280f,.117f);
         addView(content,new FrameLayout.LayoutParams(-1,-1,Gravity.CENTER));
     }
-    private void addButton(Activity host,String key,float x,float y,float w,float h,
-                           Runnable action){
+    private void addButton(Activity host,String key,float x,float y,float w,float h){
+        if(!actions.supports(key))throw new IllegalStateException("Missing functional button: "+key);
         Button button=new Button(host);
         button.setTag(key);
         button.setText(labels.get("menu",key,key));
@@ -99,7 +99,7 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x46D8B16C),
                      new ColorDrawable(Color.TRANSPARENT),null));
         button.setContentDescription(button.getText().toString());
-        button.setOnClickListener(v->{if(!released)action.run();});
+        button.setOnClickListener(v->{if(!released)actions.run(key);});
         button.setSoundEffectsEnabled(true);
         hotspots.add(new Hotspot(button,x,y,w,h));
         content.addView(button,new FrameLayout.LayoutParams(1,1));
@@ -108,7 +108,7 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         super.onSizeChanged(w,h,oldw,oldh);
         if(w<=0||h<=0)return;
         float s=Math.min(w/(float)DESIGN_W,h/(float)DESIGN_H);
-        int cw=Math.round(DESIGN_W*s),ch=Math.round(DESIGN_H*s);
+        int cw=w,ch=h;
         content.setLayoutParams(new FrameLayout.LayoutParams(cw,ch,Gravity.CENTER));
         for(Hotspot item:hotspots){
             Button b=item.control;
