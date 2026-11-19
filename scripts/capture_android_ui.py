@@ -60,6 +60,24 @@ def click(nodes,text,contains=False):
     print("TAPPED",repr(text),"at",x,y,flush=True)
     return x,y
 
+def click_after_scroll(nodes,text,context,max_swipes=6):
+    # The JSON editor is below the fold on compact landscape displays.
+    # Scroll the genuine Android ScrollView instead of guessing coordinates.
+    dimensions=adb("shell","wm","size").decode(errors="replace")
+    found=re.findall(r"(\d+)x(\d+)",dimensions)
+    assert found, "Could not obtain the real Android screen dimensions"
+    width,height=map(int,found[-1])
+    for attempt in range(max_swipes):
+        if find(nodes,text):
+            return click(nodes,text)
+        x=width//2
+        top=int(height*.39)
+        bottom=int(height*.73)
+        adb("shell","input","swipe",str(x),str(bottom),str(x),str(top),"380")
+        time.sleep(.75)
+        nodes=dump(f"{context}-scroll-{attempt+1}")
+    return click(nodes,text)
+
 def position(nodes):
     for node in nodes:
         match=re.search(r"JÁTÉKOS:\s*(-?[0-9]+(?:\.[0-9]+)?) m,\s*(-?[0-9]+(?:\.[0-9]+)?) m",
@@ -169,7 +187,7 @@ assert find(nodes,"X"),"Settings lacks functional X button"
 assert find(nodes,"3D felbontás",True),"Graphics setting not visible"
 picture("04-android-beallitasok-elo-skin")
 # Verify JSON text editor is an actual Android input and can be dismissed.
-click(nodes,"Feliratok és beállítások szerkesztése (JSON)")
+click_after_scroll(nodes,"Feliratok és beállítások szerkesztése (JSON)","settings")
 time.sleep(1)
 edited=dump("editable-menu-json")
 assert find(edited,"Mentés"),"The JSON text editor has no real Save button"
@@ -284,7 +302,7 @@ picture("11-android-jatekmenu")
 click(nodes,"Mentés")
 time.sleep(1)
 saved=adb("shell","run-as",PACKAGE,"cat","shared_prefs/taks_native_save_v1.xml")
-assert b'name="state"' in saved and b'TAKS_NATIVE_10' in saved, \
+assert b'name="state"' in saved and b'TAKS_NATIVE_12' in saved, \
     "The save button did not persist a native world-state snapshot"
 picture("12-android-mentes-ellenorizve")
 print("PASS: Android launch, 53-bone rig load, menu/navigation, touch movement, save persistence, settings and exit.",flush=True)
