@@ -19,6 +19,7 @@ std::mutex worldLock;
 GLuint program=0, vertexArray=0;
 float orbit=-0.785398f, pitch=0.615480f, zoom=19.0f;
 float playerHeading=0.0f;
+bool playerCrouching=false;
 std::chrono::steady_clock::time_point playerMovementDeadline{};
 std::chrono::steady_clock::time_point playerRunDeadline{};
 std::array<float,8> npcPrevious{};
@@ -70,6 +71,11 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeMove(
         if(std::hypot(dx,dz)>.075)playerRunDeadline=now+std::chrono::milliseconds(130);
     }
     return toJava(env,result);
+}
+extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetCrouch(
+    JNIEnv*,jobject,jboolean crouch){
+    std::lock_guard<std::mutex> guard(worldLock);
+    playerCrouching=(crouch==JNI_TRUE);
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeGoal(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
@@ -171,7 +177,7 @@ extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUplo
 // World-space PNG character. All eight true-alpha views are required.
 extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUploadActorSprite(
     JNIEnv* env,jobject,jint view,jintArray pixels,jint width,jint height){
-    if(!pixels||view<0||view>=8||width<128||height<128||width>2048||height>2048)
+    if(!pixels||view<0||view>=16||width<128||height<128||width>2048||height>2048)
         return JNI_FALSE;
     const std::size_t count=std::size_t(width)*std::size_t(height);
     if(static_cast<std::size_t>(env->GetArrayLength(pixels))!=count)return JNI_FALSE;
@@ -261,6 +267,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         f.playerZ=static_cast<float>(world.playerZ);
         f.walkPhase=static_cast<float>(world.walkPhase);
         f.playerHeading=playerHeading;
+        f.playerCrouching=playerCrouching;
         const auto frameNow=std::chrono::steady_clock::now();
         f.animationTime=static_cast<float>(std::fmod(std::chrono::duration<double>(frameNow.time_since_epoch()).count(),4096.0));
         f.playerMoving=frameNow<playerMovementDeadline;
