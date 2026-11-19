@@ -35,6 +35,7 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
     private static final int DESIGN_W=1280, DESIGN_H=720;
     private final FrameLayout content;
     private final VideoView video;
+    private final LivingWonderwerkOverlay environment;
     private final List<Hotspot> hotspots=new ArrayList<>();
     private boolean released=false;
 
@@ -88,6 +89,8 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
             video.setVisibility(View.GONE);return true;
         });
         content.addView(video,new FrameLayout.LayoutParams(-1,-1));
+        environment=new LivingWonderwerkOverlay(host);
+        content.addView(environment,new FrameLayout.LayoutParams(-1,-1));
         addHit(host,"Új Játék",.390f,.442f,.280f,.116f,onNew);
         addHit(host,"Beállítások",.390f,.558f,.280f,.119f,onSettings);
         addHit(host,"Készítő",.390f,.685f,.280f,.115f,onCreator);
@@ -144,11 +147,13 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
             p.view.setLayoutParams(params);
         }
     }
-    public void play(){if(!released&&video.getVisibility()==View.VISIBLE)video.start();}
-    public void pause(){if(!released&&video.isPlaying())video.pause();}
+    public void setClimate(MenuClimate next){if(!released)environment.setClimate(next);}
+    public void play(){if(!released){environment.resume();if(video.getVisibility()==View.VISIBLE)video.start();}}
+    public void pause(){if(!released){environment.pause();if(video.isPlaying())video.pause();}}
     public void release(){
         if(released)return;
         released=true;
+        environment.release();
         video.stopPlayback();
     }
     @Override protected void onDetachedFromWindow(){
