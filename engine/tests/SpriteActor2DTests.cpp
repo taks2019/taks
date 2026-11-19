@@ -31,6 +31,36 @@ int main() {
   assert(actor.unequip(ClothingSlot::Torso));
   assert(actor.renderLayers().size()==1);
   assert(!actor.unequip(ClothingSlot::Torso));
+  // Clothing uses stable IDs and correctly layered sprite slots.
+  assert(actor.addOwned({71,ClothingSlot::Bra,"bra_layer",0.14,0.2}));
+  assert(actor.addOwned({72,ClothingSlot::UnderwearBottom,"underwear_bottom_layer",0.10,0.1}));
+  assert(actor.addOwned({73,ClothingSlot::Feet,"leather_shoes",0.60,0.2}));
+  assert(actor.addOwned({74,ClothingSlot::Outerwear,"winter_cape",1.50,2.0}));
+  assert(actor.equip(ClothingSlot::Bra,71));
+  assert(actor.equip(ClothingSlot::UnderwearBottom,72));
+  assert(actor.equip(ClothingSlot::Feet,73));
+  assert(actor.equip(ClothingSlot::Outerwear,74));
+  auto layers=actor.renderLayers();
+  assert(layers.size()==5); // body plus four interchangeable garments
+  assert(layers.front().atlasKey=="body");
+  assert(layers[1].atlasKey=="underwear_bottom_layer");
+  assert(layers[2].atlasKey=="bra_layer");
+  assert(layers[3].atlasKey=="leather_shoes");
+  assert(layers[4].atlasKey=="winter_cape");
+  assert(actor.clothingKg()>2.0);
+  assert(actor.unequip(ClothingSlot::Bra));
+  assert(actor.renderLayers().size()==4);
+  // Content rating and character adulthood are independent. A minor or
+  // a character with unspecified age must never enable mature anatomy.
+  assert(!actor.mayDisplayAdultAnatomy());
+  actor.matureContentEnabled=true;
+  assert(!actor.mayDisplayAdultAnatomy());
+  actor.ageYears=17;
+  assert(!actor.mayDisplayAdultAnatomy());
+  actor.ageYears=18;
+  assert(actor.mayDisplayAdultAnatomy());
+  actor.matureContentEnabled=false;
+  assert(!actor.mayDisplayAdultAnatomy());
   SpriteActor2D group[5];
   for(unsigned i=0;i<5;++i)group[i].actorId=i+1;
   assert(group[4].actorId==5);
