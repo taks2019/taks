@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "menu": {
+    "new_game": "Új Játék",
+    "settings": "Beállítások",
+    "creator": "Készítő",
+    "exit": "Kilépés"
+  },
+  "settings": {
+    "title": "BEÁLLÍTÁSOK",
+    "resolution": "3D felbontás – gyors / kiegyensúlyozott / részletes",
+    "isometric": "Izometrikus kamera",
+    "top_view": "Kamera: felülnézet",
+    "low_view": "Kamera: alacsony nézet",
+    "restore": "Korábbi mentés visszaállítása",
+    "save": "Mentés",
+    "edit_script": "Feliratok és beállítások szerkesztése (JSON)",
+    "reset_script": "Alapértelmezett szövegek visszaállítása",
+    "back": "Vissza a Beállításokhoz",
+    "description": "IRÁNYÍTÁS: bal analóg = mozgás; FUTÁS = gyorsítás; jobb oldali húzás = kamera; két ujj = nagyítás.\\nOK → FOLYAMAT → OKOZAT: a világ tényleges időjárása, vízszintje, szélereje és felfedezései vezérlik a megjelenítést."
+  },
+  "graphics": {
+    "quick_width": 640,
+    "balanced_width": 840,
+    "detail_width": 1200,
+    "isometric_pitch_degrees": 35.26
+  },
+  "environment": {
+    "fern_sway_degrees": 9.3,
+    "rain_visual_threshold": 0.045,
+    "water_ripple_visibility": 1.0
+  }
+}
