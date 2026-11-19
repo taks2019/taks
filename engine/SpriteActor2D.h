@@ -13,7 +13,10 @@ enum class SpriteAction : std::uint8_t {
   Gather, Carry, Build, Swim, Rest
 };
 enum class ClothingSlot : std::uint8_t {
-  Torso, Legs, Feet, Head, Belt, Back, Hands, Count
+  // Keep existing 0-6 indices stable for future equipment/save migration.
+  Torso, Legs, Feet, Head, Belt, Back, Hands,
+  UnderwearTop, UnderwearBottom, Bra, Socks, Outerwear, Jewelry,
+  IntimateCover, Count
 };
 struct Garment2D {
   unsigned itemId=0;
@@ -38,6 +41,9 @@ struct SpriteActor2D {
   static constexpr int directions=8;
   static constexpr int clothingSlots=static_cast<int>(ClothingSlot::Count);
   unsigned actorId=0;
+  // Unknown age is NOT mature; mature display requires explicit opt-in.
+  int ageYears=0;
+  bool matureContentEnabled=false;
   double x=0.0, z=0.0, headingRadians=0.0;
   SpriteAction action=SpriteAction::Idle;
   ActorNeeds2D needs{};
@@ -46,6 +52,27 @@ struct SpriteActor2D {
   double animationSeconds=0.0;
 
   static double clamp01(double x) { return std::max(0.0,std::min(1.0,x)); }
+  bool mayDisplayAdultAnatomy() const { return ageYears>=18 && matureContentEnabled; }
+  static int clothingDrawOrder(ClothingSlot slot) {
+    // Simple layer stack; per-view masks still required for correct occlusion.
+    switch(slot) {
+      case ClothingSlot::UnderwearTop: return 10;
+      case ClothingSlot::UnderwearBottom: return 11;
+      case ClothingSlot::Bra: return 12;
+      case ClothingSlot::IntimateCover: return 13;
+      case ClothingSlot::Socks: return 20;
+      case ClothingSlot::Legs: return 30;
+      case ClothingSlot::Torso: return 40;
+      case ClothingSlot::Feet: return 50;
+      case ClothingSlot::Head: return 60;
+      case ClothingSlot::Belt: return 70;
+      case ClothingSlot::Back: return 80;
+      case ClothingSlot::Hands: return 90;
+      case ClothingSlot::Outerwear: return 100;
+      case ClothingSlot::Jewelry: return 110;
+      default: return 100;
+    }
+  }
   int direction8() const {
     constexpr double pi=3.14159265358979323846;
     const double radians=std::remainder(headingRadians,2.0*pi);
@@ -166,10 +193,13 @@ struct SpriteActor2D {
     result.push_back({"body",angle,frame,0});
     for(int slot=0;slot<clothingSlots;++slot)if(worn[slot]) {
       for(const auto& item:owned)if(item.itemId==worn[slot]) {
-        result.push_back({item.atlasKey,angle,frame,slot+1});
+        result.push_back({item.atlasKey,angle,frame,clothingDrawOrder(item.slot)});
         break;
       }
     }
+    std::stable_sort(result.begin(),result.end(),[](const SpriteRenderLayer& a,const SpriteRenderLayer& b){
+      return a.drawOrder<b.drawOrder;
+    });
     return result;
   }
 };
