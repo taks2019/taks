@@ -60,6 +60,7 @@ public final class MainActivity extends Activity {
     private TextView hint;
     private String shaderSource;
     private FrameLayout menuCover,modalOverlay;
+    private AcceptedWonderwerkMenu acceptedMenu;
     private View menuScrim;
     private Bitmap sharedStonePhoto;
     private Bitmap menuBackgroundBitmap;
@@ -584,7 +585,7 @@ public final class MainActivity extends Activity {
             addVertical(body,"Cél és környezet",()->{
                 closeModal();showPanel(2);
             });
-            addVertical(body,"Készítők",this::showCredits);
+            addVertical(body,"Készítő",this::showCredits);
             addVertical(body,"Vissza a főmenübe",()->{
                 saves.edit().putString("state",nativeSave()).commit();
                 closeModal();showMainMenu();
@@ -599,6 +600,7 @@ public final class MainActivity extends Activity {
     private void startPlaying(){
         closeModal();
         inMainMenu=false;
+        if(acceptedMenu!=null){acceptedMenu.release();acceptedMenu=null;}
         if(menuCover!=null){root.removeView(menuCover);menuCover=null;}
         setHudVisibility(true);
         refreshScene();
@@ -745,7 +747,7 @@ public final class MainActivity extends Activity {
         });
     }
     private void showCredits(){
-        modal("KÉSZÍTŐK",body->{
+        modal("KÉSZÍTŐ",body->{
             TextView text=caption("TAKS WORLD · saját TAKS Engine\n"
                 +"Natív Android, OpenGL ES 3, Wonderwerk-barlang.\n"
                 +"Élő ok–okozati világ és kőzet/növény/embermodell teszt.\n\n"
@@ -810,7 +812,17 @@ public final class MainActivity extends Activity {
         closeModal();closePanel();
         setHudVisibility(false);
         if(menuCover!=null)root.removeView(menuCover);
-
+        if(acceptedMenu!=null){acceptedMenu.release();acceptedMenu=null;}
+        // Approved 2026-11-19 animated art, native buttons, native navigation.
+        // Only used when the exact MP4 and poster assets are packed offline.
+        acceptedMenu=AcceptedWonderwerkMenu.tryCreate(this,
+            this::newWorldFromMenu,this::showSettings,this::showCredits,this::confirmExit);
+        if(acceptedMenu!=null){
+            menuCover=acceptedMenu;
+            menuScrim=null;
+            root.addView(menuCover,new FrameLayout.LayoutParams(-1,-1));
+            return;
+        }
         menuCover=new FrameLayout(this);
         menuCover.setBackgroundColor(Color.rgb(24,19,14));
         final PrehistoricMenuTheme.Look natural=PrehistoricMenuTheme.fromCues(nativeMenuCues());
@@ -857,7 +869,7 @@ public final class MainActivity extends Activity {
         causal.setPadding(dp(3),0,dp(3),dp(4));
         skin(causal,"CAUSE");
         stack.addView(causal,new LinearLayout.LayoutParams(-1,dp(33)));
-        String[] labels={"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐK","KILÉPÉS"};
+        String[] labels={"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐ","KILÉPÉS"};
         Runnable[] actions={this::newWorldFromMenu,this::showSettings,this::showCredits,
                 this::confirmExit};
         for(int i=0;i<labels.length;++i){
@@ -1034,6 +1046,7 @@ public final class MainActivity extends Activity {
     @Override protected void onResume(){
         super.onResume();
         if(surface!=null)surface.onResume();
+        if(acceptedMenu!=null)acceptedMenu.play();
         worldHandler.removeCallbacks(worldLoop);
         if(!inMainMenu){
             worldHandler.postDelayed(worldLoop,1800);
@@ -1049,6 +1062,7 @@ public final class MainActivity extends Activity {
         renderHandler.removeCallbacks(renderLoop);
         skinHandler.removeCallbacks(skinLoop);
         saves.edit().putString("state",nativeSave()).apply();
+        if(acceptedMenu!=null)acceptedMenu.pause();
         if(surface!=null)surface.onPause();
         super.onPause();
     }
