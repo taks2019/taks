@@ -168,6 +168,19 @@ extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUplo
     if(env->ExceptionCheck())return JNI_FALSE;
     return taks::RealModels::upload(id,mesh.data(),mesh.size(),texture.data(),width,height)?JNI_TRUE:JNI_FALSE;
 }
+// World-space PNG character. All eight true-alpha views are required.
+extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUploadActorSprite(
+    JNIEnv* env,jobject,jint view,jintArray pixels,jint width,jint height){
+    if(!pixels||view<0||view>=8||width<128||height<128||width>2048||height>2048)
+        return JNI_FALSE;
+    const std::size_t count=std::size_t(width)*std::size_t(height);
+    if(static_cast<std::size_t>(env->GetArrayLength(pixels))!=count)return JNI_FALSE;
+    std::vector<std::uint32_t> data(count);
+    env->GetIntArrayRegion(pixels,0,static_cast<jsize>(count),reinterpret_cast<jint*>(data.data()));
+    if(env->ExceptionCheck())return JNI_FALSE;
+    return taks::FastScene::uploadActorSprite(view,data.data(),width,height)
+        ?JNI_TRUE:JNI_FALSE;
+}
 // Exactly the saved simulation's causal facts feed the prehistoric menu.
 // Unknown fern, vine and rope species/skills remain locked; leaf resources
 // do not magically become a discovered plant species.
