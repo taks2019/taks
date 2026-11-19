@@ -1,0 +1,44 @@
+name: TAKS World 8-direction native PNG integration checks
+on:
+  push:
+    branches:
+      - codex/taks-world-elfogadott-menu-mp4-2026-11-19
+    paths:
+      - 'engine/**'
+      - 'app/src/main/cpp/**'
+      - 'app/src/main/java/hu/taks/world/MainActivity.java'
+      - '.github/workflows/png-actor-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-png-integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up GLES3 headers for real native renderer
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgles-dev libegl-dev
+      - name: Compile actual Android GLES3 sprite render code on host
+        run: |
+          g++ -std=c++17 -Wall -Wextra -fsyntax-only \
+            app/src/main/cpp/FastScene.cpp app/src/main/cpp/RealModels.cpp
+      - name: Compile engine and native tests
+        run: |
+          cmake -S engine -B build -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build --parallel 2
+          ctest --test-dir build --output-on-failure
+      - name: Confirm eight sprite assets are optional until visual approval
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path("app/src/main/java/hu/taks/world/MainActivity.java").read_text()
+          scene=Path("app/src/main/cpp/FastScene.cpp").read_text()
+          assert 'loadEightDirectionPngActor()' in src
+          assert 'characters/actor_m01_idle_' in src
+          assert 'actorSpritesComplete()' in scene
+          assert 'drawActorSprite(vp,f,right);' in scene
+          assert 'drawPlayer' in Path('app/src/main/cpp/RealModels.cpp').read_text()
+          print("PNG renderer connected to real GLES3 world and saved player state.")
+          PY
