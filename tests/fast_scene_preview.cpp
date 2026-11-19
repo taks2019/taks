@@ -150,8 +150,10 @@ int main(){
     check(taks::RealModels::complete(),"all three photo-scanned models must be uploaded to GPU");
 
     taks::FastFrame frame;
-    frame.playerX=0.f;frame.playerZ=-5.2f;frame.yaw=.785398f;frame.pitch=.615480f;
-    frame.zoom=10.f;frame.clock=11.0f;frame.rain=.15f;
+    frame.playerX=0.f;frame.playerZ=-5.2f;frame.yaw=-.785398f;frame.pitch=.615480f;
+    frame.zoom=19.f;frame.clock=11.0f;frame.rain=0.f;
+    frame.waters[0]=-4.7f;frame.waters[1]=-5.8f;frame.waters[2]=1.4f;frame.waters[3]=.76f;
+    frame.hearth=1.f;frame.fire=1.f;
     const float nodes[48]={
         -2.f,-5.5f,0,3,3.f,-4.f,0,3,-4.f,-1.2f,0,4,5.f,.5f,0,4,
         1.f,-5.4f,1,3,3.f,-.8f,1,3,-2.f,1.5f,1,2,
@@ -197,7 +199,7 @@ int main(){
     // no other mesh can animate between these two frames.
     const auto initialFrame=frame;
     frame.playerX=-2.5f;frame.playerZ=-4.6f;frame.zoom=7.f;
-    frame.rain=0;frame.animationTime=2.4f;frame.windStrength=0;
+    frame.rain=0;frame.fire=0;frame.animationTime=2.4f;frame.windStrength=0;
     const auto calmFoliage=render("15-szelcsendes-noveny.ppm");
     frame.windStrength=.78f;
     const auto windyFoliage=render("16-szelmozgatott-noveny.ppm");
@@ -216,14 +218,14 @@ int main(){
     frame.yaw=2.3f;
     const auto rotated=render("02-forgatott-kamera.ppm");
     check(rotated!=iso,"yaw did not change the actual image");
-    frame.pitch=1.25f;frame.yaw=.785398f;
+    frame.pitch=1.25f;frame.yaw=-.785398f;
     const auto overhead=render("03-felulnezet.ppm");
     check(overhead!=iso && overhead!=rotated,"pitch did not change the actual image");
     frame.pitch=.45f;
     const auto low=render("04-alacsony-3d-kamera.ppm");
     check(low!=overhead,"low 3D camera angle did not change the actual image");
     frame.pitch=.615480f;
-    frame.yaw=.785398f;
+    frame.yaw=-.785398f;
     const auto scans=render("05-valodi-cc0-fotoalapu-kovek.ppm");
     check(scans!=0,"photogrammetry image rendered no pixels");
     for(int i=0;i<12;++i)if(int(frame.nodes[4*i+2]+.5f)==1)frame.nodes[4*i+3]=0;
@@ -231,7 +233,7 @@ int main(){
     check(mined!=scans,"collecting rocks did not change photographic 3D mesh rendering");
     // Real saved ecological biomass must alter actual GPU pixels.
     frame.playerX=-5.2f;frame.playerZ=-1.7f;frame.zoom=8.2f;
-    frame.yaw=.785398f;frame.pitch=.615480f;
+    frame.yaw=-.785398f;frame.pitch=.615480f;
     const auto aliveGrass=render("07-valodi-elo-fu.ppm");
     for(int i=0;i<4;++i)frame.grass[i*5+4]=1.f;
     const auto trampledGrass=render("08-esoben-letaposott-fu.ppm");
@@ -251,7 +253,7 @@ int main(){
           "fern geometry must be gated by world botanical approval");
     // Camera close-up confirms the actual MakeHuman mesh is on the same GPU path.
     frame.playerX=0.f;frame.playerZ=-5.2f;frame.zoom=6.5f;
-    frame.pitch=.48f;frame.yaw=.785398f;
+    frame.pitch=.48f;frame.yaw=-.785398f;
     const auto idlePose=render("12-skinned-embermodellek-idle.ppm");
     frame.playerMoving=true;
     std::this_thread::sleep_for(std::chrono::milliseconds(320));

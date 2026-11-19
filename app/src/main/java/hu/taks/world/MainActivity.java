@@ -76,7 +76,7 @@ public final class MainActivity extends Activity {
     private final ArrayList<View> gameHud=new ArrayList<>();
     private boolean inMainMenu=true;
     private Button pickupButton;
-    private float orbit=.785398f,cameraPitch=.615480f,zoom=10f,lastX=0,lastY=0,lastSpan=0;
+    private float orbit=-.785398f,cameraPitch=.615480f,zoom=19f,lastX=0,lastY=0,lastSpan=0;
     private int activePanel=0;
     private final Handler worldHandler=new Handler(Looper.getMainLooper());
     private final Handler renderHandler=new Handler(Looper.getMainLooper());
@@ -724,7 +724,7 @@ public final class MainActivity extends Activity {
             addVertical(body,"3D felbontás – gyors / kiegyensúlyozott / részletes",
                     this::chooseGraphicsResolution);
             addVertical(body,"Izometrikus kamera",()->{
-                orbit=.785398f;cameraPitch=.615480f;zoom=10f;
+                orbit=-.785398f;cameraPitch=.615480f;zoom=19f;
                 nativeSetView(orbit,cameraPitch,zoom);refreshScene();
             });
             addVertical(body,"Kamera: felülnézet",()->{

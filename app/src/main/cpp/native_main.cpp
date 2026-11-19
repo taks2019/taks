@@ -17,7 +17,7 @@ namespace {
 taks::World world;
 std::mutex worldLock;
 GLuint program=0, vertexArray=0;
-float orbit=0.785398f, pitch=0.615480f, zoom=10.0f;
+float orbit=-0.785398f, pitch=0.615480f, zoom=19.0f;
 float playerHeading=0.0f;
 std::chrono::steady_clock::time_point playerMovementDeadline{};
 std::chrono::steady_clock::time_point playerRunDeadline{};

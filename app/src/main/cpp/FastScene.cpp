@@ -257,7 +257,7 @@ void buildStatic(){
         const float r=top(xx)*t,rr=top(xx)*tt;
         if(cliffOpen((x+xx)*.5f,(y+yy+r+rr)*.25f))continue;
         Vec3 a{x,y,cliffZ(x,y)},b{xx,r,cliffZ(xx,r)},c{xx,rr,cliffZ(xx,rr)},d{x,yy,cliffZ(x,yy)};
-        quad(terrainMesh,a,b,c,d,1.f);
+        quad(terrainMesh,a,d,c,b,1.f);
     }
     // Close the full rock formation down to the ground behind the entrance.
     constexpr int depthSegments=30;
@@ -284,7 +284,7 @@ void buildStatic(){
         quad(terrainMesh,a,b,bb,aa,6.f);
     }
     quad(terrainMesh,{-1.45f,surfaceHeight(-1.45f,3.75f),3.75f},{1.45f,surfaceHeight(1.45f,3.75f),3.75f},
-        {1.45f,surfaceHeight(1.45f,6.7f),6.7f},{-1.45f,surfaceHeight(-1.45f,6.7f),6.7f},1.f);
+        {1.45f,surfaceHeight(1.45f,6.7f),6.7f},{-1.45f,surfaceHeight(-1.45f,6.7f),6.7f},6.f);
     quad(terrainMesh,{-1.1f,0.0f,6.7f},{1.1f,0.0f,6.7f},
         {1.1f,2.7f,6.7f},{-1.1f,2.7f,6.7f},6.f);
     // The previous 8 angular polygon-stones are removed: natural stones are now true photogrammetry meshes.
@@ -492,7 +492,7 @@ void main(){
     gl_Position=u_viewProjection*vec4(position,1.);
 })GLSL";
 const char* FRAG=R"GLSL(#version 300 es
-precision mediump float;
+precision highp float;
 in vec3 wPos;in vec3 wNorm;in float materialValue;flat in int matId;
 uniform float u_rain;uniform float u_mud;uniform float u_clock;uniform float u_animationTime;
 uniform vec2 u_wind;
@@ -536,15 +536,17 @@ void main(){
     }else if(matId==5){
         base=vec3(.40,.29,.22);
     }else if(matId==6){
-        base=vec3(.055,.052,.046);
+        float shade=mix(.54,.15,smoothstep(3.7,6.7,wPos.z));
+        base=vec3(.21,.16,.115)*(shade+grain*.035);
     }else if(matId==7){base=vec3(.70,.61,.39);}
     else if(matId==8){base=vec3(.46,.62,.52);}
     else if(matId==9){base=vec3(.57,.60,.73);}
     else if(matId==11){
-        vec2 direction=normalize(u_wind+vec2(.0001));
+        float windSpeed=length(u_wind);
+        vec2 direction=windSpeed>.001?u_wind/windSpeed:vec2(1.,0.);
         float crosswind=dot(wPos.xz,vec2(-direction.y,direction.x));
         float ripple=.5+.5*sin(dot(wPos.xz,direction)*12.-u_animationTime*3.+sin(crosswind*2.1));
-        ripple*=.24+.76*max(length(u_wind),u_rain);
+        ripple*=.24+.76*max(windSpeed,u_rain);
         float glint=pow(max(0.,sin(u_animationTime*1.2+wPos.x*1.7-wPos.z*2.1)),10.);
         base=mix(vec3(.035,.115,.12),vec3(.12,.31,.29),ripple*.72);
         base+=vec3(.18,.21,.17)*glint;
@@ -646,7 +648,7 @@ void render(int width,int height,const FastFrame& f){
     float aspect=float(width)/float(height);
     float yaw=f.yaw,pitch=std::clamp(f.pitch,.349066f,1.396263f);
     float distance=std::max(18.f,f.zoom*2.f);
-    Vec3 focus{f.playerX,surfaceHeight(f.playerX,f.playerZ)+.90f,f.playerZ+1.65f};
+    Vec3 focus{f.playerX,surfaceHeight(f.playerX,f.playerZ)+.90f,f.playerZ+1.65f+std::clamp((f.zoom-10.f)*.29f,0.f,3.f)};
     Vec3 delta{std::sin(yaw)*std::cos(pitch)*distance,
                std::sin(pitch)*distance,
                -std::cos(yaw)*std::cos(pitch)*distance};
