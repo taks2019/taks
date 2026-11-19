@@ -123,6 +123,7 @@ jobs:
       - name: Install the EXACT approved natural Wonderwerk video and all PNGs
         run: |
           python3 -m pip install --disable-pip-version-check 'Pillow>=10,<13'
+          python3 scripts/restore_approved_assets_from_git.py
           python3 scripts/install_approved_android_game_assets.py
       - name: Never deliver stale static poster as the accepted video
         run: |
