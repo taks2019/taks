@@ -99,7 +99,9 @@ public final class LivingWonderwerkOverlay extends View {
         if(canopy!=null && sway>.005f){
             drawPlant(canvas,canopy,202,0,260,4,t,direction*sway*1.4f,1.1f);
         }
-        if(fern!=null && sway>.005f && c.fern){
+        // The approved bitmap ALREADY contains this plant; only animate it.
+        // A species discovery flag must not manufacture or erase the master art.
+        if(fern!=null && sway>.005f){
             drawPlant(canvas,806,481,892,616,t,direction*sway*3.1f,2.4f);
         }
         // Water is naturally present. Wind/rain magnify waves; a still day stays quiet.
