@@ -26,6 +26,7 @@ GLint uWindStrength=-1,uWindDirection=-1,uAnimationTime=-1,uFoliage=-1;
 GLint uWetSeason=-1,uSoilMoisture=-1,uSwayAmount=-1;
 GLint uBones=-1;
 std::string error;
+int renderedHumans=0;
 constexpr float PI=3.14159265358979323846f;
 const char* VS=R"GLSL(#version 300 es
 precision highp float;
@@ -308,6 +309,7 @@ void drawHuman(float x,float z,float scale,float radians,int actor,int clipIndex
  glUniformMatrix4fv(uModel,1,GL_FALSE,matrix);
  glBindTexture(GL_TEXTURE_2D,model.texture);glBindVertexArray(model.vao);
  glDrawArrays(GL_TRIANGLES,0,model.count);
+ ++renderedHumans;
 }
 }
 void shutdown(){
@@ -402,6 +404,7 @@ bool upload(int id,const std::uint8_t* bytes,std::size_t size,
 }
 bool complete(){return models[0].vao&&models[0].texture&&models[1].vao&&models[1].texture;}
 bool hasRealHuman(){return models[6].vao!=0 && models[6].texture!=0 && models[6].count>=15000&&human.valid;}
+int lastHumanDrawCount(){return renderedHumans;}
 const char* errorMessage(){return error.c_str();}
 void render(const float* viewProjection,const float* worldNodes,
             const float* grass,const float* trees,bool fernApproved,
@@ -409,6 +412,7 @@ void render(const float* viewProjection,const float* worldNodes,
             float playerHeading,bool drawPlayer,bool playerMoving,bool playerRunning,
             const float* npcPositions,float animationTime,float windStrength,
             float windX,float windZ,float wetSeason,float soilMoisture){
+ renderedHumans=0;
  if(!shader||!viewProjection||!worldNodes||!grass||!trees||!npcPositions||!complete())return;
  glUseProgram(shader);
  glUniformMatrix4fv(uVP,1,GL_FALSE,viewProjection);
@@ -532,6 +536,7 @@ void render(const float* viewProjection,const float* worldNodes,
     glUniform3f(uTint,1.02f,.90f,.77f);
     const int playerClip=playerRunning?4:(playerMoving?3:0);
     if(drawPlayer)drawHuman(playerX,playerZ,1.f,playerHeading,0,playerClip,now);
+    // Each companion has its own gait phase; no synchronized zombie walk.
     for(int i=0;i<4;++i){
         const float* n=npcPositions+i*4;
         const float scale=.92f+.025f*float(i);
@@ -550,8 +555,12 @@ void render(const float* viewProjection,const float* worldNodes,
         }
         const float heading=std::atan2(targetX-n[0],targetZ-n[1]);
         const int clip=(task==1||task==2)?3:(task==3?1:0);
-        glUniform3f(uTint,1.02f,.90f,.77f);
-        drawHuman(n[0],n[1],scale,heading,i+1,clip,now);
+        static constexpr float skinTints[4][3]={
+            {1.04f,.92f,.80f},{.93f,.84f,.74f},
+            {.98f,.89f,.78f},{.91f,.82f,.71f}
+        };
+        glUniform3f(uTint,skinTints[i][0],skinTints[i][1],skinTints[i][2]);
+        drawHuman(n[0],n[1],scale,heading,i+1,clip,now+double(i+1)*.63);
     }
  }
  glUniform1f(uCutoff,0.f);

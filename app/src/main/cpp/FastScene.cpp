@@ -743,7 +743,8 @@ bool actorSpritesComplete(){
     return true;
 }
 void drawActorSprite(const Mat4& vp,const FastFrame& f,Vec3 right){
-    if(!actorSpritesComplete())return; // never show half a character.
+    if(!actorSpritesComplete()||taks::RealModels::hasRealHuman())return;
+    // PNG fallback only when an actual skinned 3D body cannot be loaded.
     const int dir=taks::SpriteOrientation::cameraRelativeDirection(f.yaw,f.playerHeading);
     const float y=surfaceHeight(f.playerX,f.playerZ)+.08f;
     // 512px atlas padded by source; character feet remain at one world-space position.
@@ -833,7 +834,7 @@ void render(int width,int height,const FastFrame& f){
     glBindVertexArray(0);
     taks::RealModels::render(vp.a,f.nodes,f.grass,f.trees,f.verifiedFerns,
         f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,
-        !actorSpritesComplete(),f.playerMoving,f.playerRunning,f.npcs,
+        true,f.playerMoving,f.playerRunning,f.npcs,
         f.animationTime,f.windStrength,f.windX,f.windZ,f.wetSeason,f.moisture);
     drawActorSprite(vp,f,right);
     if(!weatherMesh.empty()){

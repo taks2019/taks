@@ -17,6 +17,8 @@ namespace taks::RealModels {
                 const float* npcPositions,float animationTime,float windStrength,
                 float windX,float windZ,float wetSeason,float soilMoisture);
     bool hasRealHuman();
+    // Live GPU instrumentation: 1 player and 4 independently animated companions.
+    int lastHumanDrawCount();
     bool complete();
     const char* errorMessage();
 }

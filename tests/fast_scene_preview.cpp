@@ -215,6 +215,9 @@ int main(){
     frame=initialFrame;
     loadRiggedHuman();
     const auto iso=render("01-izometrikus-35fok.ppm");
+    check(taks::RealModels::lastHumanDrawCount()==5,
+          "The native GPU frame must draw exactly 1 real 3D player and 4 real 3D NPCs");
+    std::cout<<"GLES3 verified: 1 player + 4 separately animated 3D companions"<<std::endl;
     frame.yaw=2.3f;
     const auto rotated=render("02-forgatott-kamera.ppm");
     check(rotated!=iso,"yaw did not change the actual image");
