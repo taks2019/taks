@@ -88,6 +88,7 @@ struct World {
     std::string nearby() const;
     std::string nextObjective() const;
     std::string npcStatus() const;
+    std::string causalReport() const; // actual environment + bounded in-session causal history
     std::string campStatus() const;
     void updateNpcs(double hoursElapsed);
     void syncGroundCounts();

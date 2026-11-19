@@ -104,6 +104,10 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeNpcSt
     std::lock_guard<std::mutex> guard(worldLock);
     return toJava(env,world.npcStatus());
 }
+extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeCausalReport(JNIEnv* env,jobject){
+    std::lock_guard<std::mutex> guard(worldLock);
+    return toJava(env,world.causalReport());
+}
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeCampStatus(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
     return toJava(env,world.campStatus());

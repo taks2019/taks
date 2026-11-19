@@ -154,6 +154,27 @@ std::string World::nextObjective() const {
         return "CÉL: Fejezd be a gyűjtő fedését 6 leveles ággal; az eső után vizet tárol.";
     return "Az első menedék és tűz elkészült. Kísérletezz az időjárással, a tűzzel és a mentéssel.";
 }
+std::string World::causalReport() const {
+    std::ostringstream out;
+    out<<std::fixed<<std::setprecision(1);
+    out<<"ÉLŐ OK → OKOZAT\\n"
+       <<"Csapadék "<<rainIntensity*100<<"% → talajnedvesség "
+       <<ecology.soilWater*100<<"% → sár "<<ecology.mud*100
+       <<"% → járási sebesség "<<ecology.walkSpeedFactor()*100<<"%\\n"
+       <<"Szél "<<windStrength()*100<<"% → növények lengése és tűz tüzelőanyag-fogyása\\n"
+       <<"Fű "<<ecology.grassCover()*100<<"% → állatok legelési lehetősége\\n"
+       <<"Tűz: "<<(fireLit?"ég, valós tüzelőanyagot használ":"nem ég")
+       <<" · fa nedvessége "<<woodMoisture*100<<"%\\n";
+    if(causeLog.empty()){
+        out<<"Legutóbbi események: még nincs feljegyzett kölcsönhatás.";
+    }else{
+        out<<"LEGUTÓBBI OKOZATI ESEMÉNYEK (csak az aktuális játékfolyamatban):";
+        const std::size_t begin=causeLog.size()>8?causeLog.size()-8:0;
+        for(std::size_t i=begin;i<causeLog.size();++i)
+            out<<"\\n"<<causeLog[i];
+    }
+    return out.str();
+}
 std::string World::campStatus() const {
     std::ostringstream out;
     out<<"TÁBORI KÉSZLET: "<<campStock[0]<<" faág, "<<campStock[1]
@@ -739,9 +760,17 @@ void World::step(double hoursElapsed) {
     const double sunlight=clamp(1.-std::abs(std::fmod(hours,24.)-13.)/12.,0.,1.);
     // The ecology owns the one soil-water reservoir. Rain enters it once;
     // gameplay traction, renderer moisture and the menu all read its result.
+    const double oldMud=ecology.mud;
     ecology.step(hoursElapsed,rainIntensity,ecology.soilWater,sunlight,
                  climate.temperatureC,climate.windStrength);
     groundMoisture=ecology.soilWater;
+    if(oldMud<.30 && ecology.mud>=.30 && rainIntensity>.02){
+        ++eventCounter;
+        logCause("Csapadék → nedves talaj → sár → lassabb járás");
+    }else if(oldMud>=.30&&ecology.mud<.30){
+        ++eventCounter;
+        logCause("Talaj száradása → kevesebb sár → biztosabb járás");
+    }
     const double heat=std::max(0.0,climate.temperatureC-26.0);
     const double heatExposure=underShelter?.35:1.0;
     playerThirst=clamp(playerThirst+hoursElapsed*(.85+.11*heat*heatExposure),0,100);
@@ -764,7 +793,11 @@ void World::step(double hoursElapsed) {
                         -(underShelter?0.09:0.035)*(1.0+.50*climate.windStrength)*hoursElapsed,0.0,1.0);
     if(fireLit) {
         fireFuel-=hoursElapsed*(0.35+0.15*rainIntensity+0.24*climate.windStrength);
-        if(rainIntensity>0.85 || fireFuel<=0.0){fireFuel=0.0;fireLit=false;++eventCounter;}
+        if(rainIntensity>0.85 || fireFuel<=0.0){
+            fireFuel=0.0;fireLit=false;++eventCounter;
+            logCause(rainIntensity>0.85?"Heves eső → tűz kialudt":
+                                      "Tüzelőanyag elfogyott → tűz kialudt");
+        }
     }
     const double gain=(underShelter?0.85:0.35)*hoursElapsed;
     const double dampPenalty=playerWetness>0.70?1.6*hoursElapsed:0.0;

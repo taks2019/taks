@@ -43,6 +43,7 @@ public final class MainActivity extends Activity {
     private native String nativeNearby();
     private native String nativeGoal();
     private native String nativeNpcStatus();
+    private native String nativeCausalReport();
     private native String nativeCampStatus();
     private native void nativeTick();
     private native String nativeSave();
@@ -478,10 +479,16 @@ public final class MainActivity extends Activity {
             content.addView(caption("NÉGY KÜLÖN DOLGOZÓ NPC",12,0xFF9EC9B9));
             TextView npc=caption(nativeNpcStatus(),12,0xFFECE4D5);
             npc.setLineSpacing(dp(4),1f);content.addView(npc);
+            content.addView(caption("TÁRSAK TAPASZTALATA ÉS OKOZATI ESEMÉNYEK",12,0xFF9EC9B9));
+            TextView experiences=caption(nativeCausalReport(),11,0xFFECE4D5);
+            experiences.setLineSpacing(dp(3),1f);content.addView(experiences);
         }else{
             content.addView(caption(nativeGoal(),12,0xFFF4D59B));
             TextView status=caption(nativeState(),12,0xFFEEE7DB);
             status.setLineSpacing(4,1f);content.addView(status);
+            content.addView(caption("OK → OKOZAT: A VILÁG VALÓDI ÁLLAPOTA",12,0xFF9EC9B9));
+            TextView causality=caption(nativeCausalReport(),11,0xFFEDE0C4);
+            causality.setLineSpacing(dp(3),1f);content.addView(causality);
             addVertical(content,"Behúzódás a menedék alá",()->act("shelter_enter"));
             addVertical(content,"Menedék elhagyása",()->act("shelter_exit"));
             addVertical(content,"Ivás a közeli vízből",()->act("drink"));

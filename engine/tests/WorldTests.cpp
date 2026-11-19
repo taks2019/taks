@@ -495,6 +495,34 @@ int main(){
     jumper.playerZ=jumper.ecology.waters[0].z;
     assert(jumper.act("jump").find("mély vízben")!=std::string::npos);
     std::cout<<"PASS: bounded terrain-dependent 3D jump and airborne footprints"<<std::endl;
+    // One actor's direct observation can become another actor's unconfirmed
+    // report only through a physical meeting; they must later verify it.
+    {
+        taks::World rumors;
+        rumors.forceRainForTest(0.0);
+        for(auto& npc:rumors.npcs){npc.x=-.3;npc.z=-3.4;}
+        const int farStone=6; // too distant to sense from the camp
+        rumors.npcs[0].rememberedAmounts[farStone]=2;
+        rumors.step(.04);
+        assert(rumors.npcs[1].rememberedAmounts[farStone]==-2);
+        assert(rumors.npcs[1].rumorsHeard>0);
+        rumors.npcs[1].x=rumors.nodes[farStone].x;
+        rumors.npcs[1].z=rumors.nodes[farStone].z;
+        rumors.step(.04);
+        assert(rumors.npcs[1].rememberedAmounts[farStone]>=0);
+        assert(rumors.ledgerConsistent());
+    }
+    // Environmental changes must have visible mechanical causes, not only art.
+    {
+        taks::World rainy;
+        rainy.forceRainForTest(1);
+        rainy.ecology.soilWater=.45;
+        rainy.ecology.mud=.05;
+        rainy.step(.04);
+        assert(rainy.ecology.mud>=.30);
+        assert(rainy.causalReport().find("sár")!=std::string::npos);
+        assert(rainy.causalReport().find("lassabb járás")!=std::string::npos);
+    }
     // NPC learning must be non-omniscient, individually persistent and bounded.
     {
         taks::World learning;
