@@ -27,8 +27,8 @@ import java.util.List;
  * UTF-8 JSON script. Nothing written into the menu photograph.
  */
 public final class AcceptedWonderwerkMenu extends FrameLayout {
-    public static final String TEXT_FREE="menu/wonderwerk_menu_NO_TEXT.png";
-    private static final int DESIGN_W=1280,DESIGN_H=720;
+    public static final String TEXT_FREE="menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png";
+    private static final int DESIGN_W=1664,DESIGN_H=768;
     private final FrameLayout content;
     private final LivingWonderwerkOverlay environment;
     private final List<Hotspot> hotspots=new ArrayList<>();
@@ -67,7 +67,7 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
             backdrop=BitmapFactory.decodeStream(in);
         }
         if(backdrop==null||backdrop.getWidth()!=DESIGN_W||backdrop.getHeight()!=DESIGN_H)
-            throw new IOException("Approved 1280x720 text-free background missing");
+            throw new IOException("Approved 1664x768 wide text-free background missing");
         // Use the whole available Android landscape screen, not a centered
         // 16:9 plate with black/blurred side gutters. The approved source
         // bitmap itself stays untouched; FIT_XY is presentation only.
