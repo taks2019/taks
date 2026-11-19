@@ -618,7 +618,7 @@ public final class MainActivity extends Activity {
             saves.edit().putString("state",nativeSave()).apply();
             startPlaying();return;
         }
-        modal("ÚJ JÁTÉK",body->{
+        modal("Új Játék",body->{
             addVertical(body,"Folytatás a mentett világból",this::startPlaying);
             addVertical(body,"Új világ – előbb biztonsági mentés",()->{
                 modal("ÚJ VILÁG MEGERŐSÍTÉSE",confirm->{
@@ -872,7 +872,7 @@ public final class MainActivity extends Activity {
         causal.setPadding(dp(3),0,dp(3),dp(4));
         skin(causal,"CAUSE");
         stack.addView(causal,new LinearLayout.LayoutParams(-1,dp(33)));
-        String[] labels={"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐ","KILÉPÉS"};
+        String[] labels={"Új Játék","BEÁLLÍTÁSOK","KÉSZÍTŐ","KILÉPÉS"};
         Runnable[] actions={this::newWorldFromMenu,this::showSettings,this::showCredits,
                 this::confirmExit};
         for(int i=0;i<labels.length;++i){
