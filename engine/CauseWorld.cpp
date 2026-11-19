@@ -123,15 +123,6 @@ void World::syncGroundCounts(){
     }
 }
 std::string World::nextObjective() const {
-    // Wonderwerk first playable morning: survival comes BEFORE crafting.
-    // No invented path markers/map; the player must find an actual water body.
-    // Once a stone edge is made, the ordinary material/structure chain resumes.
-    if(playerThirst>=60.0)
-        return "CÉL: Szomjas vagy. Keress felszíni vizet, menj a medencéhez, és igyál.";
-    if(chippedEdgeWear<=0 && stoneDebris==0 && preparedPoles==0 &&
-       playerThirst>=15.0)
-        return "CÉL: Első felderítés: keress természetes vizet a barlang környékén. "
-               "Menj a vízhez és igyál; nincs automatikus térkép vagy iránynyíl.";
     if(shelterStage==0){
         if(chippedEdgeWear<=0 && preparedPoles<2 && carriedStone<2 && campStock[1]>0)
             return "CÉL: A társak követ tettek le a táborba. Vedd át, és készíts kőeszközt.";
