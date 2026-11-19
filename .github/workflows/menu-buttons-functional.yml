@@ -51,6 +51,6 @@ jobs:
           assert 'onNew,onSettings,onCreator,onExit' in menu
           assert 'new MainMenuActionRouter(onNew,onSettings,onCreator,onExit)' in menu
           assert 'int cw=w,ch=h;' in menu, "Not true landscape full-screen"
-          assert 'menu/wonderwerk_menu_NO_TEXT.png' in menu, "Baked text not allowed"
+          assert 'menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png' in menu, "Only the approved wide text-free background is allowed"
           print('PASS all four buttons wired, JSON labels are native, full-screen fill')
           PY
