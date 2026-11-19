@@ -120,16 +120,23 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Install byte-identical user-approved wide screen and character graphics
+        if: github.ref_name == 'codex/taks-world-elfogadott-menu-mp4-2026-11-19'
+        run: |
+          python3 -m pip install 'Pillow>=10,<13'
+          python3 scripts/install_approved_android_game_assets.py
       - name: Verify approved Wonderwerk art and 16 actual 8-angle PNG poses
         if: github.ref_name == 'codex/taks-world-elfogadott-menu-mp4-2026-11-19'
         run: |
           python3 - <<'PY'
           from pathlib import Path
           base=Path('app/src/main/assets')
-          files=['menu/wonderwerk_menu_NO_TEXT.png',
+          files=['menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png',
                  'menu/menu_texts.json',
-                 'menu/wonderwerk_menu_poster.jpg',
-                 'menu/fern_live_layer.png']
+                 'menu/WATER_MASK.png',
+                 'menu/FERN_MASK.png',
+                 'menu/GRASS_MASK.png',
+                 'menu/CLOUD_MASK.png']
           for pose in ('idle','crouch'):
               for direction in ('N','NE','E','SE','S','SW','W','NW'):
                   ext='iso' if pose=='idle' else 'p00'
@@ -137,7 +144,7 @@ jobs:
           missing=[f for f in files if not (base/f).is_file()]
           if missing:
               raise SystemExit('APPROVED ASSETS MISSING; DO NOT PUBLISH AN APK: '+', '.join(missing))
-          print('PASS: 20 approved text-free menu, JSON, and character assets exist.')
+          print('PASS: 22 approved full-screen menu, text, weather masks and actor assets exist.')
           PY
       - uses: actions/download-artifact@v4
         with:
@@ -215,6 +222,21 @@ jobs:
               import struct
               magic,vertices,joints,clips=struct.unpack_from('<4sIII',rig)
               assert magic==b'TKS1' and vertices>30000 and joints==53 and clips==7
+              if "codex/taks-world-elfogadott-menu-mp4-2026-11-19" == "codex/taks-world-elfogadott-menu-mp4-2026-11-19":
+                  # Only the current approved branch must contain this exact original.
+                  accepted='assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png'
+                  assert accepted in names and z.getinfo(accepted).file_size>500000
+                  import hashlib
+                  assert hashlib.sha256(z.read(accepted)).hexdigest() == '9369d3668b69424d31132e70accbfdb76282d7d9b3f3adfaa51c7c3ca1ea7bc8'
+                  for layer in ('WATER_MASK','FERN_MASK','GRASS_MASK','CLOUD_MASK'):
+                      assert 'assets/menu/'+layer+'.png' in names
+                  for pose in ('idle','crouch'):
+                      for direction in ('N','NE','E','SE','S','SW','W','NW'):
+                          suffix='iso' if pose=='idle' else 'p00'
+                          p='assets/characters/actor_m01_'+pose+'_'+direction+'_'+suffix+'.png'
+                          assert p in names and z.getinfo(p).file_size>4000,p
+                  assert 'assets/menu/menu_texts.json' in names
+                  print('VERIFIED: all 4 functional menu buttons, real editable JSON and 16 character sprites are in APK')
               print('VERIFIED RIGGED 53-BONE HUMANOID AND 7 CLIPS EMBEDDED IN APK')
               print('TAKS NATIVE ANDROID REAL-3D TEST APK VERIFIED:',f.stat().st_size,'bytes')
           PY
