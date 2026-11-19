@@ -406,7 +406,7 @@ const char* errorMessage(){return error.c_str();}
 void render(const float* viewProjection,const float* worldNodes,
             const float* grass,const float* trees,bool fernApproved,
             float worldClock,float rain,float playerX,float playerZ,
-            float playerHeading,bool playerMoving,bool playerRunning,
+            float playerHeading,bool drawPlayer,bool playerMoving,bool playerRunning,
             const float* npcPositions,float animationTime,float windStrength,
             float windX,float windZ,float wetSeason,float soilMoisture){
  if(!shader||!viewProjection||!worldNodes||!grass||!trees||!npcPositions||!complete())return;
@@ -531,7 +531,7 @@ void render(const float* viewProjection,const float* worldNodes,
     // follow a more natural daylight range on phone displays.
     glUniform3f(uTint,1.02f,.90f,.77f);
     const int playerClip=playerRunning?4:(playerMoving?3:0);
-    drawHuman(playerX,playerZ,1.f,playerHeading,0,playerClip,now);
+    if(drawPlayer)drawHuman(playerX,playerZ,1.f,playerHeading,0,playerClip,now);
     for(int i=0;i<4;++i){
         const float* n=npcPositions+i*4;
         const float scale=.92f+.025f*float(i);
