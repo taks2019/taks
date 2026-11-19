@@ -47,6 +47,7 @@ public final class MainActivity extends Activity {
     private native void nativeOnSurfaceCreated(String fragmentSource);
     private native void nativeRender();
     private native void nativeSetView(float angle,float pitch,float zoom);
+    private native void nativeSetCrouch(boolean crouch);
     private native String nativeRendererError();
     private native float[] nativeMenuCues();
     private native float[] nativeMenuClimate();
@@ -102,7 +103,7 @@ public final class MainActivity extends Activity {
         }
     };
     private TextView proximity;
-    private boolean moving=false,moveIntent=false,padActive=false,sprinting=false;
+    private boolean moving=false,moveIntent=false,padActive=false,sprinting=false,crouching=false;
     private float anchorX,anchorY,axisX=0,axisY=0;
     private long lastMovementNs=0L;
     private final TouchMovement touchMovement=new TouchMovement();
@@ -115,7 +116,8 @@ public final class MainActivity extends Activity {
             float dt=lastMovementNs==0L?.025f:
                     Math.max(.001f,Math.min(.06f,(now-lastMovementNs)*1.e-9f));
             lastMovementNs=now;
-            float[] delta=touchMovement.step(axisX,axisY,orbit,dt,sprinting);
+            float[] delta=touchMovement.step(axisX,axisY,orbit,dt,sprinting&&!crouching);
+            if(crouching){delta[0]*=.42f;delta[1]*=.42f;}
             if(Math.abs(delta[0])+Math.abs(delta[1])>.00005f){
                 String result=nativeMove(delta[0],delta[1]);
                 if((result.contains("kimerült")||result.contains("elállja")||
@@ -185,12 +187,14 @@ public final class MainActivity extends Activity {
             return false;
         }
     }
-    /** Eight DISTINCT photos at 45-degree camera-relative angles. The originals are preserved. */
+    /** Two genuine eight-direction postures: idle and crouch, alpha RGBA PNG. */
     private boolean loadEightDirectionPngActor(){
         final String[] angles={"N","NE","E","SE","S","SW","W","NW"};
         boolean all=true;
-        for(int view=0;view<angles.length;view++){
-            final String filename="characters/actor_m01_idle_"+angles[view]+"_iso.png";
+        for(int pose=0;pose<2;pose++)for(int view=0;view<angles.length;view++){
+            final String filename="characters/actor_m01_"+
+                (pose==0?"idle_"+angles[view]+"_iso.png":
+                         "crouch_"+angles[view]+"_p00.png");
             try(InputStream in=getAssets().open(filename)){
                 BitmapFactory.Options options=new BitmapFactory.Options();
                 options.inScaled=false;
@@ -201,18 +205,13 @@ public final class MainActivity extends Activity {
                     sprite.recycle();throw new java.io.IOException("Not 512x512 true-alpha PNG");
                 }
                 int[] argb=new int[w*h];
-                sprite.getPixels(argb,0,w,0,0,w,h);
-                sprite.recycle();
+                sprite.getPixels(argb,0,w,0,0,w,h);sprite.recycle();
                 boolean clear=false,solid=false;
-                for(int c:argb){
-                    int a=c>>>24;
-                    if(a==0)clear=true;
-                    if(a>=220)solid=true;
-                }
-                if(!clear||!solid||!nativeUploadActorSprite(view,argb,w,h))
+                for(int c:argb){int a=c>>>24;if(a==0)clear=true;if(a>=220)solid=true;}
+                if(!clear||!solid||!nativeUploadActorSprite(pose*8+view,argb,w,h))
                     throw new java.io.IOException("Missing alpha or native GL upload failed");
             }catch(Exception failure){
-                android.util.Log.e("TAKS_PNG","Character direction unavailable: "+filename,failure);
+                android.util.Log.e("TAKS_PNG","Pose sprite unavailable: "+filename,failure);
                 all=false;
             }
         }
@@ -1052,6 +1051,21 @@ public final class MainActivity extends Activity {
         });
         FrameLayout.LayoutParams runParams=new FrameLayout.LayoutParams(dp(67),dp(48),Gravity.LEFT|Gravity.BOTTOM);
         runParams.setMargins(dp(116),0,0,dp(37));root.addView(sprint,runParams);gameHud.add(sprint);
+        TextView crouchButton=caption("GUGGOLÁS",11,0xFFF5E9D3);
+        crouchButton.setGravity(Gravity.CENTER);
+        crouchButton.setBackground(panelBackground(0xC02B3B2D,16));
+        crouchButton.setOnClickListener(v->{
+            crouching=!crouching;
+            if(crouching)sprinting=false;
+            nativeSetCrouch(crouching);
+            crouchButton.setText(crouching?"FELÁLLÁS":"GUGGOLÁS");
+            if(surface!=null)surface.requestRender();
+        });
+        FrameLayout.LayoutParams crouchParams=new FrameLayout.LayoutParams(
+            dp(90),dp(48),Gravity.LEFT|Gravity.BOTTOM);
+        crouchParams.setMargins(dp(192),0,0,dp(37));
+        root.addView(crouchButton,crouchParams);
+        gameHud.add(crouchButton);
 
         // Kontextuális FELVESZ – csak akkor van a képernyőn, ha tényleg van elérhető tárgy.
         pickupButton=button("FELVESZ",()->act("gather"),true);
