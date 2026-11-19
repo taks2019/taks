@@ -393,11 +393,7 @@ void World::updateNpcs(double dt){
                     logCause("Társ "+std::to_string(i+1)+" sikeres munkautat tanult");
                     ++eventCounter;
                 }else{
-                    const double step=std::min(length,.25*(npc.wetness>.6?.65:1.)*ecology.walkSpeedFactor());
-                    npc.x+=dx/length*step;npc.z+=dz/length*step;
-                    npc.walkPhase+=step*5;
-                    const double practice=std::min(npc.completedTrips,12)/12.0;
-                    npc.energy=clamp(npc.energy-step*.42*(1.0-.16*practice),0,100);
+                    walkNpc(npc,-.30,-3.40,.25);
                 }
                 continue;
             }
@@ -436,11 +432,7 @@ void World::updateNpcs(double dt){
                 const double dz=patrol[npc.scoutSteps][1]-npc.z;
                 const double length=std::hypot(dx,dz);
                 if(length<.65){++npc.scoutSteps;continue;}
-                const double pace=.22*(npc.wetness>.6?.65:1.)*ecology.walkSpeedFactor();
-                const double step=std::min(length,pace);
-                npc.x+=dx/length*step;npc.z+=dz/length*step;
-                npc.walkPhase+=step*5;
-                npc.energy=clamp(npc.energy-step*.44,0,100);
+                walkNpc(npc,patrol[npc.scoutSteps][0],patrol[npc.scoutSteps][1],.22);
                 continue;
             }
             npc.task=1;
@@ -465,11 +457,7 @@ void World::updateNpcs(double dt){
                 syncGroundCounts();
                 ++eventCounter;
             }else{
-                const double step=std::min(length,.22*(npc.wetness>.6?.65:1.)*ecology.walkSpeedFactor());
-                npc.x+=dx/length*step;npc.z+=dz/length*step;
-                npc.walkPhase+=step*5;
-                const double practice=std::min(npc.completedTrips,12)/12.0;
-                npc.energy=clamp(npc.energy-step*.44*(1.0-.16*practice),0,100);
+                walkNpc(npc,node.x,node.z,.22);
             }
         }
     }
