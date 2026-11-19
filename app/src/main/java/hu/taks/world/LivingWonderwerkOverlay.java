@@ -56,7 +56,7 @@ public final class LivingWonderwerkOverlay extends View {
                     for(int y=0;y<173;y++)for(int x=0;x<280;x++){
                         int c=master.getPixel(806+x,481+y);
                         int r=(c>>16)&255,g=(c>>8)&255,b=c&255;
-                        float green=Math.min((g-r*.72f)/32f,(g-b*1.13f)/30f);
+                        float green=Math.min(((float)g/Math.max(1,r)-.77f)*8f,(g-b*1.40f)/30f);
                         float leaf=Math.max(0f,Math.min(1f,green));
                         // Root remains fixed. Only the visible leafy ends swing.
                         float fade=Math.max(0f,Math.min(1f,(170f-y)/48f));
