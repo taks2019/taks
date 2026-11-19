@@ -31,7 +31,7 @@ import java.util.List;
  */
 public final class AcceptedWonderwerkMenu extends FrameLayout {
     private static final String VIDEO="menu/wonderwerk_menu_30fps.mp4";
-    private static final String POSTER="menu/wonderwerk_menu_poster.jpg";
+    private static final String POSTER="menu/wonderwerk_menu_UJ_JATEK_JAVITOTT.png";
     private static final int DESIGN_W=1280, DESIGN_H=720;
     private final FrameLayout content;
     private final VideoView video;
