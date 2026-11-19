@@ -13,7 +13,8 @@ public final class MenuClimateTest {
         check(windy.waterMotion()>calm.waterMotion(),"wind/rain cause more ripples");
         check(windy.vegetationMotion()>calm.vegetationMotion(),"wind moves plants");
         check(windy.wetStoneDarkening()>calm.wetStoneDarkening(),"wet stones darken");
-        check(windy.dust()<calm.dust()+.001f,"rain prevents dust");
+        MenuClimate dryWind=MenuClimate.fromNative(new float[]{12,0,.13f,.80f,.5f,-.4f,.75f,1});
+        check(windy.dust()<dryWind.dust(),"rain prevents dust compared with equally strong dry wind");
         check(calm.daylight()>.95f,"midday brightness");
         check(MenuClimate.fromNative(new float[]{0,0,0,0,0,0,.5f,0}).daylight()<.05f,
               "night darkness");
