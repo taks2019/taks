@@ -49,6 +49,7 @@ public final class MainActivity extends Activity {
     private native void nativeSetView(float angle,float pitch,float zoom);
     private native String nativeRendererError();
     private native float[] nativeMenuCues();
+    private native float[] nativeMenuClimate();
     private native boolean nativeUploadRealModel(int slot,byte[] model,int[] argb,int width,int height);
     private native boolean nativeUploadTerrainTexture(int slot,int[] pixels,int width,int height);
 
@@ -306,6 +307,7 @@ public final class MainActivity extends Activity {
     private void refreshLivingSkin(){
         if(root==null)return;
         LivingUiSkin.State state=currentSkin();
+        if(acceptedMenu!=null)acceptedMenu.setClimate(MenuClimate.fromNative(nativeMenuClimate()));
         applyMenuScrim(state);
         applySkin(root,state,android.os.SystemClock.uptimeMillis());
     }
@@ -821,6 +823,7 @@ public final class MainActivity extends Activity {
             menuCover=acceptedMenu;
             menuScrim=null;
             root.addView(menuCover,new FrameLayout.LayoutParams(-1,-1));
+            refreshLivingSkin();
             return;
         }
         menuCover=new FrameLayout(this);
