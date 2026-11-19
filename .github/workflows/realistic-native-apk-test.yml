@@ -222,7 +222,7 @@ jobs:
               import struct
               magic,vertices,joints,clips=struct.unpack_from('<4sIII',rig)
               assert magic==b'TKS1' and vertices>30000 and joints==53 and clips==7
-              if "codex/taks-world-elfogadott-menu-mp4-2026-11-19" == "codex/taks-world-elfogadott-menu-mp4-2026-11-19":
+              if __import__('os').environ.get('GITHUB_REF_NAME')=='codex/taks-world-elfogadott-menu-mp4-2026-11-19':
                   # Only the current approved branch must contain this exact original.
                   accepted='assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png'
                   assert accepted in names and z.getinfo(accepted).file_size>500000
