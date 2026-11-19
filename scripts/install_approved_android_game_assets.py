@@ -62,8 +62,19 @@ with ZipFile(PACKAGE) as archive:
         with Image.open(BytesIO(archive.read(f"approved/menu/{key}.png"))) as mask:
             if mask.size!=(1664,768):
                 fail("Maszkfelbontási hiba: "+key)
-    # Copy exactly the approved game inputs. Master/MP4 are verification copies,
-    # not live UI artwork; titles remain editable text in menu_texts.json.
+    # The user explicitly approved THIS video, not the obsolete static menu!
+    video='approved/menu/accepted_reference_video.mp4'
+    if expected.get(video)!='12cac3685ae24638b2ca9db036b454083fdc9eb2dae46ba171eccac1f7aea15c':
+        fail("A fájl nem a pontosan elfogadott 8 mp-es, esőmentes MP4!")
+    # 1664x768 H.264 MP4 will be rechecked inside the signed Android package.
+    video_target=DEST/'menu/WONDERWERK_APPROVED_NATURE_NO_RAIN.mp4'
+    video_target.parent.mkdir(parents=True,exist_ok=True)
+    video_target.write_bytes(archive.read(video))
+    print('ORIGINAL VIDEO INSTALLED',video_target.relative_to(ROOT),
+          'SHA256',sha256(video_target.read_bytes()).hexdigest())
+
+    # Copy exactly the approved image inputs. Master is an immutable verification
+    # copy; titles remain editable native Android text in menu_texts.json.
     required=character_files+[f"approved/menu/{key}.png" for key in
              ("WONDERWERK_APPROVED_WIDE_NO_TEXT","WATER_MASK",
               "FERN_MASK","GRASS_MASK","CLOUD_MASK")]
@@ -72,5 +83,5 @@ with ZipFile(PACKAGE) as archive:
         path.parent.mkdir(parents=True,exist_ok=True)
         path.write_bytes(archive.read(name))
         print("ORIGINAL BYTES INSTALLED",path.relative_to(ROOT))
-print("PASS: 16 native actor PNGs + 5 full-screen causal scene layers installed.")
+print("PASS: EXACT APPROVED 8s VIDEO + 16 actor PNGs + 5 full-screen layers installed.")
 print("The sacred logo, the original poster and the human-editable text script are untouched.")
