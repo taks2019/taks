@@ -29,6 +29,7 @@ std::chrono::steady_clock::time_point playerMovementDeadline{};
 std::chrono::steady_clock::time_point playerRunDeadline{};
 std::array<float,8> npcPrevious{};
 std::array<float,8> npcTarget{};
+std::array<float,4> npcFacing{};
 std::chrono::steady_clock::time_point npcSegmentStart{};
 bool npcInterpolationReady=false;
 std::string rendererError;
@@ -125,6 +126,10 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeTick(JNI
     for(int i=0;i<taks::World::npcCount;++i){
         npcTarget[i*2]=static_cast<float>(world.npcs[i].x);
         npcTarget[i*2+1]=static_cast<float>(world.npcs[i].z);
+        const float deltaX=npcTarget[i*2]-npcPrevious[i*2];
+        const float deltaZ=npcTarget[i*2+1]-npcPrevious[i*2+1];
+        if(deltaX*deltaX+deltaZ*deltaZ>1.e-5f)
+            npcFacing[i]=std::atan2(deltaX,deltaZ);
     }
     npcSegmentStart=std::chrono::steady_clock::now();
 }
@@ -159,14 +164,14 @@ extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeLoad
     if(txt)env->ReleaseStringUTFChars(payload,txt);
     std::lock_guard<std::mutex> guard(worldLock);
     const bool loaded=world.load(raw);
-    if(loaded){npcInterpolationReady=false;playerJump.reset();playerCrouching=false;}
+    if(loaded){npcInterpolationReady=false;playerJump.reset();playerCrouching=false;npcFacing.fill(0.f);}
     return loaded?JNI_TRUE:JNI_FALSE;
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeReset(JNIEnv*,jobject){
     std::lock_guard<std::mutex> guard(worldLock);world=taks::World();
     playerMovementDeadline=playerRunDeadline=std::chrono::steady_clock::time_point{};
     playerJump.reset();playerCrouching=false;
-    npcInterpolationReady=false;
+    npcInterpolationReady=false;npcFacing.fill(0.f);
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetView(JNIEnv*,jobject,jfloat yaw,jfloat cameraPitch,jfloat scale){
     std::lock_guard<std::mutex> guard(worldLock);
@@ -359,6 +364,10 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
             f.npcs[i*4+1]=npcPrevious[i*2+1]+(npcTarget[i*2+1]-npcPrevious[i*2+1])*npcBlend;
             f.npcs[i*4+2]=static_cast<float>(world.npcs[i].task);
             f.npcs[i*4+3]=static_cast<float>(world.npcs[i].carrying);
+            f.npcHeadings[i]=npcFacing[i];
+            const float dx=npcTarget[i*2]-npcPrevious[i*2];
+            const float dz=npcTarget[i*2+1]-npcPrevious[i*2+1];
+            f.npcMoving[i]=npcBlend<1.f&&(dx*dx+dz*dz)>.00001f?1.f:0.f;
         }
         for(int i=0;i<taks::World::maxBuildSites;++i){
             f.sites[i*4+0]=static_cast<float>(world.sites[i].x);

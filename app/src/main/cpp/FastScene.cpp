@@ -836,7 +836,8 @@ void render(int width,int height,const FastFrame& f){
     taks::RealModels::render(vp.a,f.nodes,f.grass,f.trees,f.verifiedFerns,
         f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,f.playerJumpHeight,
         true,f.playerMoving,f.playerRunning,f.npcs,
-        f.animationTime,f.windStrength,f.windX,f.windZ,f.wetSeason,f.moisture);
+        f.npcHeadings,f.npcMoving,f.animationTime,f.windStrength,
+        f.windX,f.windZ,f.wetSeason,f.moisture);
     drawActorSprite(vp,f,right);
     if(!weatherMesh.empty()){
         glUseProgram(program);

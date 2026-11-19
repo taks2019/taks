@@ -14,7 +14,8 @@ namespace taks::RealModels {
                 const float* grass, const float* trees, bool fernApproved,
                 float worldClock, float rain, float playerX, float playerZ,
                 float playerHeading, float playerJumpHeight, bool drawPlayer, bool playerMoving, bool playerRunning,
-                const float* npcPositions,float animationTime,float windStrength,
+                const float* npcPositions,const float* npcHeadings,const float* npcMoving,
+                float animationTime,float windStrength,
                 float windX,float windZ,float wetSeason,float soilMoisture);
     bool hasRealHuman();
     // Live GPU instrumentation: 1 player and 4 independently animated companions.

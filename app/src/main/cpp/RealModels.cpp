@@ -412,10 +412,12 @@ void render(const float* viewProjection,const float* worldNodes,
             const float* grass,const float* trees,bool fernApproved,
             float worldClock,float rain,float playerX,float playerZ,
             float playerHeading,float playerJumpHeight,bool drawPlayer,bool playerMoving,bool playerRunning,
-            const float* npcPositions,float animationTime,float windStrength,
+            const float* npcPositions,const float* npcHeadings,const float* npcMoving,
+             float animationTime,float windStrength,
             float windX,float windZ,float wetSeason,float soilMoisture){
  renderedHumans=0;
- if(!shader||!viewProjection||!worldNodes||!grass||!trees||!npcPositions||!complete())return;
+ if(!shader||!viewProjection||!worldNodes||!grass||!trees||
+    !npcPositions||!npcHeadings||!npcMoving||!complete())return;
  glUseProgram(shader);
  glUniformMatrix4fv(uVP,1,GL_FALSE,viewProjection);
  glUniform1i(uTexture,0);
@@ -543,21 +545,12 @@ void render(const float* viewProjection,const float* worldNodes,
     for(int i=0;i<4;++i){
         const float* n=npcPositions+i*4;
         const float scale=.92f+.025f*float(i);
-        const int task=std::clamp(int(n[2]+.5f),0,4);
-        const bool carrying=n[3]>.5f;
-        float targetX=-.30f,targetZ=-3.40f;
-        if(!carrying){
-            static constexpr int resourceTypeByRole[4]={0,1,3,2};
-            const int resourceType=resourceTypeByRole[i];
-            float best=1.e9f;
-            for(int k=0;k<12;++k){const float* node=worldNodes+k*4;
-                if(int(node[2]+.5f)!=resourceType||node[3]<.5f)continue;
-                const float dx=node[0]-n[0],dz=node[1]-n[1],distance=dx*dx+dz*dz;
-                if(distance<best){best=distance;targetX=node[0];targetZ=node[1];}
-            }
-        }
-        const float heading=std::atan2(targetX-n[0],targetZ-n[1]);
-        const int clip=(task==1||task==2)?3:(task==3?1:0);
+        const int task=std::clamp(int(n[2]+.5f),0,6);
+        // Read orientation from interpolated ACTUAL locomotion, not from an
+        // omniscient search for resources. This also faces away from predators.
+        const float heading=std::isfinite(npcHeadings[i])?npcHeadings[i]:0.f;
+        const bool moving=npcMoving[i]>.5f;
+        const int clip=moving?(task==5?4:3):(task==3?1:0);
         static constexpr float skinTints[4][3]={
             {1.04f,.92f,.80f},{.93f,.84f,.74f},
             {.98f,.89f,.78f},{.91f,.82f,.71f}

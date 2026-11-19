@@ -17,6 +17,8 @@ struct FastFrame {
     float animals[48]={}; // [x,z,kind,alive,thirst,hunger] x8; species remain unverified
     bool verifiedFerns=false;
     float npcs[16]={};
+    float npcHeadings[4]={}; // actual last movement direction; no invented target turn
+    float npcMoving[4]={};   // walk or run only while actually changing position
     float sites[12]={};
     float collectorStage=0,collectorWater=0;
 };
