@@ -1,6 +1,16 @@
 package hu.taks.world;
 
 import android.app.Activity;
+import android.content.res.AssetManager;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Rect;
+import android.graphics.PorterDuff;
+import android.widget.VideoView;
+import android.net.Uri;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.util.concurrent.atomic.AtomicBoolean;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -28,9 +38,13 @@ import java.util.List;
  */
 public final class AcceptedWonderwerkMenu extends FrameLayout {
     public static final String TEXT_FREE="menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png";
+    // Byte-identical, user-approved, rain-free eight-second documentary-like menu.
+    public static final String APPROVED_VIDEO="menu/WONDERWERK_APPROVED_NATURE_NO_RAIN.mp4";
     private static final int DESIGN_W=1664,DESIGN_H=768;
     private final FrameLayout content;
     private final LivingWonderwerkOverlay environment;
+    private final VideoView approvedVideo;
+    private boolean videoPlaying=false;
     private final List<Hotspot> hotspots=new ArrayList<>();
     private final EditableGameScript labels;
     private final MainMenuActionRouter actions;
@@ -47,8 +61,9 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         EditableGameScript labels,Runnable onNew,Runnable onSettings,
         Runnable onCreator,Runnable onExit){
         // NEVER fall back to baked-text art as though it were editable.
-        try(InputStream p=host.getAssets().open(TEXT_FREE)){
-            if(p.read()==-1)return null;
+        try(InputStream p=host.getAssets().open(TEXT_FREE);
+            InputStream mp4=host.getAssets().open(APPROVED_VIDEO)){
+            if(p.read()==-1||mp4.read()==-1)return null;
             return new AcceptedWonderwerkMenu(host,labels,onNew,onSettings,onCreator,onExit);
         }catch(IOException e){
             android.util.Log.e("TAKS_MENU","Text-free accepted background missing; not displaying false editable labels",e);
@@ -76,9 +91,51 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         still.setImageBitmap(backdrop);
         still.setScaleType(ImageView.ScaleType.FIT_XY);
         content.addView(still,new FrameLayout.LayoutParams(-1,-1));
+        // Real video playback from APK resources, not a static poster or a GIF.
+        approvedVideo=new VideoView(host);
+        approvedVideo.setBackgroundColor(Color.TRANSPARENT);
+        approvedVideo.setVisibility(View.INVISIBLE);
+        content.addView(approvedVideo,new FrameLayout.LayoutParams(-1,-1));
         environment=new LivingWonderwerkOverlay(host);
         environment.setEditableScript(labels);
         content.addView(environment,new FrameLayout.LayoutParams(-1,-1));
+
+        // Accepted MP4 already has old raster glyphs burned onto its static
+        // stones. Composite ONLY the exact same untouched text-free stone pixels
+        // above the video in tiny letter-sized rectangles, then Android buttons
+        // draw genuinely editable text. The logo, stream, plants are not patched.
+        Bitmap stoneLettersCover=Bitmap.createBitmap(DESIGN_W,DESIGN_H,Bitmap.Config.ARGB_8888);
+        Canvas coverCanvas=new Canvas(stoneLettersCover);
+        Paint opaque=new Paint(Paint.FILTER_BITMAP_FLAG);
+        int[] top={354,455,544,642};
+        int[] bottom={401,497,588,688};
+        for(int i=0;i<4;++i){
+            Rect letterBox=new Rect(807,top[i],1060,bottom[i]);
+            coverCanvas.drawBitmap(backdrop,letterBox,letterBox,opaque);
+        }
+        ImageView textBlanker=new ImageView(host);
+        textBlanker.setImageBitmap(stoneLettersCover);
+        textBlanker.setScaleType(ImageView.ScaleType.FIT_XY);
+        content.addView(textBlanker,new FrameLayout.LayoutParams(-1,-1));
+
+        approvedVideo.setOnPreparedListener(mp->{
+            if(released)return;
+            mp.setLooping(true);
+            mp.setVolume(0f,0f);
+            videoPlaying=true;
+            approvedVideo.setVisibility(View.VISIBLE);
+            environment.setVisibility(View.GONE);
+            approvedVideo.start();
+        });
+        approvedVideo.setOnErrorListener((mp,what,extra)->{
+            android.util.Log.e("TAKS_MENU","Approved video decode error "+what+"/"+extra);
+            videoPlaying=false;
+            approvedVideo.setVisibility(View.GONE);
+            environment.setVisibility(View.VISIBLE);
+            return true;  // the original approved still remains, never black
+        });
+        File media=copyApprovedVideoToCache(host.getAssets(),host.getCacheDir());
+        approvedVideo.setVideoURI(Uri.fromFile(media));
         addButton(host,"new_game",.390f,.442f,.280f,.116f);
         addButton(host,"settings",.390f,.558f,.280f,.119f);
         addButton(host,"creator",.390f,.685f,.280f,.115f);
@@ -127,6 +184,29 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
                 TypedValue.COMPLEX_UNIT_PX);
         }
     }
+    private static File copyApprovedVideoToCache(AssetManager assets,File cacheDir)
+            throws IOException{
+        File video=new File(cacheDir,"TAKS_WONDERWERK_APPROVED_NATURE_NO_RAIN.mp4");
+        long sourceLength=0;
+        try(InputStream in=assets.open(APPROVED_VIDEO)){
+            byte[] b=new byte[65536];int n;
+            while((n=in.read(b))!=-1)sourceLength+=n;
+        }
+        if(sourceLength<500000)throw new IOException("Approved MP4 is missing or empty.");
+        if(video.exists()&&video.length()==sourceLength)return video;
+        File temp=new File(cacheDir,"TAKS_WONDERWERK_APPROVED.tmp");
+        try(InputStream in=assets.open(APPROVED_VIDEO);
+            FileOutputStream out=new FileOutputStream(temp)){
+            byte[] b=new byte[65536];int n;
+            while((n=in.read(b))!=-1)out.write(b,0,n);
+            out.getFD().sync();
+        }
+        if(video.exists()&&!video.delete())
+            throw new IOException("Cannot replace outdated video cache");
+        if(!temp.renameTo(video))
+            throw new IOException("Cannot activate approved MP4");
+        return video;
+    }
     public void refreshText(){
         environment.setEditableScript(labels);
         for(Hotspot h:hotspots){
@@ -136,11 +216,20 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         }
     }
     public void setClimate(MenuClimate next){if(!released)environment.setClimate(next);}
-    public void play(){if(!released)environment.resume();}
-    public void pause(){if(!released)environment.pause();}
+    public void play(){
+        if(released)return;
+        if(videoPlaying)approvedVideo.start();
+        else environment.resume();
+    }
+    public void pause(){
+        if(released)return;
+        environment.pause();
+        if(videoPlaying&&approvedVideo.isPlaying())approvedVideo.pause();
+    }
     public void release(){
         if(released)return;
         released=true;
+        approvedVideo.stopPlayback();
         environment.release();
     }
     @Override protected void onDetachedFromWindow(){release();super.onDetachedFromWindow();}
