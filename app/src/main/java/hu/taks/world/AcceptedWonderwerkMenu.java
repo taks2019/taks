@@ -77,6 +77,7 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         still.setScaleType(ImageView.ScaleType.FIT_XY);
         content.addView(still,new FrameLayout.LayoutParams(-1,-1));
         environment=new LivingWonderwerkOverlay(host);
+        environment.setEditableScript(labels);
         content.addView(environment,new FrameLayout.LayoutParams(-1,-1));
         addButton(host,"new_game",.390f,.442f,.280f,.116f,onNew);
         addButton(host,"settings",.390f,.558f,.280f,.119f,onSettings);
