@@ -1,0 +1,24 @@
+{
+  "asset_id": "TAKS_WORLD_LOGO_ERA_01_STONE",
+  "date": "2026-11-19",
+  "status": "ELFOGADOTT – változtatás nélkül megőrzendő",
+  "approved_png_filename": "TAKS_WORLD_LOGO_ERA_01_KO_ELFOGADOTT.png",
+  "source_filename": "homokkőbe_vésett_taks_world_embléma.png",
+  "sha256": "7109006c1190b8d00e62656c99616506f7b1068864c181655df99a291fe55d7a",
+  "dimensions_px": [
+    1323,
+    1189
+  ],
+  "format": "PNG RGBA (átlátszó háttér)",
+  "approval_scope": "Stone logotype, life-tree, mountains, stone motif, no orbit ring/globe/dot. No additional redesign.",
+  "immutability": "Master original pixels must never be overwritten. Living graphics are separate transparent runtime layers, dependent on actual world/knowledge states.",
+  "era_condition": {
+    "era01": "Only approved bare stone master",
+    "vines": "Living vegetation grows under humidity/light/elapsed-time constraints",
+    "ferns": "Separate living vegetation layer",
+    "moss": "Moisture, shade and local ecology; no fixed north orientation",
+    "orbit_and_planet": "Not until verified era-specific astronomical discoveries and separately approved future logo"
+  },
+  "integration_status": "Kép és védelmi előírás rögzítve; megjelenítőbe/APK-ba integrálás még nincs igazolva.",
+  "file_delivery": "Original immutable PNG is in user-visible TAKS_WORLD_OSKORI_LOGO_ELFOGADOTT.zip, not committed as binary to GitHub via the text-only file connector."
+}
