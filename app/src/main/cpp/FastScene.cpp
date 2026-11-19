@@ -22,7 +22,7 @@ GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uAnimation=-1,uWind=-1,uGround=-1,uCliff
 GLuint terrainTexture[2]={0,0};
 // Dedicated world-space 2D asset renderer (NOT a second browser/game engine).
 GLuint actorProgram=0,actorVAO=0,actorVBO=0;
-GLuint actorTextures[8]={};
+GLuint actorTextures[16]={};
 GLint actorVP=-1,actorSampler=-1,actorLight=-1;
 const char* ACTOR_VERT=R"GLSL(#version 300 es
 precision highp float;
@@ -599,7 +599,7 @@ void main(){
 const std::string& lastError(){return error;}
 void shutdown(){
     if(terrainTexture[0]||terrainTexture[1])glDeleteTextures(2,terrainTexture);
-    glDeleteTextures(8,actorTextures);
+    glDeleteTextures(16,actorTextures);
     std::fill(std::begin(actorTextures),std::end(actorTextures),0u);
     if(actorVBO)glDeleteBuffers(1,&actorVBO);
     if(actorVAO)glDeleteVertexArrays(1,&actorVAO);
@@ -702,7 +702,7 @@ bool uploadTerrainTexture(int slot,const std::uint32_t* argb,int width,int heigh
     return true;
 }
 bool uploadActorSprite(int view,const std::uint32_t* argb,int width,int height){
-    if(view<0||view>=8||!argb||width<128||height<128||width>2048||height>2048||!actorProgram)
+    if(view<0||view>=16||!argb||width<128||height<128||width>2048||height>2048||!actorProgram)
         return false;
     bool anyOpaque=false,anyClear=false;
     const std::size_t n=std::size_t(width)*std::size_t(height);
@@ -769,7 +769,8 @@ void drawActorSprite(const Mat4& vp,const FastFrame& f,Vec3 right){
     const float sun=std::clamp(1.f-std::abs(tod-13.f)/11.f,.38f,1.f);
     glUniform1f(actorLight,sun*(1.f-.18f*std::clamp(f.rain,0.f,1.f)));
     glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D,actorTextures[dir]);
+    int spriteIndex=f.playerCrouching&&actorTextures[8+dir]?8+dir:dir;
+    glBindTexture(GL_TEXTURE_2D,actorTextures[spriteIndex]);
     glUniform1i(actorSampler,2);
     glBindVertexArray(actorVAO);
     glBindBuffer(GL_ARRAY_BUFFER,actorVBO);
