@@ -63,10 +63,13 @@ def click(nodes,text,contains=False):
 def click_after_scroll(nodes,text,context,max_swipes=6):
     # The JSON editor is below the fold on compact landscape displays.
     # Scroll the genuine Android ScrollView instead of guessing coordinates.
-    dimensions=adb("shell","wm","size").decode(errors="replace")
-    found=re.findall(r"(\d+)x(\d+)",dimensions)
-    assert found, "Could not obtain the real Android screen dimensions"
-    width,height=map(int,found[-1])
+    # WM reports physical portrait dimensions even when the game is rotated.
+    # Accessibility bounds use the current on-screen landscape coordinates.
+    rects=[list(map(int,re.findall(r"\d+",n.get("bounds","")))) for n in nodes]
+    rects=[rect for rect in rects if len(rect)==4]
+    assert rects, "The native Android screen contains no accessibility bounds"
+    width=max(rect[2] for rect in rects)
+    height=max(rect[3] for rect in rects)
     for attempt in range(max_swipes):
         if find(nodes,text):
             return click(nodes,text)
