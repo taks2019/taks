@@ -107,7 +107,7 @@ public final class EditableGameScript {
         JSONObject object=data.optJSONObject(section);
         return object!=null?(float)object.optDouble(key,fallback):fallback;
     }
-    public synchronized String rawJson(){return data.toString(2);}
+    public synchronized String rawJson(){try{return data.toString(2);}catch(JSONException e){return data.toString();}}
     public synchronized String lastError(){return lastError;}
     public synchronized boolean save(String changed){
         try{
