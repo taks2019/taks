@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT=Path("ui-evidence")
 ROOT.mkdir(parents=True, exist_ok=True)
 PACKAGE="hu.taks.world.windseasons"
-APK="android/TAKS_World_0_14_Android.apk"
+APK="android/TAKS_World_0_15_Android.apk"
 
 def adb(*args, check=True):
     result=subprocess.run(["adb",*args],stdout=subprocess.PIPE,

@@ -1,7 +1,7 @@
 name: TAKS World 0.15 Android
 on:
   push:
-    branches: ['codex/taks-world-wonderwerk-live']
+    branches: ['codex/taks-world-0-14-github-build']
   workflow_dispatch:
 permissions:
   contents: read
