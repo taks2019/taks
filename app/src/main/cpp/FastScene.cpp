@@ -17,7 +17,7 @@ struct Vertex { float x,y,z,nx,ny,nz,kind; };
 struct Mat4 { float a[16]{}; };
 std::string error;
 GLuint program=0,staticVAO=0,staticVBO=0,dynamicVAO=0,dynamicVBO=0;
-GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uAnimation=-1,uWind=-1,uEye=-1,uGround=-1,uCliff=-1;
+GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uAnimation=-1,uWind=-1,uGround=-1,uCliff=-1;
 GLuint terrainTexture[2]={0,0};
 std::vector<Vertex> terrainMesh,objectsMesh,weatherMesh;
 Vec3 add(Vec3 a,Vec3 b){return {a.x+b.x,a.y+b.y,a.z+b.z};}
@@ -518,9 +518,9 @@ void main(){
         // Soil dampness/mud follows saved ecological simulation and darkens
         // the photographic surface instead of painting a new brown slab.
         float drainage=.30*sin(wPos.x*1.54+wPos.z*.81)+.17*sin(wPos.z*3.8-wPos.x*2.9);
-        float patch=smoothstep(.12,.77,u_mud+drainage*.43)*smoothstep(.02,.20,u_mud);
-        base=mix(base,base*vec3(.48,.44,.38),patch);
-        base+=vec3(.065,.058,.049)*patch*patch*pow(.5+.5*sin(lines*6.+wPos.x*3.),4.);
+        float mudCoverage=smoothstep(.12,.77,u_mud+drainage*.43)*smoothstep(.02,.20,u_mud);
+        base=mix(base,base*vec3(.48,.44,.38),mudCoverage);
+        base+=vec3(.065,.058,.049)*mudCoverage*mudCoverage*pow(.5+.5*sin(lines*6.+wPos.x*3.),4.);
     }else if(matId==1){
         vec3 weights=pow(abs(normalize(wNorm)),vec3(4.));
         weights/=max(dot(weights,vec3(1.)),.001);

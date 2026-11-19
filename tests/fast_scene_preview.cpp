@@ -164,15 +164,15 @@ int main(){
         4.4f,-2.0f,2.f,0.f,-1.8f,-2.4f,3.f,0.f
     };
     std::copy(npc,npc+16,frame.npcs);
-    const float grass[20]={
-       -2.5f,-4.6f,.62f,.95f,0.f,2.25f,-4.2f,.57f,.90f,0.f,
-       -3.8f,.9f,.45f,.94f,0.f,4.4f,.5f,.53f,.91f,0.f
+    const float grass[16]={
+       -2.5f,-4.6f,.62f,.95f,2.25f,-4.2f,.57f,.90f,
+       -3.8f,.9f,.45f,.94f,4.4f,.5f,.53f,.91f
     };
     const float trees[12]={
        -6.4f,-1.3f,2.0f,1.0f,5.7f,3.1f,1.6f,1.0f,
        -5.8f,5.7f,.7f,1.0f
     };
-    std::copy(grass,grass+20,frame.grass);
+    std::copy(grass,grass+16,frame.grass);
     std::copy(trees,trees+12,frame.trees);
     frame.verifiedFerns=false; // never show historically unverified plants
     for(int i=0;i<3;++i){frame.sites[4*i+2]=-1.f;frame.sites[4*i+3]=1.f;}
