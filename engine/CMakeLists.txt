@@ -36,4 +36,10 @@ if(TAKS_BUILD_TESTS)
   add_test(NAME taks_save_compatibility COMMAND taks_save_compatibility_tests
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/world-v9-ledger.txt"
     "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/world-v8-water.txt")
+  add_executable(taks_sprite_actor_tests tests/SpriteActor2DTests.cpp)
+  target_link_libraries(taks_sprite_actor_tests PRIVATE taks_cause)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(taks_sprite_actor_tests PRIVATE -UNDEBUG)
+  endif()
+  add_test(NAME taks_sprite_actor_2d COMMAND taks_sprite_actor_tests)
 endif()
