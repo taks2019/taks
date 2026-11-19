@@ -36,9 +36,13 @@ jobs:
           src=Path("app/src/main/java/hu/taks/world/MainActivity.java").read_text()
           scene=Path("app/src/main/cpp/FastScene.cpp").read_text()
           assert 'loadEightDirectionPngActor()' in src
-          assert 'characters/actor_m01_idle_' in src
+          assert 'characters/actor_m01_' in src
           assert 'actorSpritesComplete()' in scene
           assert 'drawActorSprite(vp,f,right);' in scene
-          assert 'drawPlayer' in Path('app/src/main/cpp/RealModels.cpp').read_text()
-          print("PNG renderer connected to real GLES3 world and saved player state.")
+          assert 'taks::RealModels::hasRealHuman()' in scene, "2D fallback must not cover a real 3D player"
+          models=Path('app/src/main/cpp/RealModels.cpp').read_text()
+          assert 'if(drawPlayer)drawHuman(' in models, "Player is not drawn with a real 3D rig"
+          assert 'for(int i=0;i<4;++i)' in models, "Four 3D companions must exist"
+          assert 'lastHumanDrawCount()==5' in Path('tests/fast_scene_preview.cpp').read_text()
+          print("REAL 3D player + four NPCs preferred; PNG is an optional fallback only.")
           PY
