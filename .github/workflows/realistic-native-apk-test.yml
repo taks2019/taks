@@ -126,7 +126,8 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           base=Path('app/src/main/assets')
-          files=['menu/wonderwerk_menu_UJ_JATEK_JAVITOTT.png',
+          files=['menu/wonderwerk_menu_NO_TEXT.png',
+                 'menu/menu_texts.json',
                  'menu/wonderwerk_menu_poster.jpg',
                  'menu/fern_live_layer.png']
           for pose in ('idle','crouch'):
@@ -136,7 +137,7 @@ jobs:
           missing=[f for f in files if not (base/f).is_file()]
           if missing:
               raise SystemExit('APPROVED ASSETS MISSING; DO NOT PUBLISH AN APK: '+', '.join(missing))
-          print('PASS: 19 approved original-derived menu and character files exist.')
+          print('PASS: 20 approved text-free menu, JSON, and character assets exist.')
           PY
       - uses: actions/download-artifact@v4
         with:
