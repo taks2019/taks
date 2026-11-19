@@ -1,0 +1,56 @@
+name: TAKS World - minden gomb funkcionális
+on:
+  push:
+    branches:
+      - codex/taks-world-elfogadott-menu-mp4-2026-11-19
+    paths:
+      - 'app/src/main/java/hu/taks/world/MainMenuActionRouter.java'
+      - 'app/src/main/java/hu/taks/world/AcceptedWonderwerkMenu.java'
+      - 'app/src/main/java/hu/taks/world/MainActivity.java'
+      - 'tests/java/**'
+      - 'scripts/capture_android_ui.py'
+      - '.github/workflows/menu-buttons-functional.yml'
+  pull_request:
+    paths:
+      - 'app/src/main/java/hu/taks/world/MainMenuActionRouter.java'
+      - 'app/src/main/java/hu/taks/world/AcceptedWonderwerkMenu.java'
+      - 'app/src/main/java/hu/taks/world/MainActivity.java'
+      - 'tests/java/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  four-real-actions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Compile and execute all four actual menu callbacks
+        run: |
+          mkdir -p build-menu-test
+          javac -encoding UTF-8 -d build-menu-test \
+            app/src/main/java/hu/taks/world/MainMenuActionRouter.java \
+            tests/java/hu/taks/world/MainMenuActionRouterTest.java
+          java -cp build-menu-test hu.taks.world.MainMenuActionRouterTest
+      - name: Prevent graphical placeholder buttons and broken wiring
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          menu=Path('app/src/main/java/hu/taks/world/AcceptedWonderwerkMenu.java').read_text()
+          activity=Path('app/src/main/java/hu/taks/world/MainActivity.java').read_text()
+          for key in ('new_game','settings','creator','exit'):
+              assert f'addButton(host,"{key}"' in menu, key
+          assert 'actions.run(key)' in menu
+          assert 'button.setText(labels.get("menu",key,key))' in menu
+          for callback in ('this::newWorldFromMenu','this::showSettings',
+                           'this::showCredits','this::confirmExit'):
+              assert callback in activity, callback
+          assert 'onNew,onSettings,onCreator,onExit' in menu
+          assert 'new MainMenuActionRouter(onNew,onSettings,onCreator,onExit)' in menu
+          assert 'int cw=w,ch=h;' in menu, "Not true landscape full-screen"
+          assert 'menu/wonderwerk_menu_NO_TEXT.png' in menu, "Baked text not allowed"
+          print('PASS all four buttons wired, JSON labels are native, full-screen fill')
+          PY
