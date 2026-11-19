@@ -194,6 +194,27 @@ extern "C" JNIEXPORT jfloatArray JNICALL Java_hu_taks_world_MainActivity_nativeM
     if(arr)env->SetFloatArrayRegion(arr,0,11,snapshot);
     return arr;
 }
+// Isolated snapshot for animated menu. No pause-induced false weather.
+// hour, rain, soil water, wind strength, wind X/Z, actual source pool level, fern.
+extern "C" JNIEXPORT jfloatArray JNICALL Java_hu_taks_world_MainActivity_nativeMenuClimate(
+    JNIEnv* env,jobject) {
+    jfloat snapshot[8]{};
+    {
+        std::lock_guard<std::mutex> guard(worldLock);
+        const taks::AfricanWeather w=taks::africanWeatherAt(world.hours);
+        snapshot[0]=static_cast<jfloat>(world.hours);
+        snapshot[1]=static_cast<jfloat>(world.rainIntensity);
+        snapshot[2]=static_cast<jfloat>(world.ecology.soilWater);
+        snapshot[3]=static_cast<jfloat>(w.windStrength);
+        snapshot[4]=static_cast<jfloat>(w.windX);
+        snapshot[5]=static_cast<jfloat>(w.windZ);
+        snapshot[6]=static_cast<jfloat>(world.ecology.waters[0].level);
+        snapshot[7]=world.ecology.verifiedFerns?1.f:0.f;
+    }
+    jfloatArray result=env->NewFloatArray(8);
+    if(result)env->SetFloatArrayRegion(result,0,8,snapshot);
+    return result;
+}
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeRendererError(JNIEnv* env,jobject){
     const auto& e=taks::FastScene::lastError();
     if(!e.empty())return toJava(env,e);
