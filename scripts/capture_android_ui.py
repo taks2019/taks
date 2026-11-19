@@ -134,26 +134,26 @@ for attempt in range(10):
         adb("shell","input","keyevent","66",check=False)
         time.sleep(1)
         continue
-    if find(nodes,"BEÁLLÍTÁSOK"):
+    if find(nodes,"Beállítások") or find(nodes,"BEÁLLÍTÁSOK"):
         break
     time.sleep(2)
 else:
     raise AssertionError("Native main menu never became visible after OS dialog")
-assert find(nodes,"ÚJ JÁTÉK")
-assert find(nodes,"KÉSZÍTŐK")
-assert find(nodes,"KILÉPÉS")
+assert find(nodes,"Új Játék")
+assert find(nodes,"Készítő")
+assert find(nodes,"Kilépés")
 picture("01-android-fomenu-eredeti-logo")
 
-click(nodes,"KÉSZÍTŐK")
+click(nodes,"Készítő")
 time.sleep(1)
 nodes=dump("credits")
-assert find(nodes,"KÉSZÍTŐK")
+assert find(nodes,"Készítő")
 assert find(nodes,"X"),"Credits modal lacks its working close button"
 picture("02-android-keszitok")
 click(nodes,"X")
 time.sleep(1)
 nodes=dump("main-after-credits")
-click(nodes,"KILÉPÉS")
+click(nodes,"Kilépés")
 time.sleep(1)
 nodes=dump("exit-confirm")
 assert find(nodes,"Mentés és kilépés")
@@ -162,19 +162,29 @@ click(nodes,"Vissza")
 time.sleep(1)
 nodes=dump("main-after-exit-confirm")
 
-click(nodes,"BEÁLLÍTÁSOK")
+click(nodes,"Beállítások")
 time.sleep(2)
 nodes=dump("settings")
 assert find(nodes,"X"),"Settings lacks functional X button"
 assert find(nodes,"3D felbontás",True),"Graphics setting not visible"
 picture("04-android-beallitasok-elo-skin")
+# Verify JSON text editor is an actual Android input and can be dismissed.
+click(nodes,"Feliratok és beállítások szerkesztése (JSON)")
+time.sleep(1)
+edited=dump("editable-menu-json")
+assert find(edited,"Mentés"),"The JSON text editor has no real Save button"
+assert find(edited,"Mégse"),"The JSON editor cannot be dismissed"
+picture("04b-android-valodi-json-szovegszerkeszto")
+click(edited,"Mégse")
+time.sleep(.7)
+nodes=dump("settings-after-editor")
 click(nodes,"X")
 time.sleep(1)
 
 # Main menu should remain accessible and operative after closing Settings.
 nodes=dump("main-after-settings")
-assert find(nodes,"ÚJ JÁTÉK")
-click(nodes,"ÚJ JÁTÉK")
+assert find(nodes,"Új Játék")
+click(nodes,"Új Játék")
 time.sleep(4)
 nodes=dump("gameplay")
 # Fresh install creates initial world. If previous save exists, offer 'Folytatás'.
@@ -186,6 +196,18 @@ assert find(nodes,"ÉPÍTÉS"),"Game HUD is not present"
 assert find(nodes,"TÁRSAK"),"NPC screen inaccessible"
 assert find(nodes,"TÁSKA"),"Inventory screen inaccessible"
 picture("05-android-jatek-elomenuk")
+# Actual gameplay posture control: crouch has its own sprite and movement state.
+assert find(nodes,"GUGGOLÁS"),"Gameplay crouch button is missing"
+click(nodes,"GUGGOLÁS")
+time.sleep(.6)
+crouching=dump("guggolas")
+assert find(crouching,"FELÁLLÁS"),"Crouch did not change into stand action"
+picture("05b-android-guggolas")
+click(crouching,"FELÁLLÁS")
+time.sleep(.6)
+standing=dump("felallas")
+assert find(standing,"GUGGOLÁS"),"Stand did not restore crouch action"
+
 
 # Drive the actual left touch pad and compare live native coordinates.
 click(nodes,"TÁSKA")
