@@ -7,6 +7,9 @@ import android.graphics.Color;
 import android.graphics.BitmapFactory;
 import android.graphics.Bitmap;
 import android.widget.ImageView;
+import android.widget.EditText;
+import android.graphics.Typeface;
+import android.text.InputType;
 import java.util.ArrayList;
 import android.graphics.drawable.GradientDrawable;
 import android.opengl.GLES30;
@@ -64,6 +67,7 @@ public final class MainActivity extends Activity {
     private String shaderSource;
     private FrameLayout menuCover,modalOverlay;
     private AcceptedWonderwerkMenu acceptedMenu;
+    private EditableGameScript menuScript;
     private View menuScrim;
     private Bitmap sharedStonePhoto;
     private Bitmap menuBackgroundBitmap;
@@ -592,13 +596,13 @@ public final class MainActivity extends Activity {
     private void chooseGraphicsResolution(){
         modal("3D FELBONTÁS",body->{
             addVertical(body,"Gyors – 640 képpont széles",()->{
-                applyFramebufferSize(640);refreshScene();showSettings();
+                applyFramebufferSize(menuScript.integer("graphics","quick_width",640));refreshScene();showSettings();
             });
             addVertical(body,"Kiegyensúlyozott – 840 képpont széles",()->{
-                applyFramebufferSize(840);refreshScene();showSettings();
+                applyFramebufferSize(menuScript.integer("graphics","balanced_width",840));refreshScene();showSettings();
             });
             addVertical(body,"Részletes – 1200 képpont széles",()->{
-                applyFramebufferSize(1200);refreshScene();showSettings();
+                applyFramebufferSize(menuScript.integer("graphics","detail_width",1200));refreshScene();showSettings();
             });
             body.addView(caption("A képarány megmarad. A valódi 3D világ töltődik be, nem előre rögzített kép.",
                     12,0xFFD2C5AA));
@@ -756,29 +760,66 @@ public final class MainActivity extends Activity {
         root.addView(modalOverlay,new FrameLayout.LayoutParams(-1,-1));
         refreshLivingSkin();
     }
+    private String editable(String section,String key,String fallback){
+        return menuScript==null?fallback:menuScript.get(section,key,fallback);
+    }
+    private void showScriptEditor(){
+        EditText editor=new EditText(this);
+        editor.setTypeface(Typeface.MONOSPACE);
+        editor.setTextSize(12f);
+        editor.setTextColor(0xFF202018);
+        editor.setInputType(InputType.TYPE_CLASS_TEXT |
+                            InputType.TYPE_TEXT_FLAG_MULTI_LINE |
+                            InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        editor.setHorizontallyScrolling(false);
+        editor.setMinLines(9);editor.setMaxLines(17);
+        editor.setText(menuScript.rawJson());
+        android.widget.ScrollView pane=new android.widget.ScrollView(this);
+        pane.setPadding(dp(12),dp(6),dp(12),dp(3));
+        pane.addView(editor);
+        new AlertDialog.Builder(this)
+            .setTitle("Feliratok és beállítások – JSON")
+            .setView(pane)
+            .setPositiveButton("Mentés",(dialog,which)->{
+                if(menuScript.save(editor.getText().toString())){
+                    if(acceptedMenu!=null)acceptedMenu.refreshText();
+                    say("A szerkeszthető szövegek és beállítások elmentve.");
+                    showSettings();
+                }else{
+                    say("JSON hiba: "+menuScript.lastError());
+                }
+            })
+            .setNegativeButton("Mégse",(dialog,which)->{})
+            .setNeutralButton("Alapértelmezett",(dialog,which)->{
+                menuScript.restoreDefaults();
+                if(acceptedMenu!=null)acceptedMenu.refreshText();
+                showSettings();
+            }).show();
+    }
     private void showSettings(){
-        modal("BEÁLLÍTÁSOK",body->{
-            addVertical(body,"3D felbontás – gyors / kiegyensúlyozott / részletes",
+        modal(editable("settings","title","BEÁLLÍTÁSOK"),body->{
+            addVertical(body,editable("settings","resolution","3D felbontás – gyors / kiegyensúlyozott / részletes"),
                     this::chooseGraphicsResolution);
-            addVertical(body,"Izometrikus kamera",()->{
-                orbit=-.785398f;cameraPitch=.615480f;zoom=19f;
+            addVertical(body,editable("settings","isometric","Izometrikus kamera"),()->{
+                orbit=-.785398f;cameraPitch=(float)Math.toRadians(menuScript.decimal("graphics","isometric_pitch_degrees",35.26f));zoom=19f;
                 nativeSetView(orbit,cameraPitch,zoom);refreshScene();
             });
-            addVertical(body,"Kamera: felülnézet",()->{
+            addVertical(body,editable("settings","top_view","Kamera: felülnézet"),()->{
                 cameraPitch=1.37f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();
             });
-            addVertical(body,"Kamera: alacsony nézet",()->{
+            addVertical(body,editable("settings","low_view","Kamera: alacsony nézet"),()->{
                 cameraPitch=.40f;nativeSetView(orbit,cameraPitch,zoom);refreshScene();
             });
-            TextView explanation=caption(
-                "IRÁNYÍTÁS: bal analóg = mozgás; FUTÁS = gyorsítás; jobb oldali húzás = kamera;"
-                +" két ujj = nagyítás.\n"
-                +"OK → FOLYAMAT → OKOZAT: az időjárás, a tűz, a nedvesség és a"
-                +" tényleges felfedezések vezérlik az összes menü megjelenését.",12,0xFFE3D6BC);
+            TextView explanation=caption(editable("settings","description",
+                "OK → FOLYAMAT → OKOZAT: valódi időjárás és világállapot.").replace("\\n","\n"),
+                12,0xFFE3D6BC);
             explanation.setPadding(dp(5),dp(10),dp(5),dp(10));
             body.addView(explanation);
-            addVertical(body,"Korábbi mentés visszaállítása",this::restoreOldWorld);
-            addVertical(body,"Mentés",this::save);
+            addVertical(body,editable("settings","edit_script",
+                "Feliratok és beállítások szerkesztése (JSON)"),this::showScriptEditor);
+            addVertical(body,editable("settings","restore",
+                "Korábbi mentés visszaállítása"),this::restoreOldWorld);
+            addVertical(body,editable("settings","save","Mentés"),this::save);
         });
     }
     private void showCredits(){
@@ -850,7 +891,7 @@ public final class MainActivity extends Activity {
         if(acceptedMenu!=null){acceptedMenu.release();acceptedMenu=null;}
         // Approved 2026-11-19 animated art, native buttons, native navigation.
         // Only used when the exact MP4 and poster assets are packed offline.
-        acceptedMenu=AcceptedWonderwerkMenu.tryCreate(this,
+        acceptedMenu=AcceptedWonderwerkMenu.tryCreate(this,menuScript,
             this::newWorldFromMenu,this::showSettings,this::showCredits,this::confirmExit);
         if(acceptedMenu!=null){
             menuCover=acceptedMenu;
@@ -905,7 +946,9 @@ public final class MainActivity extends Activity {
         causal.setPadding(dp(3),0,dp(3),dp(4));
         skin(causal,"CAUSE");
         stack.addView(causal,new LinearLayout.LayoutParams(-1,dp(33)));
-        String[] labels={"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐ","KILÉPÉS"};
+        String[] labels={
+            editable("menu","new_game","Új Játék"),editable("menu","settings","Beállítások"),
+            editable("menu","creator","Készítő"),editable("menu","exit","Kilépés")};
         Runnable[] actions={this::newWorldFromMenu,this::showSettings,this::showCredits,
                 this::confirmExit};
         for(int i=0;i<labels.length;++i){
@@ -946,6 +989,7 @@ public final class MainActivity extends Activity {
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION |
                 View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
         saves=getSharedPreferences("taks_native_save_v1",MODE_PRIVATE);
+        menuScript=new EditableGameScript(this);
         String previous=saves.getString("state",null);
         if(previous!=null&&!nativeLoad(previous))nativeReset();
         // Java 9 readAllBytes helyett Android 26-tól kompatibilis betöltés.
