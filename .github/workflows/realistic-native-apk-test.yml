@@ -124,6 +124,7 @@ jobs:
         if: github.ref_name == 'codex/taks-world-elfogadott-menu-mp4-2026-11-19'
         run: |
           python3 -m pip install 'Pillow>=10,<13'
+          python3 scripts/restore_approved_assets_from_git.py
           python3 scripts/install_approved_android_game_assets.py
       - name: Verify approved Wonderwerk art and 16 actual 8-angle PNG poses
         if: github.ref_name == 'codex/taks-world-elfogadott-menu-mp4-2026-11-19'
