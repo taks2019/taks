@@ -221,13 +221,37 @@ void World::updateNpcs(double dt){
         const double dx=tx-npc.x,dz=tz-npc.z;
         const double distance=std::hypot(dx,dz);
         if(distance<1.e-8)return;
-        const double distanceMoved=std::min(distance,pace*ecology.walkSpeedFactor()*
-                                               (npc.wetness>.6?.65:1.));
-        npc.x=clamp(npc.x+dx/distance*distanceMoved,-7.45,7.45);
-        npc.z=clamp(npc.z+dz/distance*distanceMoved,-7.45,12.95);
-        npc.walkPhase+=distanceMoved*5;
+        double traction=ecology.walkSpeedFactor()*(npc.wetness>.6?.65:1.);
+        for(const auto& water:ecology.waters){
+            const double wx=npc.x-water.x,wz=npc.z-water.z;
+            if(water.level>.28&&wx*wx+wz*wz<water.radius*water.radius)
+                traction=std::min(traction,.70);
+        }
+        const double intended=std::min(distance,pace*traction);
+        const double stepX=dx/distance*intended,stepZ=dz/distance*intended;
+        auto passable=[this](double x,double z){
+            if(x< -7.45||x>7.45||z< -7.45||z>12.95)return false;
+            if(z>2.67&&z<4.23&&std::abs(x)>1.22)return false;
+            for(const auto& tree:ecology.trees){
+                if(!tree.alive||tree.heightM<=.5)continue;
+                const double tx=x-tree.x,tz=z-tree.z;
+                if(tx*tx+tz*tz<.42*.42)return false;
+            }
+            return true;
+        };
+        const double beforeX=npc.x,beforeZ=npc.z;
+        if(passable(npc.x+stepX,npc.z+stepZ)){
+            npc.x+=stepX;npc.z+=stepZ;
+        }else{
+            // Same real cave/trunk collision family as the player's movement.
+            // Retain unblocked component rather than ghosting through a rock.
+            if(passable(npc.x+stepX,npc.z))npc.x+=stepX;
+            if(passable(npc.x,npc.z+stepZ))npc.z+=stepZ;
+        }
+        const double traveled=std::hypot(npc.x-beforeX,npc.z-beforeZ);
+        npc.walkPhase+=traveled*5;
         const double practice=std::min(npc.completedTrips,12)/12.0;
-        npc.energy=clamp(npc.energy-distanceMoved*.44*(1.0-.16*practice),0,100);
+        npc.energy=clamp(npc.energy-traveled*.44*(1.0-.16*practice),0,100);
     };
     int loopGuard=0;
     while(npcSimulatedHours+1.e-9>=tick && loopGuard++<600){

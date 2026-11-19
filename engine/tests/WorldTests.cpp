@@ -572,6 +572,36 @@ int main(){
         assert(oldLoaded.save().find("TAKS_NATIVE_12")==0);
         std::cout<<"PASS: NPC discovery, learning persistence, invalid data and v10 migration"<<std::endl;
     }
+    // NPCs may not walk through a cave wall or live tree trunk to reach water.
+    {
+        taks::World cave;
+        cave.forceRainForTest(0);
+        for(auto& npc:cave.npcs)npc.hunger=100;
+        auto& traveler=cave.npcs[0];
+        traveler.hunger=0;traveler.thirst=90;
+        traveler.x=5.0;traveler.z=4.40;
+        cave.ecology.waters[0].x=5.0;
+        cave.ecology.waters[0].z=2.0;
+        cave.ecology.waters[0].level=.80;
+        cave.ecology.waters[1].level=0;
+        cave.step(.8);
+        assert(traveler.z>=4.23 && traveler.x<7.45);
+        taks::World grove;
+        grove.forceRainForTest(0);
+        for(auto& npc:grove.npcs)npc.hunger=100;
+        auto& walker=grove.npcs[0];
+        walker.hunger=0;walker.thirst=90;
+        walker.x=-6.4;walker.z=-1.90;
+        grove.ecology.waters[0].x=-6.4;
+        grove.ecology.waters[0].z=0.5;
+        grove.ecology.waters[0].level=.80;
+        grove.ecology.waters[1].level=0;
+        grove.step(.8);
+        const double tx=walker.x-grove.ecology.trees[0].x;
+        const double tz=walker.z-grove.ecology.trees[0].z;
+        assert(tx*tx+tz*tz>=.42*.42-1e-8);
+        assert(grove.ledgerConsistent());
+    }
     // New NPCSURV1 is independently validated, while v11 migrates intact.
     {
         taks::World survival;
