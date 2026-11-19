@@ -424,12 +424,9 @@ public final class MainActivity extends Activity {
                 content.addView(caption("Ez a menedék fedett. Az anyaga időjárásban kopik; ellenőrizd az ép szerkezetet.",12,0xFFDDCDAF));
                 addVertical(content,"Szerkezet javítása · 1 cölöp + 2 leveles ág",()->act("repair"));
             }
-            // PRE-DISCOVERY: no usable fire or fake discovery button in the first era.
-            // The native engine's legacy fire actions remain for old saves/tests,
-            // but new-world UI does not expose them until a real learning system exists.
-            content.addView(caption("4 · TŰZ: MÉG NEM FELFEDEZETT",12,0xFF9EC9B9));
-            content.addView(caption("A tűz használatához előbb tényleges tapasztalat "
-                +"és tanulás szükséges. Tűzhelyet nem kapsz automatikusan.",12,0xFFDDCDAF));
+            content.addView(caption("4 · TŰZ ÉS MELEG",12,0xFF9EC9B9));
+            addVertical(content,"Tűzhely építése · 3 faág + 2 kő",()->act("hearth"));
+            addVertical(content,"Tűzgyújtás · 2 faág + gyújtós",()->act("ignite"));
             content.addView(caption("5 · ESŐVÍZ ÉS KÉSZLETEZÉS",12,0xFF9EC9B9));
             addVertical(content,"Vízgyűjtő tartóváza · 2 cölöp + 2 kő",()->act("catchment_frame"));
             addVertical(content,"Vízgyűjtő fedése · 6 leveles ág",()->act("catchment_roof"));
@@ -614,36 +611,14 @@ public final class MainActivity extends Activity {
         worldHandler.removeCallbacks(worldLoop);
         worldHandler.postDelayed(worldLoop,1800);
     }
-    private void showFirstArrival(){
-        modal("WONDERWERK · AZ ELSŐ NAP",body->{
-            TextView intro=caption("A barlang közelében ébredsz. A világ már él: "
-                +"az öt ember, a víz, a növények és az időjárás ugyanazt a "
-                +"menthető világállapotot használják.\n\n"
-                +"Első feladatod: figyeld meg a terepet, keresd a természetes "
-                +"vizet, és menj oda. Nem kapsz térképet vagy varázsiránytűt.\n\n"
-                +"Bal oldalt mozogsz, jobb oldalon forgatod a kamerát, "
-                +"két ujjal nagyítasz. Ha a vízhez értél, a TÁSKA / "
-                +"KÖRNYEZET panelen ihatsz. A tűz használata még nem "
-                +"felfedezett tudás.",13,0xFFF1E5CF);
-            intro.setLineSpacing(dp(4),1f);
-            body.addView(intro);
-            addVertical(body,"Felderítés kezdése",()->{
-                closeModal();say(nativeGoal());
-            });
-            addVertical(body,"Irányítás emlékeztető",()->{
-                closeModal();say("Bal: mozgás · Jobb: kamera · Két ujj: zoom. "
-                    +"Keresd a vizet, majd TÁSKA → Ivás a közeli vízből.");
-            });
-        });
-    }
     private void newWorldFromMenu(){
         final String existing=saves.getString("state",null);
         if(existing==null){
             nativeReset();
             saves.edit().putString("state",nativeSave()).apply();
-            startPlaying();showFirstArrival();return;
+            startPlaying();return;
         }
-        modal("Új Játék",body->{
+        modal("ÚJ JÁTÉK",body->{
             addVertical(body,"Folytatás a mentett világból",this::startPlaying);
             addVertical(body,"Új világ – előbb biztonsági mentés",()->{
                 modal("ÚJ VILÁG MEGERŐSÍTÉSE",confirm->{
@@ -655,7 +630,6 @@ public final class MainActivity extends Activity {
                         nativeReset();
                         saves.edit().putString("state",nativeSave()).commit();
                         startPlaying();
-                        showFirstArrival();
                     });
                     addVertical(confirm,"Mégse",this::newWorldFromMenu);
                 });
@@ -898,7 +872,7 @@ public final class MainActivity extends Activity {
         causal.setPadding(dp(3),0,dp(3),dp(4));
         skin(causal,"CAUSE");
         stack.addView(causal,new LinearLayout.LayoutParams(-1,dp(33)));
-        String[] labels={"Új Játék","BEÁLLÍTÁSOK","KÉSZÍTŐ","KILÉPÉS"};
+        String[] labels={"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐ","KILÉPÉS"};
         Runnable[] actions={this::newWorldFromMenu,this::showSettings,this::showCredits,
                 this::confirmExit};
         for(int i=0;i<labels.length;++i){
