@@ -50,7 +50,9 @@ jobs:
               assert callback in activity, callback
           assert 'onNew,onSettings,onCreator,onExit' in menu
           assert 'new MainMenuActionRouter(onNew,onSettings,onCreator,onExit)' in menu
-          assert 'int cw=w,ch=h;' in menu, "Not true landscape full-screen"
+          assert 'int cw=Math.max(1,Math.round(DESIGN_W*s));' in menu, "Approved aspect ratio must be preserved"
+          assert 'int ch=Math.max(1,Math.round(DESIGN_H*s));' in menu, "Approved aspect ratio must be preserved"
+          assert 'Math.round(cw*item.x)' in menu and 'Math.round(ch*item.y)' in menu, "Button hotspots must track the art"
           assert 'menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png' in menu, "Only the approved wide text-free background is allowed"
-          print('PASS all four buttons wired, JSON labels are native, full-screen fill')
+          print('PASS all four buttons wired; original aspect ratio and touch positions preserved')
           PY
