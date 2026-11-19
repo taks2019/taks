@@ -1,0 +1,23 @@
+import hu.taks.world.MenuClimate;
+
+public final class MenuClimateTest {
+    private static void check(boolean p,String msg){if(!p)throw new AssertionError(msg);}
+    public static void main(String[] args){
+        check(MenuClimate.fromNative(null)==null,"null cannot invent weather");
+        check(MenuClimate.fromNative(new float[]{12,0,0,0,0,0})==null,"short array rejected");
+        check(MenuClimate.fromNative(new float[]{12,0,0,Float.NaN,0,0,.5f,0})==null,"NaN rejected");
+        check(MenuClimate.fromNative(new float[]{12,2,0,0,0,0,.5f,0})==null,"invalid rain rejected");
+        MenuClimate calm=MenuClimate.fromNative(new float[]{12,0,.13f,0,0,0,.66f,0});
+        MenuClimate windy=MenuClimate.fromNative(new float[]{12,.70f,.7f,.80f,.5f,-.4f,.75f,1});
+        check(calm!=null&&windy!=null,"valid states");
+        check(windy.waterMotion()>calm.waterMotion(),"wind/rain cause more ripples");
+        check(windy.vegetationMotion()>calm.vegetationMotion(),"wind moves plants");
+        check(windy.wetStoneDarkening()>calm.wetStoneDarkening(),"wet stones darken");
+        check(windy.dust()<calm.dust()+.001f,"rain prevents dust");
+        check(calm.daylight()>.95f,"midday brightness");
+        check(MenuClimate.fromNative(new float[]{0,0,0,0,0,0,.5f,0}).daylight()<.05f,
+              "night darkness");
+        check(!calm.fern&&windy.fern,"fern tag from World only");
+        System.out.println("PASS: validated World snapshot; water, vegetation, daylight, soil and dust cause chain.");
+    }
+}
