@@ -88,9 +88,9 @@ public final class LivingWonderwerkOverlay extends View {
                 final int color=original[y*w+x];
                 final int red=(color>>>16)&255,green=(color>>>8)&255,blue=color&255;
                 // Exclude blue sky, cloud, white sun, dark bark and far stones.
-                final boolean leaf=green>=54&&red>=72&&blue<155&&
-                    red>blue*1.27f&&green>blue*1.28f&&
-                    red>green*.77f&&red<green*1.77f;
+                final boolean leaf=green>=95&&red>=125&&blue<155&&
+                    red>blue*1.43f&&green>blue*1.36f&&
+                    red>green*.83f&&red<green*1.53f;
                 if(!leaf)continue;
                 // Fade toward the scene edge so the movement never looks like
                 // a large sliding rectangular picture.
@@ -117,8 +117,8 @@ public final class LivingWonderwerkOverlay extends View {
             final int c=original[y*w+x];
             final int red=(c>>>16)&255,green=(c>>>8)&255,blue=c&255;
             // Green/sage foliage differs from the yellow dolomite face.
-            final boolean leaf=green>=44&&green>blue*1.25f&&
-                    green>red*.78f&&red<green*1.28f&&blue<156;
+            final boolean leaf=green>=65&&green>blue*1.35f&&
+                    green>red*.91f&&red<green*1.20f&&blue<155;
             if(!leaf)continue;
             float edgeX=Math.min(1f,Math.min(x,w-x)/46f);
             float edgeY=Math.min(1f,Math.min(y,h-y)/34f);
