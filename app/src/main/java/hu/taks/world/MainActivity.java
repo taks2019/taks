@@ -58,6 +58,7 @@ public final class MainActivity extends Activity {
     private native float[] nativeMenuClimate();
     private native float[] nativeAudioScene();
     private WorldAudio worldAudio;
+    private boolean audioForeground;
     private final Handler audioHandler=new Handler(Looper.getMainLooper());
     private final Runnable audioLoop=new Runnable(){
         @Override public void run(){
@@ -1193,10 +1194,20 @@ public final class MainActivity extends Activity {
         skinHandler.removeCallbacks(skinLoop);
         skinHandler.post(skinLoop);
     }
+    @Override public void onWindowFocusChanged(boolean focused){
+        super.onWindowFocusChanged(focused);
+        if(focused&&audioForeground&&worldAudio!=null){
+            worldAudio.update(nativeAudioScene());worldAudio.start();
+        }
+    }
     @Override protected void onResume(){
         super.onResume();
+        audioForeground=true;
         if(worldAudio==null)worldAudio=new WorldAudio(this);
-        worldAudio.update(nativeAudioScene());worldAudio.start();
+        worldAudio.update(nativeAudioScene());
+        audioHandler.postDelayed(()->{
+            if(audioForeground&&hasWindowFocus())worldAudio.start();
+        },200);
         audioHandler.removeCallbacks(audioLoop);audioHandler.post(audioLoop);
         if(surface!=null)surface.onResume();
         if(acceptedMenu!=null)acceptedMenu.play();
@@ -1209,6 +1220,7 @@ public final class MainActivity extends Activity {
         skinHandler.post(skinLoop);
     }
     @Override protected void onPause(){
+        audioForeground=false;
         audioHandler.removeCallbacks(audioLoop);
         if(worldAudio!=null)worldAudio.stop();
         padActive=false;moveIntent=false;sprinting=false;

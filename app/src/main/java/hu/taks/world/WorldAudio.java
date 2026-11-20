@@ -11,16 +11,32 @@ public final class WorldAudio {
     private Thread worker;
     private volatile boolean running;
     private AudioFocusRequest request;
-    private final AudioManager.OnAudioFocusChangeListener focus=change->{if(change<0)stop();};
+    private boolean desired;
+    private final AudioManager.OnAudioFocusChangeListener focus=this::focusChanged;
+    private synchronized void focusChanged(int change){
+        Log.i("TAKSAudio","Focus "+change);
+        if(change==AudioManager.AUDIOFOCUS_GAIN&&desired)openOutput();
+        else if(change<0)closeOutput();
+    }
     public WorldAudio(Context context){manager=(AudioManager)context.getSystemService(Context.AUDIO_SERVICE);}
     public void update(float[] state){synth.update(state);}
     public synchronized void start(){
+        desired=true;
         if(running)return;
         AudioAttributes attributes=new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
-        request=new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+        if(request==null)request=new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                 .setAudioAttributes(attributes).setOnAudioFocusChangeListener(focus).build();
-        if(manager.requestAudioFocus(request)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED)return;
+        if(manager.requestAudioFocus(request)!=AudioManager.AUDIOFOCUS_REQUEST_GRANTED){
+            Log.i("TAKSAudio","Focus not granted yet; wait for foreground window");return;
+        }
+        openOutput();
+    }
+    private synchronized void openOutput(){
+        if(running||!desired)return;
+        closeOutput();
+        AudioAttributes attributes=new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
         try {
             int min=AudioTrack.getMinBufferSize(ProceduralSoundscape.RATE,
                     AudioFormat.CHANNEL_OUT_STEREO,AudioFormat.ENCODING_PCM_16BIT);
@@ -44,14 +60,20 @@ public final class WorldAudio {
                     }
                 }
             },"TAKS-procedural-audio");worker.start();
+            Log.i("TAKSAudio","PCM stream started 24000 Hz stereo");
         }catch(RuntimeException error){Log.e("TAKSAudio","Audio output unavailable",error);stop();}
     }
     public synchronized void stop(){
+        desired=false;
+        closeOutput();
+        if(request!=null){manager.abandonAudioFocusRequest(request);request=null;}
+    }
+    private synchronized void closeOutput(){
         running=false;
         if(track!=null){try{track.pause();track.flush();}catch(IllegalStateException ignored){}}
         if(worker!=null){try{worker.join(500);}catch(InterruptedException e){Thread.currentThread().interrupt();}}
         if(track!=null){track.release();track=null;}
         worker=null;
-        if(request!=null){manager.abandonAudioFocusRequest(request);request=null;}
+        Log.i("TAKSAudio","PCM stream stopped");
     }
 }
