@@ -6,11 +6,12 @@ import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.PorterDuff;
-import android.widget.VideoView;
-import android.net.Uri;
+import android.graphics.SurfaceTexture;
+import android.media.MediaPlayer;
+import android.view.Surface;
+import android.view.TextureView;
 import java.io.File;
 import java.io.FileOutputStream;
-import java.util.concurrent.atomic.AtomicBoolean;
 import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -43,8 +44,12 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
     private static final int DESIGN_W=1664,DESIGN_H=768;
     private final FrameLayout content;
     private final LivingWonderwerkOverlay environment;
-    private final VideoView approvedVideo;
+    // TextureView is in the normal View hierarchy: unlike VideoView's SurfaceView,
+    // it can never draw over the four actual Android text buttons.
+    private final TextureView approvedVideo;
+    private MediaPlayer approvedPlayer;
     private boolean videoPlaying=false;
+    private boolean active=true;
     private final List<Hotspot> hotspots=new ArrayList<>();
     private final EditableGameScript labels;
     private final MainMenuActionRouter actions;
@@ -91,10 +96,10 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         still.setImageBitmap(backdrop);
         still.setScaleType(ImageView.ScaleType.FIT_XY);
         content.addView(still,new FrameLayout.LayoutParams(-1,-1));
-        // Real video playback from APK resources, not a static poster or a GIF.
-        approvedVideo=new VideoView(host);
-        approvedVideo.setBackgroundColor(Color.TRANSPARENT);
-        approvedVideo.setVisibility(View.INVISIBLE);
+        // The video is a composited TEXTURE, not a separate SurfaceView plane.
+        // The transparent moving nature and accessible text remain above it.
+        approvedVideo=new TextureView(host);
+        approvedVideo.setOpaque(false);
         content.addView(approvedVideo,new FrameLayout.LayoutParams(-1,-1));
         environment=new LivingWonderwerkOverlay(host);
         environment.setEditableScript(labels);
@@ -118,24 +123,59 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         textBlanker.setScaleType(ImageView.ScaleType.FIT_XY);
         content.addView(textBlanker,new FrameLayout.LayoutParams(-1,-1));
 
-        approvedVideo.setOnPreparedListener(mp->{
-            if(released)return;
-            mp.setLooping(true);
-            mp.setVolume(0f,0f);
-            videoPlaying=true;
-            approvedVideo.setVisibility(View.VISIBLE);
-            environment.setVisibility(View.GONE);
-            approvedVideo.start();
+        final File media=copyApprovedVideoToCache(host.getAssets(),host.getCacheDir());
+        approvedVideo.setSurfaceTextureListener(new TextureView.SurfaceTextureListener(){
+            @Override public void onSurfaceTextureAvailable(
+                    SurfaceTexture texture,int width,int height){
+                if(released)return;
+                try{
+                    MediaPlayer player=new MediaPlayer();
+                    approvedPlayer=player;
+                    Surface surface=new Surface(texture);
+                    try{player.setSurface(surface);}finally{surface.release();}
+                    player.setDataSource(media.getAbsolutePath());
+                    player.setLooping(true);
+                    player.setVolume(0f,0f);
+                    player.setOnPreparedListener(mp->{
+                        if(released||approvedPlayer!=mp)return;
+                        videoPlaying=true;
+                        // Crucial: never hide the separate animated nature layer.
+                        environment.setVisibility(View.VISIBLE);
+                        if(active)mp.start();
+                    });
+                    player.setOnErrorListener((mp,what,extra)->{
+                        android.util.Log.e("TAKS_MENU","Texture video error "+what+"/"+extra);
+                        videoPlaying=false;
+                        approvedVideo.setVisibility(View.INVISIBLE);
+                        environment.setVisibility(View.VISIBLE);
+                        environment.resume();
+                        return true;
+                    });
+                    player.prepareAsync();
+                }catch(Exception e){
+                    android.util.Log.e("TAKS_MENU","Menu video setup failed; live still active",e);
+                    videoPlaying=false;
+                    if(approvedPlayer!=null){
+                        try{approvedPlayer.release();}catch(Exception ignored){}
+                        approvedPlayer=null;
+                    }
+                    approvedVideo.setVisibility(View.INVISIBLE);
+                    environment.setVisibility(View.VISIBLE);
+                    environment.resume();
+                }
+            }
+            @Override public void onSurfaceTextureSizeChanged(
+                    SurfaceTexture texture,int width,int height){}
+            @Override public boolean onSurfaceTextureDestroyed(SurfaceTexture texture){
+                videoPlaying=false;
+                if(approvedPlayer!=null){
+                    try{approvedPlayer.release();}catch(Exception ignored){}
+                    approvedPlayer=null;
+                }
+                return true;
+            }
+            @Override public void onSurfaceTextureUpdated(SurfaceTexture texture){}
         });
-        approvedVideo.setOnErrorListener((mp,what,extra)->{
-            android.util.Log.e("TAKS_MENU","Approved video decode error "+what+"/"+extra);
-            videoPlaying=false;
-            approvedVideo.setVisibility(View.GONE);
-            environment.setVisibility(View.VISIBLE);
-            return true;  // the original approved still remains, never black
-        });
-        File media=copyApprovedVideoToCache(host.getAssets(),host.getCacheDir());
-        approvedVideo.setVideoURI(Uri.fromFile(media));
         addButton(host,"new_game",.390f,.442f,.280f,.116f);
         addButton(host,"settings",.390f,.558f,.280f,.119f);
         addButton(host,"creator",.390f,.685f,.280f,.115f);
@@ -219,18 +259,26 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
     public void setClimate(MenuClimate next){if(!released)environment.setClimate(next);}
     public void play(){
         if(released)return;
-        if(videoPlaying)approvedVideo.start();
-        else environment.resume();
+        active=true;
+        environment.resume(); // foliage & water animate even while MP4 plays
+        if(videoPlaying&&approvedPlayer!=null)approvedPlayer.start();
     }
     public void pause(){
         if(released)return;
+        active=false;
         environment.pause();
-        if(videoPlaying&&approvedVideo.isPlaying())approvedVideo.pause();
+        if(videoPlaying&&approvedPlayer!=null&&approvedPlayer.isPlaying())
+            approvedPlayer.pause();
     }
     public void release(){
         if(released)return;
         released=true;
-        approvedVideo.stopPlayback();
+        active=false;
+        videoPlaying=false;
+        if(approvedPlayer!=null){
+            try{approvedPlayer.release();}catch(Exception ignored){}
+            approvedPlayer=null;
+        }
         environment.release();
     }
     @Override protected void onDetachedFromWindow(){release();super.onDetachedFromWindow();}

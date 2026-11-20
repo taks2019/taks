@@ -45,6 +45,12 @@ jobs:
               assert f'addButton(host,"{key}"' in menu, key
           assert 'actions.run(key)' in menu
           assert 'button.setText(labels.get("menu",key,key))' in menu
+          assert 'new TextureView(host)' in menu, "SurfaceView VideoView covers Android text overlays"
+          assert 'new VideoView(' not in menu, "VideoView wrongly hides text on some GPUs"
+          assert 'environment.setVisibility(View.GONE)' not in menu, "Animated nature must never be hidden while playing"
+          assert 'environment.resume(); // foliage & water animate even while MP4 plays' in menu
+          assert 'treeCanopy=makeCanopyLayer(master)' in Path(
+              'app/src/main/java/hu/taks/world/LivingWonderwerkOverlay.java').read_text()
           for callback in ('this::newWorldFromMenu','this::showSettings',
                            'this::showCredits','this::confirmExit'):
               assert callback in activity, callback
