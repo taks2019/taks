@@ -1,4 +1,4 @@
-name: TAKS World 0.16.4 - causal offline audio APK
+name: TAKS World 0.16.5 - native resolution, no gameplay logo
 on:
   push:
     branches: ['codex/taks-world-elfogadott-menu-mp4-2026-11-19']
@@ -250,7 +250,7 @@ jobs:
           tools="$ANDROID_HOME/build-tools/35.0.0"
           "$tools/apksigner" verify --verbose "$apk"
           "$tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/taks-package.txt"
-          grep -F "package: name='hu.taks.world.wonderwerk' versionCode='19' versionName='0.16.4-audio'" "$RUNNER_TEMP/taks-package.txt"
+          grep -F "package: name='hu.taks.world.wonderwerk' versionCode='20' versionName='0.16.5-native'" "$RUNNER_TEMP/taks-package.txt"
           grep -F 'lib/arm64-v8a/libtaks_engine.so' <(unzip -Z1 "$apk")
       - uses: actions/upload-artifact@v4
         with:
@@ -264,12 +264,14 @@ jobs:
       - name: Publish downloadable test release with hash evidence
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: taks-world-0.16.4-audio-${{ github.run_number }}
+          tag_name: taks-world-0.16.5-native-${{ github.run_number }}
           target_commitish: ${{ github.sha }}
-          name: TAKS World 0.16.4 - offline causal audio test
+          name: TAKS World 0.16.5 - native resolution test
           prerelease: true
           body: |
-            Installable debug test APK (hu.taks.world.wonderwerk), versionCode 19.
+            Native display resolution by default; rejected top-left gameplay title/logo panel removed.
+            Gameplay art remains rejected and unfinished; this is a sharpness/HUD fix only.
+            Installable debug test APK (hu.taks.world.wonderwerk), versionCode 20.
             Original procedural synthesis, no third-party sound recordings.
             Accepted branch menu and logo files unchanged; see JSON hashes.
             Full separate approved logo PNG and 0.17 reference were unavailable; not certified.

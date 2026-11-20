@@ -611,6 +611,9 @@ public final class MainActivity extends Activity {
     }
     private void chooseGraphicsResolution(){
         modal("3D FELBONTÁS",body->{
+            addVertical(body,"Éles – kijelző natív felbontása (alapértelmezett)",()->{
+                applyFramebufferSize(0);refreshScene();showSettings();
+            });
             addVertical(body,"Gyors – 640 képpont széles",()->{
                 applyFramebufferSize(menuScript.integer("graphics","quick_width",640));refreshScene();showSettings();
             });
@@ -626,6 +629,12 @@ public final class MainActivity extends Activity {
         });
     }
     private void applyFramebufferSize(int desiredWidth){
+        if(desiredWidth<=0){
+            // Follow the actual laid-out view, including rotation and window resizing.
+            // Never magnify a fixed 840px render target to a much larger screen.
+            surface.getHolder().setSizeFromLayout();
+            return;
+        }
         android.util.DisplayMetrics m=getResources().getDisplayMetrics();
         float scale=Math.min(1.0f,(float)desiredWidth/Math.max(m.widthPixels,m.heightPixels));
         int width=Math.max(320,Math.round(m.widthPixels*scale));
@@ -1053,7 +1062,7 @@ public final class MainActivity extends Activity {
         surface=new GLSurfaceView(this);
         surface.setEGLContextClientVersion(3);
         // Isometric GPU mesh renderer: dynamic resolution menu, aspect ratio always preserved.
-        applyFramebufferSize(840);
+        applyFramebufferSize(0);
         surface.setPreserveEGLContextOnPause(true);
         surface.setRenderer(new GLSurfaceView.Renderer(){
             @Override public void onSurfaceCreated(javax.microedition.khronos.opengles.GL10 gl,javax.microedition.khronos.egl.EGLConfig config){
@@ -1084,25 +1093,17 @@ public final class MainActivity extends Activity {
                     }
                 });
             }
-            @Override public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,int w,int h){GLES30.glViewport(0,0,w,h);}
+            @Override public void onSurfaceChanged(javax.microedition.khronos.opengles.GL10 gl,int w,int h){
+                GLES30.glViewport(0,0,w,h);
+                surface.post(()->android.util.Log.i("TAKS_RESOLUTION",
+                        "Framebuffer "+w+"x"+h+"; view "+surface.getWidth()+"x"+surface.getHeight()));
+            }
             @Override public void onDrawFrame(javax.microedition.khronos.opengles.GL10 gl){nativeRender();}
         });
         surface.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         surface.setOnTouchListener((v,e)->touch(e,false));
         root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
         nativeSetView(orbit,cameraPitch,zoom);
-
-        LinearLayout header=new LinearLayout(this);header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(dp(15),dp(10),dp(10),dp(10));
-        skin(header,"CARD");
-        FrameLayout gameplayLogo=new FrameLayout(this);
-        gameplayLogo.setPadding(dp(3),dp(2),dp(3),dp(2));
-        gameplayLogo.addView(originalLogoOrTitle(),new FrameLayout.LayoutParams(-1,-1));
-        gameplayLogo.addView(new LogoEnvironmentView(this),new FrameLayout.LayoutParams(-1,-1));
-        header.addView(gameplayLogo,new LinearLayout.LayoutParams(dp(124),dp(77)));
-        header.addView(caption("TAKS ENGINE · ÉLŐ VILÁG",10,0xFFC3D1C5));
-        FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
-        hp.setMargins(dp(12),dp(12),0,0);root.addView(header,hp);gameHud.add(header);
 
         hint=caption("Bal: analóg mozgás · FUTÁS: nyomva tartva · Jobb: kamera · Két ujjal: zoom",12,0xFFECE9DC);
         hint.setPadding(dp(10),dp(7),dp(10),dp(7));
