@@ -164,6 +164,24 @@ assert find(nodes,"Új Játék")
 assert find(nodes,"Készítő")
 assert find(nodes,"Kilépés")
 picture("01-android-fomenu-eredeti-logo")
+# Record ACTUAL rendered Android frames. This is not the old baked MP4;
+# it proves whether live masks, water, birds and continuous sun animate.
+try:
+    remote="/sdcard/taks-live-menu-test.mp4"
+    subprocess.run(["adb","shell","rm","-f",remote],check=False)
+    recorded=subprocess.run(["adb","shell","screenrecord","--bit-rate","5500000",
+                             "--time-limit","9",remote],capture_output=True,timeout=18)
+    raw=adb("exec-out","cat",remote,check=False)
+    if recorded.returncode==0 and len(raw)>90000 and b"ftyp" in raw[:100]:
+        destination=ROOT/"01b-android-valodi-elo-menu.mp4"
+        destination.write_bytes(raw)
+        print("REAL ANDROID SCREENRECORD",len(raw),"bytes",flush=True)
+    else:
+        print("Android menu recording unavailable:",recorded.returncode,
+              len(raw),recorded.stderr.decode(errors="replace")[-300:],flush=True)
+except Exception as e:
+    print("Android video capture diagnostic:",repr(e),flush=True)
+
 
 click(nodes,"Készítő")
 time.sleep(1)
