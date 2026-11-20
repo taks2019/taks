@@ -49,7 +49,8 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
     private static final float CAPTION_X=928f;
     // Icon ends at ~805; the natural stone ends at ~1065.
     // 205 design pixels (+ outline) never protrude beyond either edge.
-    private static final float CAPTION_MAX_WIDTH=205f;
+    private static final float CAPTION_MAX_WIDTH=176f;
+    private static final float CAPTION_TEXT_SIZE=28f;
 
     private static final class Hotspot {
         final Button control;
@@ -158,25 +159,27 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
             type.setTextAlign(Paint.Align.CENTER);
             for(int i=0;i<KEYS.length;++i){
                 String title=titleFor(KEYS[i]).toUpperCase(java.util.Locale.forLanguageTag("hu-HU"));
-                type.setTextSize(35f);
+                // Draw a single small line IN the actual lettering recess.
+                // Independent of Android system font scale and screen aspect.
+                // The clip rectangle includes the outline but never the icon.
+                type.setTextSize(CAPTION_TEXT_SIZE);
                 float width=type.measureText(title);
                 if(width>CAPTION_MAX_WIDTH)
-                    type.setTextSize(35f*CAPTION_MAX_WIDTH/width);
-                // Truly long user-edited captions are still bounded inside
-                // the stone; never enforce a minimum size that overflows.
-                width=type.measureText(title);
-                if(width>CAPTION_MAX_WIDTH+0.5f)
-                    type.setTextSize(type.getTextSize()*CAPTION_MAX_WIDTH/width);
+                    type.setTextSize(CAPTION_TEXT_SIZE*CAPTION_MAX_WIDTH/width);
+                c.save();
+                c.clipRect(CAPTION_X-94f,CAPTION_Y[i]-31f,
+                           CAPTION_X+94f,CAPTION_Y[i]+8f);
                 type.clearShadowLayer();
                 type.setStyle(Paint.Style.STROKE);
-                type.setStrokeWidth(6.5f);
+                type.setStrokeWidth(3.5f);
                 type.setStrokeJoin(Paint.Join.ROUND);
                 type.setColor(0xFF38240F);
                 c.drawText(title,CAPTION_X,CAPTION_Y[i],type);
                 type.setStyle(Paint.Style.FILL);
                 type.setColor(0xFFFFF1CD);
-                type.setShadowLayer(1.3f,0f,1.5f,0xFF3A2712);
+                type.setShadowLayer(1f,0f,1f,0xFF3A2712);
                 c.drawText(title,CAPTION_X,CAPTION_Y[i],type);
+                c.restore();
             }
             c.restore();
         }

@@ -46,7 +46,11 @@ jobs:
           assert 'actions.run(key)' in menu
           assert 'button.setText(titleFor(key))' in menu
           assert 'c.drawText(title,CAPTION_X,CAPTION_Y[i],type)' in menu, "Labels must be visibly painted on top"
-          assert 'CAPTION_MAX_WIDTH=205f' in menu, "Text cannot protrude beyond stone edges"
+          assert 'CAPTION_MAX_WIDTH=176f' in menu, "Text cannot protrude beyond stone edges"
+          assert 'c.clipRect(CAPTION_X-94f' in menu, "Captions must be clipped inside each stone"
+          assert 'CAPTION_TEXT_SIZE=28f' in menu, "Oversized lettering is forbidden"
+          assert 'new RadialGradient(' not in overlay, "A second sun must never be rendered"
+          assert 'Rendered moving nature frame' in overlay, "Animation must expose draw evidence"
           overlay=Path('app/src/main/java/hu/taks/world/LivingWonderwerkOverlay.java').read_text()
           assert 'new PorterDuffXfermode(PorterDuff.Mode.DST_IN)' in overlay
           assert 'strips(canvas,water' not in overlay, "NEVER shift river rocks with water"

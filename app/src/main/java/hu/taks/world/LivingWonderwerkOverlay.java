@@ -11,8 +11,6 @@ import android.graphics.PorterDuff;
 import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.graphics.RadialGradient;
-import android.graphics.Shader;
 import android.os.SystemClock;
 import android.view.View;
 import java.io.InputStream;
@@ -34,6 +32,7 @@ public final class LivingWonderwerkOverlay extends View {
     private MenuClimate smoothClimate;
     private boolean playing=true;
     private long lastFrameNanos=0;
+    private long paintedFrames=0;
     private float fernDegrees=9.3f,waterVisibility=1.f;
 
     /** Transparent pre-masked cropped pixels, NOT the original fixed photo. */
@@ -253,7 +252,7 @@ public final class LivingWonderwerkOverlay extends View {
         plume.setStyle(Paint.Style.FILL);
         canvas.save();
         canvas.clipRect(1150,254,1485,585);
-        final int count=102;
+        final int count=160;
         for(int i=0;i<count;++i){
             double phase=(t*(.013+.002*(i%4))+i*.61803398875)%1.;
             float fade=(float)Math.pow(Math.sin(Math.PI*phase),2);
@@ -279,15 +278,21 @@ public final class LivingWonderwerkOverlay extends View {
         ripple.setStyle(Paint.Style.STROKE);
         ripple.setStrokeCap(Paint.Cap.ROUND);
         ripple.setColor(0xFFF9E7BC);
-        for(int i=0;i<118;++i){
-            double phase=(t*(.035+.003*(i%5))+i*.61803398875)%1.;
-            float x=10f+(float)phase*654f;
-            float y=565f+(i*31.2f)%198f+(float)Math.sin(t*.53+i*1.3)*3.8f;
+        for(int i=0;i<145;++i){
+            double phase=(t*(.025+.002*(i%5))+i*.61803398875)%1.;
+            float x=8f+(float)phase*654f;
+            float y=565f+(i*31.2f)%198f+(float)Math.sin(t*.53+i*1.3)*4.5f;
             float fade=(float)Math.pow(Math.sin(Math.PI*phase),2);
-            ripple.setAlpha((int)(210f*fade*(.44f+.56f*wave)));
-            ripple.setStrokeWidth(.8f+(i%3)*.7f);
-            float length=7f+(i%7)*2.7f;
-            canvas.drawLine(x,y,x+length,y+(float)Math.sin(t*.9+i)*.7f,ripple);
+            ripple.setAlpha((int)(220f*fade*(.50f+.50f*wave)));
+            ripple.setStrokeWidth(1.6f+(i%3)*.7f);
+            float length=12f+(i%7)*3.1f;
+            canvas.drawLine(x,y,x+length,y+(float)Math.sin(t*.9+i)*1.2f,ripple);
+            // Shallow traveling elliptical surface waves, not shifting terrain.
+            if(i%9==0){
+                ripple.setAlpha((int)(135f*fade*(.35f+.65f*wave)));
+                canvas.drawOval(new RectF(x-10f,y-2f,x+length+10f,y+5f),
+                                ripple);
+            }
         }
         // Tight alpha intersection makes stones/grass on the riverbank static.
         Paint restrict=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
@@ -299,36 +304,32 @@ public final class LivingWonderwerkOverlay extends View {
     private void drawFoliage(Canvas canvas,double t,MenuClimate w){
         // Even on a calm day the leaves experience subtle local turbulence,
         // while gust strength still comes from the real simulated wind.
-        float gust=.30f+.70f*w.vegetationMotion();
+        float gust=.45f+.55f*w.vegetationMotion();
         float sign=w.windX<-.1f?-1f:1f;
-        float slowGust=.87f+.13f*(float)Math.sin(t*.22+1.7);
-        float amplitude=Math.min(29f,Math.max(19f,fernDegrees*2.25f))*gust*slowGust*sign;
-        strips(canvas,grass,t,amplitude*.59f,1.19f,.82f,true,.84f);
-        strips(canvas,fern,t,amplitude,2.42f,.63f,true,.98f);
-        // Tree and cliff plant groups are animated at different frequencies.
-        strips(canvas,treeCanopy,t,Math.max(5.8f,Math.abs(amplitude)*.85f),.36f,
-               .43f,false,.97f);
-        swayHanging(canvas,cliffVines,t,Math.max(4.1f,Math.abs(amplitude)*.96f));
+        float slowGust=.86f+.14f*(float)Math.sin(t*.22+1.7);
+        float amplitude=Math.min(36f,Math.max(26f,fernDegrees*2.5f))*gust*slowGust*sign;
+        strips(canvas,grass,t,amplitude*.44f,1.19f,.82f,true,.82f);
+        strips(canvas,fern,t,amplitude,2.42f,.70f,true,.96f);
+        // The tree trunk remains fixed: only leaf pixels bend toward their
+        // stem, with zero offset at the bottom of the canopy.
+        strips(canvas,treeCanopy,t,Math.min(12f,Math.max(4f,Math.abs(amplitude)*.44f)),
+               .36f,.43f,true,.87f);
+        swayHanging(canvas,cliffVines,t,Math.max(5f,Math.abs(amplitude)*.72f));
     }
     private void drawSunlight(Canvas canvas,double t,MenuClimate w){
-        // Very subtle changing daylight only on the sunlit LEFT landscape.
-        // The artist's logo, stone buttons and right-side cave remain untouched.
-        if(w.daylight()<.12f)return;
-        final float light=w.daylight();
-        // One continuous cloud-shadow oscillator: no random frame changes,
-        // no switching videos, no discontinuities at the bright sun.
+        // There is exactly ONE sun: the one already present in the approved
+        // photograph. Never paint another radial sun / glowing disk on top.
+        // The moving cloud bank ONLY dims the landscape as a continuous
+        // shadow, and NEVER teleports or changes the fixed stone/logo.
+        final float daylight=w.daylight();
+        if(daylight<.07f)return;
         final float cloudCover=.5f+.5f*(float)Math.sin(t*.082+1.2);
-        final float sunlight=light*(.28f+.72f*(1f-cloudCover));
-        Paint glow=new Paint(Paint.ANTI_ALIAS_FLAG);
-        float x=459f+(float)Math.sin(t*.045)*17f;
-        float y=178f+(float)Math.sin(t*.027+.4)*8f;
-        glow.setShader(new RadialGradient(x,y,375f,
-            new int[]{0x30FFF3D2,0x12FFE7B5,0x00FFE7B5},
-            new float[]{0f,.43f,1f},Shader.TileMode.CLAMP));
-        glow.setAlpha(Math.round(220f*sunlight));
+        Paint shadow=new Paint(Paint.ANTI_ALIAS_FLAG);
+        shadow.setColor(Color.argb(Math.round(67f*daylight*cloudCover),
+                                   34,43,46));
         canvas.save();
-        canvas.clipRect(0,60,650,555);
-        canvas.drawRect(0,60,650,555,glow);
+        canvas.clipRect(0,285,653,560);
+        canvas.drawRect(0,285,653,560,shadow);
         canvas.restore();
     }
     private void drawClouds(Canvas canvas,double t,MenuClimate w){
@@ -385,7 +386,11 @@ public final class LivingWonderwerkOverlay extends View {
         drawBirds(canvas,t,weather);
         drawDust(canvas,t,weather);
         canvas.restore();
-        if(isShown())postInvalidateDelayed(33); // render only while visible
+        paintedFrames++;
+        if(paintedFrames==1||paintedFrames==60)
+            android.util.Log.i("TAKS_MENU_ANIM","Rendered moving nature frame "+paintedFrames+
+                " · water="+weather.waterMotion()+" · wind="+weather.wind);
+        if(isShown())postInvalidateDelayed(33); // continuous redraw while visible
     }
     public void release(){
         pause();
