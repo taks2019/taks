@@ -3,6 +3,7 @@
 #include <android/log.h>
 #include <algorithm>
 #include "CauseWorld.h"
+#include "AudioScene.h"
 #include "AfricanClimate.h"
 #include "FastScene.h"
 #include "RealModels.h"
@@ -423,4 +424,12 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
     GLint vp[4]={0,0,1,1};
     glGetIntegerv(GL_VIEWPORT,vp);
     taks::FastScene::render(vp[2],vp[3],f);
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL Java_hu_taks_world_MainActivity_nativeAudioScene(JNIEnv* env,jobject) {
+    std::lock_guard<std::mutex> guard(worldLock);
+    const auto s=taks::audioScene(world,playerJump.airborne(monotonicSeconds()));
+    jfloatArray out=env->NewFloatArray(static_cast<jsize>(s.size()));
+    if(out)env->SetFloatArrayRegion(out,0,static_cast<jsize>(s.size()),s.data());
+    return out;
 }

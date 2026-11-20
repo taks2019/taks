@@ -1,10 +1,10 @@
-name: TAKS World 0.16 - Egységes élő menü Android APK
+name: TAKS World 0.16.4 - causal offline audio APK
 on:
   push:
     branches: ['codex/taks-world-elfogadott-menu-mp4-2026-11-19']
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   assets:
     runs-on: ubuntu-latest
@@ -15,7 +15,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install asset import tools (no Blender, no Canvas)
-        run: python -m pip install 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2'
+        run: python -m pip install 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2' 'opencv-python-headless>=4.10,<5'
       - name: Download real CC0 geology meshes and PBR photo surfaces
         run: python scripts/import_cc0_rocks.py
       - name: Download and bake original CC0 grass and fern
@@ -82,6 +82,15 @@ jobs:
           java -cp build-java hu.taks.world.PrehistoricMenuThemeTest
           java -cp build-java hu.taks.world.TouchMovementTest
           java -cp build-java hu.taks.world.LivingUiSkinTest
+      - name: Test continuous synthesized sound and export reproducible audition
+        run: |
+          javac -encoding UTF-8 -d build-java app/src/main/java/hu/taks/world/ProceduralSoundscape.java tests/java/hu/taks/world/ProceduralSoundscapeTest.java
+          java -cp build-java hu.taks.world.ProceduralSoundscapeTest soundscape.pcm
+          python3 -c "import wave; w=wave.open('soundscape.wav','wb'); w.setparams((2,2,24000,0,'NONE','not compressed')); w.writeframes(open('soundscape.pcm','rb').read()); w.close()"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-procedural-audio-audition
+          path: soundscape.wav
   real-gpu-screenshots:
     needs: [assets,engine-tests]
     runs-on: ubuntu-latest
@@ -233,7 +242,7 @@ jobs:
           tools="$ANDROID_HOME/build-tools/35.0.0"
           "$tools/apksigner" verify --verbose "$apk"
           "$tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/taks-package.txt"
-          grep -F "package: name='hu.taks.world.wonderwerk' versionCode='18' versionName='0.16.2'" "$RUNNER_TEMP/taks-package.txt"
+          grep -F "package: name='hu.taks.world.wonderwerk' versionCode='19' versionName='0.16.4-audio'" "$RUNNER_TEMP/taks-package.txt"
           grep -F 'lib/arm64-v8a/libtaks_engine.so' <(unzip -Z1 "$apk")
       - uses: actions/upload-artifact@v4
         with:
@@ -241,3 +250,23 @@ jobs:
           path: TAKS_World_Android_KIPROBALO.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Verify unchanged logo, accepted art and actual APK contents
+        run: python3 scripts/verify_audio_release.py TAKS_World_Android_KIPROBALO.apk
+      - name: Publish downloadable test release with hash evidence
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: taks-world-0.16.4-audio-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: TAKS World 0.16.4 - offline causal audio test
+          prerelease: true
+          body: |
+            Installable debug test APK (hu.taks.world.wonderwerk), versionCode 19.
+            Original procedural synthesis, no third-party sound recordings.
+            Accepted branch menu and logo files unchanged; see JSON hashes.
+            Full separate approved logo PNG and 0.17 reference were unavailable; not certified.
+            Eight-direction male idle/crouch PNGs preserved. Other requested eight-direction sets unavailable.
+            This is a test release, not a claim of finished graphics or acoustically realistic species.
+          files: |
+            TAKS_World_Android_KIPROBALO.apk
+            audio-release-verification.json

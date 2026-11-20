@@ -56,6 +56,15 @@ public final class MainActivity extends Activity {
     private native String nativeRendererError();
     private native float[] nativeMenuCues();
     private native float[] nativeMenuClimate();
+    private native float[] nativeAudioScene();
+    private WorldAudio worldAudio;
+    private final Handler audioHandler=new Handler(Looper.getMainLooper());
+    private final Runnable audioLoop=new Runnable(){
+        @Override public void run(){
+            if(worldAudio!=null)worldAudio.update(nativeAudioScene());
+            audioHandler.postDelayed(this,50);
+        }
+    };
     private native boolean nativeUploadRealModel(int slot,byte[] model,int[] argb,int width,int height);
     private native boolean nativeUploadTerrainTexture(int slot,int[] pixels,int width,int height);
     private native boolean nativeUploadActorSprite(int view,int[] argb,int width,int height);
@@ -920,6 +929,8 @@ public final class MainActivity extends Activity {
         inMainMenu=true;
         renderHandler.removeCallbacks(renderLoop);
         worldHandler.removeCallbacks(worldLoop);
+        audioHandler.removeCallbacks(audioLoop);
+        if(worldAudio!=null)worldAudio.stop();
         padActive=false;moveIntent=false;sprinting=false;
         stopMovement();
         closeModal();closePanel();
@@ -1184,6 +1195,9 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onResume(){
         super.onResume();
+        if(worldAudio==null)worldAudio=new WorldAudio(this);
+        worldAudio.update(nativeAudioScene());worldAudio.start();
+        audioHandler.removeCallbacks(audioLoop);audioHandler.post(audioLoop);
         if(surface!=null)surface.onResume();
         if(acceptedMenu!=null)acceptedMenu.play();
         worldHandler.removeCallbacks(worldLoop);
@@ -1195,6 +1209,8 @@ public final class MainActivity extends Activity {
         skinHandler.post(skinLoop);
     }
     @Override protected void onPause(){
+        audioHandler.removeCallbacks(audioLoop);
+        if(worldAudio!=null)worldAudio.stop();
         padActive=false;moveIntent=false;sprinting=false;
         stopMovement();
         worldHandler.removeCallbacks(worldLoop);
