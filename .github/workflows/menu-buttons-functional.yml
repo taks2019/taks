@@ -33,16 +33,24 @@ jobs:
           mkdir -p build-menu-test
           javac -encoding UTF-8 -d build-menu-test \
             app/src/main/java/hu/taks/world/MainMenuActionRouter.java \
-            tests/java/hu/taks/world/MainMenuActionRouterTest.java
+            app/src/main/java/hu/taks/world/MenuStoneTouch.java \
+            tests/java/hu/taks/world/MainMenuActionRouterTest.java \
+            tests/java/hu/taks/world/MenuStoneTouchTest.java
           java -cp build-menu-test hu.taks.world.MainMenuActionRouterTest
+          java -cp build-menu-test hu.taks.world.MenuStoneTouchTest
       - name: Prevent graphical placeholder buttons and broken wiring
         run: |
           python3 - <<'PY'
           from pathlib import Path
           menu=Path('app/src/main/java/hu/taks/world/AcceptedWonderwerkMenu.java').read_text()
           activity=Path('app/src/main/java/hu/taks/world/MainActivity.java').read_text()
+          geometry=Path('app/src/main/java/hu/taks/world/MenuStoneTouch.java').read_text()
           for key in ('new_game','settings','creator','exit'):
-              assert f'addButton(host,"{key}"' in menu, key
+              assert f'"{key}"' in geometry, key
+          assert 'addButton(host,MenuStoneTouch.COMMANDS[i]' in menu
+          assert 'captions.setClickable(true)' in menu
+          assert 'hotspots.get(selected).control.performClick()' in menu
+          assert 'onTouchEvent(MotionEvent event)' in menu
           assert 'actions.run(key)' in menu
           assert 'button.setText(titleFor(key))' in menu
           assert 'c.drawText(title,CAPTION_X,CAPTION_Y[i],type)' in menu, "Labels must be visibly painted on top"

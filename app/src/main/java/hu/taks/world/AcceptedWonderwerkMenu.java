@@ -12,6 +12,7 @@ import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
@@ -42,7 +43,7 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
     private final MainMenuActionRouter actions;
     private boolean released=false;
 
-    private static final String[] KEYS={"new_game","settings","creator","exit"};
+    private static final String[] KEYS=MenuStoneTouch.COMMANDS;
     private static final String[] DEFAULTS={"Új Játék","Beállítások","Készítő","Kilépés"};
     // Real stone coordinates in the approved source. Never change the master.
     private static final float[] CAPTION_Y={387f,479f,573f,668f};
@@ -98,15 +99,15 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         content.addView(environment,new FrameLayout.LayoutParams(-1,-1));
 
         // Native Buttons own all click targets and accessibility semantics.
-        addButton(host,"new_game",.390f,.442f,.280f,.116f);
-        addButton(host,"settings",.390f,.558f,.280f,.119f);
-        addButton(host,"creator",.390f,.685f,.280f,.115f);
-        addButton(host,"exit",.390f,.806f,.280f,.117f);
+        for(int i=0;i<MenuStoneTouch.COMMANDS.length;++i)
+            addButton(host,MenuStoneTouch.COMMANDS[i],MenuStoneTouch.left(i),
+                      MenuStoneTouch.top(i),MenuStoneTouch.width(i),
+                      MenuStoneTouch.height(i));
 
         // Added LAST to the Android drawing order, but deliberately untouchable.
         // The four button rectangles stay clickable beneath the text.
         captions=new MenuCaptionView(host);
-        captions.setClickable(false);
+        captions.setClickable(true); // touches always reach real native controls
         captions.setFocusable(false);
         captions.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         content.addView(captions,new FrameLayout.LayoutParams(-1,-1));
@@ -135,7 +136,11 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         button.setBackground(new RippleDrawable(ColorStateList.valueOf(0x66D8B16C),
                              new ColorDrawable(Color.TRANSPARENT),null));
         button.setContentDescription(button.getText().toString());
-        button.setOnClickListener(v->{if(!released)actions.run(key);});
+        button.setOnClickListener(v->{
+            if(released)return;
+            android.util.Log.i("TAKS_MENU_ACTION","Stone "+key+" pressed");
+            actions.run(key);
+        });
         button.setSoundEffectsEnabled(true);
         hotspots.add(new Hotspot(button,x,y,w,h));
         content.addView(button,new FrameLayout.LayoutParams(1,1));
@@ -149,6 +154,44 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
     private final class MenuCaptionView extends View {
         private final Paint type=new Paint(Paint.ANTI_ALIAS_FLAG|
                                             Paint.SUBPIXEL_TEXT_FLAG);
+        private int pressedIndex=-1;
+
+        @Override public boolean onTouchEvent(MotionEvent event){
+            if(released||getWidth()<=0||getHeight()<=0)return false;
+            int action=event.getActionMasked();
+            int hit=MenuStoneTouch.hit(event.getX()/getWidth(),
+                                       event.getY()/getHeight());
+            if(action==MotionEvent.ACTION_DOWN){
+                if(hit<0)return false;
+                pressedIndex=hit;
+                hotspots.get(hit).control.setPressed(true);
+                invalidate();
+                return true;
+            }
+            if(pressedIndex<0)return false;
+            if(action==MotionEvent.ACTION_MOVE){
+                hotspots.get(pressedIndex).control.setPressed(hit==pressedIndex);
+                invalidate();
+                return true;
+            }
+            if(action==MotionEvent.ACTION_UP){
+                int selected=pressedIndex;
+                pressedIndex=-1;
+                hotspots.get(selected).control.setPressed(false);
+                invalidate();
+                if(hit==selected && event.getPointerCount()==1)
+                    hotspots.get(selected).control.performClick();
+                return true;
+            }
+            if(action==MotionEvent.ACTION_CANCEL||
+               action==MotionEvent.ACTION_POINTER_DOWN){
+                hotspots.get(pressedIndex).control.setPressed(false);
+                pressedIndex=-1;
+                invalidate();
+                return true;
+            }
+            return true;
+        }
         MenuCaptionView(Activity host){super(host);setWillNotDraw(false);}
         @Override protected void onDraw(Canvas c){
             super.onDraw(c);
@@ -176,7 +219,7 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
                 type.setColor(0xFF38240F);
                 c.drawText(title,CAPTION_X,CAPTION_Y[i],type);
                 type.setStyle(Paint.Style.FILL);
-                type.setColor(0xFFFFF1CD);
+                type.setColor(i==pressedIndex?0xFFFFD875:0xFFFFF1CD);
                 type.setShadowLayer(1f,0f,1f,0xFF3A2712);
                 c.drawText(title,CAPTION_X,CAPTION_Y[i],type);
                 c.restore();
