@@ -26,7 +26,7 @@ import java.io.InputStream;
 public final class LivingWonderwerkOverlay extends View {
     private static final int WIDTH=1664,HEIGHT=768;
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
-    private final Layer water,fern,grass,cloud,treeCanopy;
+    private final Layer water,fern,grass,cloud,treeCanopy,cliffVines;
     private MenuClimate climate;
     private boolean playing=true;
     private long begunNanos=SystemClock.elapsedRealtimeNanos();
@@ -104,6 +104,31 @@ public final class LivingWonderwerkOverlay extends View {
         mask.setPixels(leaves,0,w,0,0,w,h);
         return new Layer(mask,r);
     }
+    private static Layer makeCliffVinesLayer(Bitmap photo){
+        // Hanging greenery on the far-right cliff is its own living layer.
+        // Never animate the rock, original TAKS emblem or stone buttons.
+        final Rect r=new Rect(1170,0,1664,420);
+        if(photo==null||photo.getWidth()!=WIDTH||photo.getHeight()!=HEIGHT)
+            return new Layer(null,r);
+        final int w=r.width(),h=r.height();
+        int[] original=new int[w*h],leaves=new int[w*h];
+        photo.getPixels(original,0,w,r.left,r.top,w,h);
+        for(int y=0;y<h;++y)for(int x=0;x<w;++x){
+            final int c=original[y*w+x];
+            final int red=(c>>>16)&255,green=(c>>>8)&255,blue=c&255;
+            // Green/sage foliage differs from the yellow dolomite face.
+            final boolean leaf=green>=44&&green>blue*1.25f&&
+                    green>red*.78f&&red<green*1.28f&&blue<156;
+            if(!leaf)continue;
+            float edgeX=Math.min(1f,Math.min(x,w-x)/46f);
+            float edgeY=Math.min(1f,Math.min(y,h-y)/34f);
+            int alpha=(int)(195f*edgeX*edgeY);
+            leaves[y*w+x]=(c&0x00FFFFFF)|(alpha<<24);
+        }
+        Bitmap layer=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+        layer.setPixels(leaves,0,w,0,0,w,h);
+        return new Layer(layer,r);
+    }
     private static Layer createLayer(Context c,Bitmap original,String maskAsset,Rect area,String label){
         Bitmap mask=decode(c,maskAsset);
         Layer layer=cutLayer(original,mask,area,label);
@@ -121,6 +146,7 @@ public final class LivingWonderwerkOverlay extends View {
         grass=createLayer(context,master,"menu/GRASS_MASK.png",new Rect(0,369,794,768),"grass");
         cloud=createLayer(context,master,"menu/CLOUD_MASK.png",new Rect(0,0,772,379),"clouds");
         treeCanopy=makeCanopyLayer(master);
+        cliffVines=makeCliffVinesLayer(master);
         if(master!=null)master.recycle();
     }
     public void setEditableScript(EditableGameScript json){
@@ -154,6 +180,39 @@ public final class LivingWonderwerkOverlay extends View {
             c.drawBitmap(layer.texture,from,to,paint);
         }
     }
+    private void swayHanging(Canvas canvas,Layer layer,double t,float motion){
+        if(!layer.exists()||motion<=.003f)return;
+        final int w=layer.bounds.width(),h=layer.bounds.height();
+        paint.reset();paint.setFilterBitmap(true);paint.setAntiAlias(true);
+        paint.setAlpha(215);
+        for(int y=0;y<h;y+=5){
+            int end=Math.min(h,y+5);
+            float tip=(float)Math.pow(y/(float)h,1.24);
+            float dx=(float)(Math.sin(t*.79+y*.017)*motion*tip+
+                       Math.sin(t*.37+y*.023)*motion*.28f*tip);
+            Rect src=new Rect(0,y,w,end);
+            RectF target=new RectF(layer.bounds.left+dx,layer.bounds.top+y,
+                                   layer.bounds.right+dx,layer.bounds.top+end);
+            canvas.drawBitmap(layer.texture,src,target,paint);
+        }
+    }
+    private void drawDust(Canvas canvas,double t,MenuClimate w){
+        float dust=w.dust();
+        if(dust<.08f)return;
+        // Local fine dust is carried by actual wind in front of the cave.
+        // No invented rain or frame-shaking is added.
+        paint.reset();paint.setAntiAlias(true);
+        paint.setColor(0xFFEED6A1);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setAlpha(Math.round(65*dust));
+        for(int i=0;i<19;++i){
+            double phase=i*2.39996323;
+            float x=1172f+(float)((i*29.9+t*(13f+w.wind*27f))%210f);
+            float y=288f+(float)(i*11.7%142.0)-
+                    (float)Math.sin(t*.43+phase)*9f;
+            canvas.drawCircle(x,y,.7f+(i%3)*.35f,paint);
+        }
+    }
     private void drawStream(Canvas canvas,double t,float wave){
         if(!water.exists())return;
         // Every rendered pixel in this layer was already selected as WATER by
@@ -171,6 +230,7 @@ public final class LivingWonderwerkOverlay extends View {
         // Independent overlapping canopy movements, distinct from the ferns.
         strips(canvas,treeCanopy,t,Math.max(1.5f,amplitude*.55f),.36f,
                .97f,false,.88f);
+        swayHanging(canvas,cliffVines,t,Math.abs(amplitude)*.75f);
     }
     private void drawSunlight(Canvas canvas,double t,MenuClimate w){
         // Very subtle changing daylight only on the sunlit LEFT landscape.
@@ -206,12 +266,13 @@ public final class LivingWonderwerkOverlay extends View {
         drawStream(canvas,t,climate.waterMotion()*waterVisibility);
         drawFoliage(canvas,t,climate);
         drawSunlight(canvas,t,climate);
+        drawDust(canvas,t,climate);
         canvas.restore();
         if(isShown())postInvalidateDelayed(33); // render only while visible
     }
     public void release(){
         pause();
         water.release();fern.release();grass.release();cloud.release();
-        treeCanopy.release();
+        treeCanopy.release();cliffVines.release();
     }
 }
