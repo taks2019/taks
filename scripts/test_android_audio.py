@@ -13,6 +13,7 @@ def expect_workers(expected):
         if count()==expected:return
         time.sleep(.25)
     Path("ui-evidence").mkdir(exist_ok=True)
+    Path("ui-evidence/audio-activity.txt").write_text(adb("shell","dumpsys","activity","activities"))
     Path("ui-evidence/audio-logcat.txt").write_text(adb("logcat","-d","-s","TAKSAudio:I","AudioTrack:E","AndroidRuntime:E"))
     raise AssertionError(f"Expected {expected} audio worker(s): "+threads())
 adb("shell","am","start","-n",PACKAGE+"/hu.taks.world.MainActivity")

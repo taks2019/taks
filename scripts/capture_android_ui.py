@@ -136,8 +136,6 @@ assert human_loaded in runtime_log, \
 assert b"Rigged skinned humanoid asset unavailable" not in runtime_log, \
     "Android could not decode the skinned humanoid model"
 
-subprocess.run(["python3","scripts/test_android_audio.py"],check=True)
-
 # A fresh Android emulator shows a one-time OS-level full-screen prompt.
 # This prompt is NOT the TAKS interface; dismiss before screenshots/tests.
 for attempt in range(10):
@@ -165,6 +163,7 @@ else:
 assert find(nodes,"Új Játék")
 assert find(nodes,"Készítő")
 assert find(nodes,"Kilépés")
+subprocess.run(["python3","scripts/test_android_audio.py"],check=True)
 picture("01-android-fomenu-eredeti-logo")
 # Visible motion acceptance: redraw calls alone are not enough. Pixel
 # differences must exist in actual screenshots of water, vegetation and sky.
