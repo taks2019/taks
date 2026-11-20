@@ -64,6 +64,24 @@ class VisualApprovalTests(unittest.TestCase):
         self.assertFalse(allowed)
         self.assertTrue(any("not listed" in r for r in reasons))
 
+    def test_new_svg_in_other_asset_folder_is_blocked(self):
+        self.approve()
+        icon = self.assets / "extra/ui_icon.svg"
+        icon.parent.mkdir(parents=True)
+        icon.write_text("<svg/>", encoding="utf-8")
+        allowed, reasons = self.check()
+        self.assertFalse(allowed)
+        self.assertTrue(any("extra/ui_icon.svg" in r for r in reasons))
+
+    def test_new_video_animation_is_blocked(self):
+        self.approve()
+        video = self.assets / "extra/wind_preview.mp4"
+        video.parent.mkdir(parents=True)
+        video.write_bytes(b"animation placeholder")
+        allowed, reasons = self.check()
+        self.assertFalse(allowed)
+        self.assertTrue(any("extra/wind_preview.mp4" in r for r in reasons))
+
     def test_missing_approval_evidence_is_blocked(self):
         self.approve()
         self.record["approval_reference"] = None
