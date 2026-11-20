@@ -77,7 +77,7 @@ public final class LivingWonderwerkOverlay extends View {
      * No external image or substituted tree art is introduced.
      */
     private static Layer makeCanopyLayer(Bitmap photo){
-        final Rect r=new Rect(0,0,700,360);
+        final Rect r=new Rect(0,0,640,360);
         if(photo==null||photo.getWidth()!=WIDTH||photo.getHeight()!=HEIGHT)
             return new Layer(null,r);
         int w=r.width(),h=r.height();
