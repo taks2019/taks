@@ -802,8 +802,30 @@ public final class MainActivity extends Activity {
                 showSettings();
             }).show();
     }
+    private void showUpdateNotes(){
+        modal("TAKS WORLD – 0.16.0",body->{
+            TextView changelog=caption(
+                "EGYSÉGES ÉLŐ MENÜ – VÁLTOZÁSOK\n\n"+
+                "1. Az MP4-videó lejátszása megszűnt. Nincs 8 másodpercenkénti ugrás.\n\n"+
+                "2. A négy magyar felirat külön, legfelül jelenik meg. "+
+                "A kőgombok valódi érintési funkciói megmaradtak.\n\n"+
+                "3. A lombok, a páfrány és a lelógó növények külön ütemben mozognak.\n\n"+
+                "4. A vízen folyamatos hullámzás és fénycsillanások láthatók.\n\n"+
+                "5. Lassú felhőárnyék, változó napfény és távoli madarak kerültek a menübe.\n\n"+
+                "6. Az eredeti TAKS WORLD logó, a teljes barlang és a játékmentések "+
+                "változatlanok.\n\n"+
+                "A játékon belüli 3D világ fejlesztése ettől külön folytatódik. "+
+                "A menü természetes mozgását a telefonon is ellenőrizni kell.",
+                13,0xFFF5E8D2);
+            changelog.setLineSpacing(dp(4),1f);
+            body.addView(changelog);
+            addVertical(body,"Vissza a Beállításokhoz",this::showSettings);
+        });
+    }
     private void showSettings(){
         modal(editable("settings","title","BEÁLLÍTÁSOK"),body->{
+            addVertical(body,editable("settings","update_notes",
+                "Újdonságok – 0.16 élő menü"),this::showUpdateNotes);
             addVertical(body,editable("settings","resolution","3D felbontás – gyors / kiegyensúlyozott / részletes"),
                     this::chooseGraphicsResolution);
             addVertical(body,editable("settings","isometric","Izometrikus kamera"),()->{

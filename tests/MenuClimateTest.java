@@ -19,6 +19,17 @@ public final class MenuClimateTest {
         check(MenuClimate.fromNative(new float[]{0,0,0,0,0,0,.5f,0}).daylight()<.05f,
               "night darkness");
         check(!calm.fern&&windy.fern,"fern tag from World only");
-        System.out.println("PASS: validated World snapshot; water, vegetation, daylight, soil and dust cause chain.");
+        MenuClimate night=MenuClimate.fromNative(new float[]{23.9f,0,.13f,0,0,0,.66f,0});
+        MenuClimate dawn=MenuClimate.fromNative(new float[]{.1f,0,.13f,0,0,0,.66f,0});
+        MenuClimate middle=MenuClimate.blend(night,dawn,.5f);
+        check(middle!=null&&(middle.hour<.04f||middle.hour>23.96f),
+              "Midnight must interpolate across wrap without jumping through noon");
+        check(MenuClimate.blend(calm,windy,0).wind==calm.wind,
+              "Zero blend must preserve the previous weather");
+        check(MenuClimate.blend(calm,windy,1).wind==windy.wind,
+              "Full blend reaches the actual new native weather");
+        check(MenuClimate.blend(calm,windy,.5f).wind>calm.wind,
+              "Cloud/wind changes blend continuously");
+        System.out.println("PASS: validated World snapshot; smooth day/cloud/wind interpolation and river motion.");
     }
 }
