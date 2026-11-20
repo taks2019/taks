@@ -11,6 +11,8 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -60,6 +62,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Build C++ living ecology and persistence
         run: |
           cmake -S engine -B build-eco -DCMAKE_BUILD_TYPE=Debug
@@ -96,6 +100,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v4
         with:
           name: TAKS-World-Real-Geology-Flora-Human-Assets
@@ -129,6 +135,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install original Wonderwerk scenery and transparent masks, never looping MP4
         run: |
           python3 -m pip install --disable-pip-version-check 'Pillow>=10,<13' 'opencv-python-headless>=4.8,<5'
