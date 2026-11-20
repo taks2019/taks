@@ -19,6 +19,14 @@ public final class MenuClimateTest {
         check(MenuClimate.fromNative(new float[]{0,0,0,0,0,0,.5f,0}).daylight()<.05f,
               "night darkness");
         check(!calm.fern&&windy.fern,"fern tag from World only");
+        MenuClimate living=MenuClimate.fromNative(
+            new float[]{12,0,.13f,.35f,1,0,.66f,1,3,1});
+        check(living!=null&&living.grazers==3f&&living.predators==1f,
+              "Visible fauna must reflect actual live native world population");
+        MenuClimate deceased=MenuClimate.fromNative(
+            new float[]{12,0,.13f,.35f,1,0,.66f,1,0,0});
+        check(MenuClimate.blend(living,deceased,.5f).grazers==1.5f,
+              "Extinction/discovery transitions cannot suddenly pop an animal");
         MenuClimate night=MenuClimate.fromNative(new float[]{23.9f,0,.13f,0,0,0,.66f,0});
         MenuClimate dawn=MenuClimate.fromNative(new float[]{.1f,0,.13f,0,0,0,.66f,0});
         MenuClimate middle=MenuClimate.blend(night,dawn,.5f);

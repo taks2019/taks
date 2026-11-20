@@ -29,7 +29,7 @@ import java.io.InputStream;
 public final class LivingWonderwerkOverlay extends View {
     private static final int WIDTH=1664,HEIGHT=768;
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
-    private final Layer water,fern,grass,cloud,treeCanopy,cliffVines;
+    private final Layer water,fern,grass,cloud,treeCanopy,cliffVines,photoGrazer;
     private MenuClimate climate;
     private MenuClimate smoothClimate;
     private boolean playing=true;
@@ -160,6 +160,13 @@ public final class LivingWonderwerkOverlay extends View {
         cloud=createLayer(context,master,"menu/CLOUD_MASK.png",new Rect(0,0,772,379),"clouds");
         treeCanopy=makeCanopyLayer(master);
         cliffVines=makeCliffVinesLayer(master);
+        // The actual photographic animal has been removed from the static
+        // plate, so one organism can now physically move against the grass.
+        Bitmap beast=decode(context,"menu/WILDLIFE_GRAZER_1.png");
+        if(beast!=null&&(beast.getWidth()!=71||beast.getHeight()!=48)){
+            beast.recycle();beast=null;
+        }
+        photoGrazer=new Layer(beast,new Rect(465,378,536,426));
         if(master!=null)master.recycle();
     }
     public void setEditableScript(EditableGameScript json){
@@ -215,8 +222,29 @@ public final class LivingWonderwerkOverlay extends View {
             canvas.drawBitmap(layer.texture,src,target,paint);
         }
     }
+    private void drawWildlife(Canvas canvas,double t,MenuClimate weather){
+        if(!photoGrazer.exists()||weather.grazers<=.01f)return;
+        // One actual subject, sampled from the original approved photograph.
+        // The actual SAVED ecological population controls whether it exists.
+        // Oscillating locomotion has no loop boundary, teleport or codec jump.
+        final float life=Math.min(1f,weather.grazers);
+        final float stride=(float)Math.sin(t*3.2)*1.0f;
+        final float move=(float)Math.sin(t*.17)*23.0f;
+        final float x=465f+move;
+        final float y=378f+stride;
+        Paint animal=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
+        animal.setAlpha(Math.round(238f*life));
+        canvas.save();
+        // Turn the animal at the end of its path; do not walk backwards.
+        if(Math.cos(t*.17)<0){
+            canvas.scale(-1f,1f,x+35.5f,y+24f);
+        }
+        canvas.drawBitmap(photoGrazer.texture,null,
+            new RectF(x,y,x+71f,y+48f),animal);
+        canvas.restore();
+    }
     private void drawDust(Canvas canvas,double t,MenuClimate w){
-        final float dust=Math.max(.12f*w.daylight(),w.dust());
+        final float dust=Math.max(.25f*w.daylight(),w.dust());
         if(dust<.012f)return; // backlit cave particles + stronger gust-driven dust
         // Dust originates at the cave threshold and follows the true wind.
         // Slow translucent plumes plus individual grains, never static noise.
@@ -225,7 +253,7 @@ public final class LivingWonderwerkOverlay extends View {
         plume.setStyle(Paint.Style.FILL);
         canvas.save();
         canvas.clipRect(1150,254,1485,585);
-        final int count=66;
+        final int count=102;
         for(int i=0;i<count;++i){
             double phase=(t*(.013+.002*(i%4))+i*.61803398875)%1.;
             float fade=(float)Math.pow(Math.sin(Math.PI*phase),2);
@@ -234,7 +262,7 @@ public final class LivingWonderwerkOverlay extends View {
                     (float)Math.sin(t*.21+i*.7)*9f;
             float size=1.1f+(i%7)*.76f;
             plume.setColor(i%3==0?0xFFFFE6B6:0xFFE2C495);
-            plume.setAlpha(Math.round(165f*dust*fade));
+            plume.setAlpha(Math.round(220f*dust*fade));
             canvas.drawCircle(x,y,size,plume);
         }
         canvas.restore();
@@ -251,14 +279,14 @@ public final class LivingWonderwerkOverlay extends View {
         ripple.setStyle(Paint.Style.STROKE);
         ripple.setStrokeCap(Paint.Cap.ROUND);
         ripple.setColor(0xFFF9E7BC);
-        for(int i=0;i<38;++i){
+        for(int i=0;i<118;++i){
             double phase=(t*(.035+.003*(i%5))+i*.61803398875)%1.;
             float x=10f+(float)phase*654f;
             float y=565f+(i*31.2f)%198f+(float)Math.sin(t*.53+i*1.3)*3.8f;
             float fade=(float)Math.pow(Math.sin(Math.PI*phase),2);
-            ripple.setAlpha((int)(185f*fade*(.38f+.62f*wave)));
-            ripple.setStrokeWidth(.7f+(i%3)*.55f);
-            float length=4f+(i%6)*2.1f;
+            ripple.setAlpha((int)(210f*fade*(.44f+.56f*wave)));
+            ripple.setStrokeWidth(.8f+(i%3)*.7f);
+            float length=7f+(i%7)*2.7f;
             canvas.drawLine(x,y,x+length,y+(float)Math.sin(t*.9+i)*.7f,ripple);
         }
         // Tight alpha intersection makes stones/grass on the riverbank static.
@@ -271,16 +299,16 @@ public final class LivingWonderwerkOverlay extends View {
     private void drawFoliage(Canvas canvas,double t,MenuClimate w){
         // Even on a calm day the leaves experience subtle local turbulence,
         // while gust strength still comes from the real simulated wind.
-        float gust=.20f+.80f*w.vegetationMotion();
+        float gust=.30f+.70f*w.vegetationMotion();
         float sign=w.windX<-.1f?-1f:1f;
         float slowGust=.87f+.13f*(float)Math.sin(t*.22+1.7);
-        float amplitude=Math.min(22f,Math.max(14f,fernDegrees*1.60f))*gust*slowGust*sign;
+        float amplitude=Math.min(29f,Math.max(19f,fernDegrees*2.25f))*gust*slowGust*sign;
         strips(canvas,grass,t,amplitude*.59f,1.19f,.82f,true,.84f);
         strips(canvas,fern,t,amplitude,2.42f,.63f,true,.98f);
         // Tree and cliff plant groups are animated at different frequencies.
-        strips(canvas,treeCanopy,t,Math.max(3.1f,Math.abs(amplitude)*.55f),.36f,
-               .43f,false,.90f);
-        swayHanging(canvas,cliffVines,t,Math.max(2.6f,Math.abs(amplitude)*.87f));
+        strips(canvas,treeCanopy,t,Math.max(5.8f,Math.abs(amplitude)*.85f),.36f,
+               .43f,false,.97f);
+        swayHanging(canvas,cliffVines,t,Math.max(4.1f,Math.abs(amplitude)*.96f));
     }
     private void drawSunlight(Canvas canvas,double t,MenuClimate w){
         // Very subtle changing daylight only on the sunlit LEFT landscape.
@@ -350,6 +378,7 @@ public final class LivingWonderwerkOverlay extends View {
         // Absolute monotonic time has no 8s seam and survives pause/resume.
         double t=now*1e-9;
         drawClouds(canvas,t,weather);
+        drawWildlife(canvas,t,weather);
         drawStream(canvas,t,weather.waterMotion()*waterVisibility);
         drawFoliage(canvas,t,weather);
         drawSunlight(canvas,t,weather);
@@ -361,6 +390,6 @@ public final class LivingWonderwerkOverlay extends View {
     public void release(){
         pause();
         water.release();fern.release();grass.release();cloud.release();
-        treeCanopy.release();cliffVines.release();
+        treeCanopy.release();cliffVines.release();photoGrazer.release();
     }
 }

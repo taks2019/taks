@@ -123,7 +123,7 @@ jobs:
       - name: Install byte-identical user-approved wide screen and character graphics
         if: github.ref_name == 'codex/taks-world-elfogadott-menu-mp4-2026-11-19'
         run: |
-          python3 -m pip install 'Pillow>=10,<13'
+          python3 -m pip install 'Pillow>=10,<13' 'opencv-python-headless>=4.8,<5'
           python3 scripts/restore_approved_assets_from_git.py
           python3 scripts/install_approved_android_game_assets.py
       - name: Verify approved Wonderwerk art and 16 actual 8-angle PNG poses
@@ -249,7 +249,7 @@ jobs:
           tools="$ANDROID_HOME/build-tools/35.0.0"
           "$tools/apksigner" verify --verbose "$apk"
           "$tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/taks-package.txt"
-          grep -F "package: name='hu.taks.world.wonderwerk' versionCode='17' versionName='0.16.1'" "$RUNNER_TEMP/taks-package.txt"
+          grep -F "package: name='hu.taks.world.wonderwerk' versionCode='18' versionName='0.16.2'" "$RUNNER_TEMP/taks-package.txt"
           grep -F 'lib/arm64-v8a/libtaks_engine.so' <(unzip -Z1 "$apk")
       - uses: actions/upload-artifact@v4
         with:

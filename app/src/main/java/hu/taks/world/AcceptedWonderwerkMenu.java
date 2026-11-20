@@ -32,6 +32,7 @@ import java.util.List;
  */
 public final class AcceptedWonderwerkMenu extends FrameLayout {
     public static final String TEXT_FREE="menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png";
+    private static final String LIVE_BASE="menu/WONDERWERK_LIVE_BASE.png";
     private static final int DESIGN_W=1664,DESIGN_H=768;
     private final FrameLayout content;
     private final LivingWonderwerkOverlay environment;
@@ -79,7 +80,7 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
         actions=new MainMenuActionRouter(onNew,onSettings,onCreator,onExit);
         setBackgroundColor(0xFF21180F);
         Bitmap backdrop;
-        try(InputStream in=host.getAssets().open(TEXT_FREE)){
+        try(InputStream in=host.getAssets().open(LIVE_BASE)){
             backdrop=BitmapFactory.decodeStream(in);
         }
         if(backdrop==null||backdrop.getWidth()!=DESIGN_W||backdrop.getHeight()!=DESIGN_H)

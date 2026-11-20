@@ -1,4 +1,4 @@
-TAKS WORLD 0.16.1 – EGYSÉGES ÉLŐ MENÜ (2026-11-20)
+TAKS WORLD 0.16.2 – EGYSÉGES ÉLŐ MENÜ (2026-11-20)
 
 ELKÉSZÜLT A KÓDBAN:
 - A régi 8 másodperces MP4 sem fut, sem kerül be a telepített APK-ba. A menü egyetlen élő felület.
@@ -15,6 +15,11 @@ ELKÉSZÜLT A KÓDBAN:
 - Mentési rendszer és a natív izometrikus játék változatlanul megmarad.
 
 TOVÁBBI JAVÍTÁSOK:
+- A jóváhagyott háttérbe festett távoli növényevőt fotóalapon különválasztottuk, és a natív élőállatok létszámához kötöttük.
+- A vízen háromszor több, csak vízfelületre korlátozott mozgó csillanás jelenik meg.
+- Erősebb szélmozgás a lombban, páfrányokban, távoli indákon.
+- Erősebb, de kizárólag a barlang előtt látható szél- és fényfüggő por.
+
 - A menüfeliratok többé nem érnek túl a kőgomb szélén.
 - A vizes maszk különválasztja a vízi fényeket a kő és part felületétől.
 - A ragadozók és legelők a 3D játékban saját tényleges mozgásukat követik.

@@ -273,7 +273,7 @@ extern "C" JNIEXPORT jfloatArray JNICALL Java_hu_taks_world_MainActivity_nativeM
 // hour, rain, soil water, wind strength, wind X/Z, actual source pool level, fern.
 extern "C" JNIEXPORT jfloatArray JNICALL Java_hu_taks_world_MainActivity_nativeMenuClimate(
     JNIEnv* env,jobject) {
-    jfloat snapshot[8]{};
+    jfloat snapshot[10]{};
     {
         std::lock_guard<std::mutex> guard(worldLock);
         const taks::AfricanWeather w=taks::africanWeatherAt(world.hours);
@@ -285,9 +285,11 @@ extern "C" JNIEXPORT jfloatArray JNICALL Java_hu_taks_world_MainActivity_nativeM
         snapshot[5]=static_cast<jfloat>(w.windZ);
         snapshot[6]=static_cast<jfloat>(world.ecology.waters[0].level);
         snapshot[7]=world.ecology.verifiedFerns?1.f:0.f;
+        snapshot[8]=static_cast<jfloat>(world.ecology.aliveAnimals(0));
+        snapshot[9]=static_cast<jfloat>(world.ecology.aliveAnimals(1));
     }
-    jfloatArray result=env->NewFloatArray(8);
-    if(result)env->SetFloatArrayRegion(result,0,8,snapshot);
+    jfloatArray result=env->NewFloatArray(10);
+    if(result)env->SetFloatArrayRegion(result,0,10,snapshot);
     return result;
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeRendererError(JNIEnv* env,jobject){

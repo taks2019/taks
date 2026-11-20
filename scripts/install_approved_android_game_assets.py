@@ -82,5 +82,10 @@ with ZipFile(PACKAGE) as archive:
         path.parent.mkdir(parents=True,exist_ok=True)
         path.write_bytes(archive.read(name))
         print("ORIGINAL BYTES INSTALLED",path.relative_to(ROOT))
-print("PASS: continuous live scene + 16 actor PNGs + 5 layers installed; NO MP4.")
+# Generate extra photographic layers ONLY after the originals are restored.
+# The logo, stone buttons and archived approved art are never modified.
+import subprocess,sys
+subprocess.check_call([sys.executable,str(ROOT/"scripts/prepare_menu_wildlife.py"),
+                       str(DEST/"menu")])
+print("PASS: continuous live scene + moving source-photo wildlife + 16 actor PNGs; NO MP4.")
 print("The sacred logo, the original poster and the human-editable text script are untouched.")
