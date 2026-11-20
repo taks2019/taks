@@ -1,0 +1,67 @@
+name: TAKS World 0.15 PNG Cave Review - Android build shell
+on:
+  push:
+    branches: [codex/taks-world-png-cave-preview-2026-11-20]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-android-png-review-shell:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Download original CC0 3D gameplay resources
+        run: |
+          python -m pip install --disable-pip-version-check 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2'
+          python scripts/import_cc0_rocks.py
+          python scripts/import_cc0_foliage.py
+          python scripts/import_cc0_rigged_human.py
+      - name: Verify native engine and progression
+        run: |
+          cmake -S engine -B build-native -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-native --parallel 2
+          ctest --test-dir build-native --output-on-failure
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Compile separate Android preview APK
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Check current assets and installable ARM64 game
+        run: |
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          p=Path('app/build/outputs/apk/debug/app-debug.apk')
+          assert p.is_file() and p.stat().st_size>8000000
+          with zipfile.ZipFile(p) as z:
+              n=set(z.namelist())
+              assert 'lib/arm64-v8a/libtaks_engine.so' in n
+              assert 'classes.dex' in n
+          print('Android shell ready to bundle review-only 8 PNG source images')
+          PY
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
+      - name: Copy Android signing and alignment tools for local, disposable preview signing
+        run: |
+          mkdir -p delivery/signer
+          cp app/build/outputs/apk/debug/app-debug.apk delivery/TAKS_WORLD_PNG_PREVIEW_SHELL.apk
+          cp "$ANDROID_HOME/build-tools/35.0.0/lib/apksigner.jar" delivery/signer/apksigner.jar
+          cp "$ANDROID_HOME/build-tools/35.0.0/zipalign" delivery/signer/zipalign
+          test -s delivery/signer/apksigner.jar
+          test -s delivery/signer/zipalign
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS_World_PNG_Android_Base_And_Signing_Tools
+          path: delivery/
+          if-no-files-found: error
+          retention-days: 7
