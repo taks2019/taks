@@ -19,6 +19,22 @@ public final class MenuClimate {
         return new MenuClimate((raw[0]%24f+24f)%24f,raw[1],raw[2],raw[3],
                                raw[4],raw[5],raw[6],raw[7]>.5f);
     }
+    // In-between weather snapshots are never allowed to snap a rendered scene.
+    // The real native world remains the authority; this only interpolates UI.
+    public static MenuClimate blend(MenuClimate from,MenuClimate to,float amount){
+        if(to==null)return from;
+        if(from==null)return to;
+        float t=clamp(amount);
+        float delta=(to.hour-from.hour+36f)%24f-12f;
+        float hour=(from.hour+delta*t+24f)%24f;
+        return new MenuClimate(hour,from.rain+(to.rain-from.rain)*t,
+                from.soilWater+(to.soilWater-from.soilWater)*t,
+                from.wind+(to.wind-from.wind)*t,
+                from.windX+(to.windX-from.windX)*t,
+                from.windZ+(to.windZ-from.windZ)*t,
+                from.waterLevel+(to.waterLevel-from.waterLevel)*t,
+                to.fern||from.fern);
+    }
     public float waterMotion(){return clamp(.10f+wind*.65f+rain*.45f) * (.35f+.65f*waterLevel);}
     public float vegetationMotion(){return clamp(wind)*.94f;}
     public float wetStoneDarkening(){return clamp(soilWater*.75f+rain*.23f);}

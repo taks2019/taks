@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.RadialGradient;
@@ -28,8 +29,9 @@ public final class LivingWonderwerkOverlay extends View {
     private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
     private final Layer water,fern,grass,cloud,treeCanopy,cliffVines;
     private MenuClimate climate;
+    private MenuClimate smoothClimate;
     private boolean playing=true;
-    private long begunNanos=SystemClock.elapsedRealtimeNanos();
+    private long lastFrameNanos=0;
     private float fernDegrees=9.3f,waterVisibility=1.f;
 
     /** Transparent pre-masked cropped pixels, NOT the original fixed photo. */
@@ -155,11 +157,17 @@ public final class LivingWonderwerkOverlay extends View {
         waterVisibility=json.decimal("environment","water_ripple_visibility",1f);
     }
     public void setClimate(MenuClimate next){
+        if(next==null)return;
         climate=next;
+        if(smoothClimate==null)smoothClimate=next;
         if(playing)postInvalidateOnAnimation();
     }
-    public void resume(){playing=true;begunNanos=SystemClock.elapsedRealtimeNanos();postInvalidateOnAnimation();}
-    public void pause(){playing=false;}
+    public void resume(){
+        playing=true;
+        lastFrameNanos=SystemClock.elapsedRealtimeNanos();
+        postInvalidateOnAnimation();
+    }
+    public void pause(){playing=false;lastFrameNanos=0;}
     private void strips(Canvas c,Layer layer,double t,float amount,float phase,
                         float horizontalSpeed,boolean rooted,float alpha){
         if(!layer.exists()||amount<=.001f)return;
@@ -217,56 +225,109 @@ public final class LivingWonderwerkOverlay extends View {
         if(!water.exists())return;
         // Every rendered pixel in this layer was already selected as WATER by
         // the authoring mask; moving it NEVER moves rock/shore pixels.
-        strips(canvas,water,t,1.0f+wave*4.0f,1.3f,.82f,false,.60f+.30f*wave);
+        strips(canvas,water,t,2.1f+wave*6.0f,1.3f,.82f,false,.73f+.22f*wave);
+        // Sunlit glints follow the stream and fade at both ends of each pass,
+        // so the phase wraps without ever popping into view.
+        Paint glint=new Paint(Paint.ANTI_ALIAS_FLAG);
+        glint.setColor(0xFFF9E8BB);
+        glint.setStrokeCap(Paint.Cap.ROUND);
+        for(int i=0;i<19;++i){
+            double phase=(t*(.012+.001*(i%4))+(i*.61803398875))%1.0;
+            float x=56f+(float)phase*540f;
+            float y=590f+(i*33.1f)%161f+(float)Math.sin(t*.6+i)*4f;
+            float fade=(float)Math.pow(Math.sin(Math.PI*phase),2);
+            glint.setAlpha((int)(170*fade*(.4+.6*wave)));
+            glint.setStrokeWidth(.9f+(i%3)*.45f);
+            canvas.drawLine(x,y,x+4f+(i%3)*3f,y-1f,glint);
+        }
     }
     private void drawFoliage(Canvas canvas,double t,MenuClimate w){
-        float gust=w.vegetationMotion();
-        if(gust<.003f)return; // no invented wind in still weather
-        float sign=w.windX<0?-1f:1f;
-        // 9.3° visually translates to an approx 2-9px flexible tip shift.
-        float amplitude=Math.min(12f,fernDegrees)*gust*sign;
-        strips(canvas,grass,t,amplitude*.62f,1.19f,1.24f,true,.86f);
-        strips(canvas,fern,t,amplitude,2.42f,1.12f,true,.92f);
-        // Independent overlapping canopy movements, distinct from the ferns.
-        strips(canvas,treeCanopy,t,Math.max(1.5f,amplitude*.55f),.36f,
-               .97f,false,.88f);
-        swayHanging(canvas,cliffVines,t,Math.abs(amplitude)*.75f);
+        // Even on a calm day the leaves experience subtle local turbulence,
+        // while gust strength still comes from the real simulated wind.
+        float gust=.20f+.80f*w.vegetationMotion();
+        float sign=w.windX<-.1f?-1f:1f;
+        float slowGust=.87f+.13f*(float)Math.sin(t*.22+1.7);
+        float amplitude=Math.min(22f,Math.max(14f,fernDegrees*1.60f))*gust*slowGust*sign;
+        strips(canvas,grass,t,amplitude*.59f,1.19f,.82f,true,.84f);
+        strips(canvas,fern,t,amplitude,2.42f,.63f,true,.98f);
+        // Tree and cliff plant groups are animated at different frequencies.
+        strips(canvas,treeCanopy,t,Math.max(3.1f,Math.abs(amplitude)*.55f),.36f,
+               .43f,false,.90f);
+        swayHanging(canvas,cliffVines,t,Math.max(2.6f,Math.abs(amplitude)*.87f));
     }
     private void drawSunlight(Canvas canvas,double t,MenuClimate w){
         // Very subtle changing daylight only on the sunlit LEFT landscape.
         // The artist's logo, stone buttons and right-side cave remain untouched.
         if(w.daylight()<.12f)return;
         final float light=w.daylight();
-        final float drift=(float)Math.sin(t*.23)*33f;
+        // One continuous cloud-shadow oscillator: no random frame changes,
+        // no switching videos, no discontinuities at the bright sun.
+        final float cloudCover=.5f+.5f*(float)Math.sin(t*.082+1.2);
+        final float sunlight=light*(.28f+.72f*(1f-cloudCover));
         Paint glow=new Paint(Paint.ANTI_ALIAS_FLAG);
-        float x=286f+drift,y=225f+(float)Math.cos(t*.19)*16f;
-        glow.setShader(new RadialGradient(x,y,272f,
-            new int[]{0x11FFF0C6,0x08FFF0C6,0x00FFF0C6},
-            new float[]{0f,.45f,1f},Shader.TileMode.CLAMP));
-        glow.setAlpha(Math.round(190f*light));
+        float x=459f+(float)Math.sin(t*.045)*17f;
+        float y=178f+(float)Math.sin(t*.027+.4)*8f;
+        glow.setShader(new RadialGradient(x,y,375f,
+            new int[]{0x30FFF3D2,0x12FFE7B5,0x00FFE7B5},
+            new float[]{0f,.43f,1f},Shader.TileMode.CLAMP));
+        glow.setAlpha(Math.round(220f*sunlight));
         canvas.save();
-        canvas.clipRect(0,110,650,540);
-        canvas.drawRect(0,110,650,540,glow);
+        canvas.clipRect(0,60,650,555);
+        canvas.drawRect(0,60,650,555,glow);
         canvas.restore();
     }
     private void drawClouds(Canvas canvas,double t,MenuClimate w){
-        float drift=Math.max(0f,w.wind*.68f);
-        if(drift<.003f||!cloud.exists())return;
-        strips(canvas,cloud,t,drift*5.5f,.77f,.26f,false,.27f);
+        if(!cloud.exists())return;
+        // The whole cloud bank drifts gently rather than jumping between
+        // screenshots; the sun/cloud occlusion follows its own slow cycle.
+        float drift=.24f+w.wind*.76f;
+        strips(canvas,cloud,t,drift*11.5f,.77f,.092f,false,.43f);
+    }
+    private void drawBirds(Canvas canvas,double t,MenuClimate weather){
+        // Distant aerial silhouettes only: the main five human characters
+        // remain the real native GLES3 skinned models in the gameplay world.
+        Paint wings=new Paint(Paint.ANTI_ALIAS_FLAG);
+        wings.setStyle(Paint.Style.STROKE);
+        wings.setStrokeWidth(2.0f);
+        wings.setStrokeCap(Paint.Cap.ROUND);
+        wings.setColor(0xFF493826);
+        Path flight=new Path();
+        for(int i=0;i<3;++i){
+            final double phase=(t*(.016+.003*i)+i*.31)%1.0;
+            final float x=54f+(float)phase*560f;
+            final float y=248f+i*17f+(float)Math.sin(t*.13+i*2)*11f;
+            final float opacity=(float)Math.pow(Math.sin(Math.PI*phase),2);
+            wings.setAlpha((int)(170f*opacity*weather.daylight()));
+            if(wings.getAlpha()<3)continue;
+            final float bend=(float)Math.sin(t*(4.2+i*.4)+i*2.1)*4.5f;
+            final float size=7f+i*1.6f;
+            flight.reset();
+            flight.moveTo(x-size,y-1f+bend);
+            flight.quadTo(x-size*.45f,y-2f-bend*.55f,x,y);
+            flight.quadTo(x+size*.45f,y-2f-bend*.55f,x+size,y-1f+bend);
+            canvas.drawPath(flight,wings);
+        }
     }
     @Override protected void onDraw(Canvas canvas){
         super.onDraw(canvas);
         if(!playing||climate==null||getWidth()<=0||getHeight()<=0)return;
+        final long now=SystemClock.elapsedRealtimeNanos();
+        final float dt=lastFrameNanos==0?.033f:
+                         Math.max(0f,Math.min(.2f,(now-lastFrameNanos)*1.e-9f));
+        lastFrameNanos=now;
+        final float blend=(float)(1.0-Math.exp(-dt/2.4));
+        smoothClimate=MenuClimate.blend(smoothClimate,climate,blend);
+        final MenuClimate weather=smoothClimate;
         canvas.save();
         canvas.scale(getWidth()/(float)WIDTH,getHeight()/(float)HEIGHT);
-        double t=(SystemClock.elapsedRealtimeNanos()-begunNanos)*1e-9;
-        // No rain streaks or rain video. The menu uses the accepted fair-weather
-        // scene; water/wind evolve according to actual native simulation values.
-        drawClouds(canvas,t,climate);
-        drawStream(canvas,t,climate.waterMotion()*waterVisibility);
-        drawFoliage(canvas,t,climate);
-        drawSunlight(canvas,t,climate);
-        drawDust(canvas,t,climate);
+        // Absolute monotonic time has no 8s seam and survives pause/resume.
+        double t=now*1e-9;
+        drawClouds(canvas,t,weather);
+        drawStream(canvas,t,weather.waterMotion()*waterVisibility);
+        drawFoliage(canvas,t,weather);
+        drawSunlight(canvas,t,weather);
+        drawBirds(canvas,t,weather);
+        drawDust(canvas,t,weather);
         canvas.restore();
         if(isShown())postInvalidateDelayed(33); // render only while visible
     }
