@@ -164,6 +164,30 @@ assert find(nodes,"Új Játék")
 assert find(nodes,"Készítő")
 assert find(nodes,"Kilépés")
 picture("01-android-fomenu-eredeti-logo")
+# Visible motion acceptance: redraw calls alone are not enough. Pixel
+# differences must exist in actual screenshots of water, vegetation and sky.
+# This makes a fully static menu FAIL, instead of claiming it is animated.
+time.sleep(3.5)
+picture("01a-android-fomenu-3mp-kesobb")
+from PIL import Image, ImageChops
+first=Image.open(ROOT/"01-android-fomenu-eredeti-logo.png").convert("RGB")
+later=Image.open(ROOT/"01a-android-fomenu-3mp-kesobb.png").convert("RGB")
+assert first.size==later.size, "Screen resolution changed during a static menu test"
+fw,fh=first.size
+zones={
+    "víz":(.02,.71,.40,.98),
+    "páfrány":(.70,.54,.98,.98),
+    "ég és lomb":(.04,.08,.41,.52),
+}
+for name,(x1,y1,x2,y2) in zones.items():
+    zone=(int(fw*x1),int(fh*y1),int(fw*x2),int(fh*y2))
+    diff=ImageChops.difference(first.crop(zone),later.crop(zone)).convert("L")
+    changed=sum(1 for value in diff.getdata() if value>=9)
+    print("VISIBLE ANDROID ANIMATION",name,changed,"changed pixels",flush=True)
+    assert changed>=50, f"The {name} is visually static on Android"
+logs=adb("logcat","-d","-s","TAKS_MENU_ANIM:I",check=False)
+assert b"Rendered moving nature frame 60" in logs, \
+    "Live Android menu renderer did not draw 60 distinct frames"
 # Record ACTUAL rendered Android frames. This is not the old baked MP4;
 # it proves whether live masks, water, birds and continuous sun animate.
 try:
