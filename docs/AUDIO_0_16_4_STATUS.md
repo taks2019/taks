@@ -20,3 +20,5 @@ The approved archive/menu hashes and repository logo WebP bytes are verified. Th
 
 ## Limits
 Approximate enclosure, fixed-axis stereo, single nearest-combined animal sound texture, no ray-based occlusion/convolution, no NPC footstep emitters. Audio is a functional synthetic first implementation; listening and physical Android-device acceptance are still required. Debug signing cannot guarantee upgrade compatibility with a separately signed earlier APK.
+
+Android UI tests match Hungarian dialog labels case-insensitively, including transformed uppercase AlertDialog labels. Actual controls remain required. Audio lifecycle tests run before later UI flows.

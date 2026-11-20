@@ -44,7 +44,7 @@ def dump(name):
 def find(nodes,text,contains=False):
     for n in nodes:
         label=n.get("text","")
-        if label==text or (contains and text in label):
+        if label.casefold()==text.casefold() or (contains and text.casefold() in label.casefold()):
             return n
     return None
 
@@ -135,6 +135,8 @@ assert human_loaded in runtime_log, \
     "The Android GPU thread did not load the rigged character asset within 48 seconds"
 assert b"Rigged skinned humanoid asset unavailable" not in runtime_log, \
     "Android could not decode the skinned humanoid model"
+
+subprocess.run(["python3","scripts/test_android_audio.py"],check=True)
 
 # A fresh Android emulator shows a one-time OS-level full-screen prompt.
 # This prompt is NOT the TAKS interface; dismiss before screenshots/tests.
@@ -235,7 +237,7 @@ picture("04-android-beallitasok-elo-skin")
 click_after_scroll(nodes,"Feliratok és beállítások szerkesztése (JSON)","settings")
 time.sleep(1)
 edited=dump("editable-menu-json")
-assert find(edited,"Mentés"),"The JSON text editor has no real Save button"
+assert find(edited,"Mentés"),"The JSON text editor has no real Save button: "+str(edited)
 assert find(edited,"Mégse"),"The JSON editor cannot be dismissed"
 picture("04b-android-valodi-json-szovegszerkeszto")
 click(edited,"Mégse")
