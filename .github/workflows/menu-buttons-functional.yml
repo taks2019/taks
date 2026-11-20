@@ -1,0 +1,83 @@
+name: TAKS World - minden gomb funkcionális
+on:
+  push:
+    branches:
+      - codex/taks-world-elfogadott-menu-mp4-2026-11-19
+    paths:
+      - 'app/src/main/java/hu/taks/world/MainMenuActionRouter.java'
+      - 'app/src/main/java/hu/taks/world/AcceptedWonderwerkMenu.java'
+      - 'app/src/main/java/hu/taks/world/MainActivity.java'
+      - 'tests/java/**'
+      - 'scripts/capture_android_ui.py'
+      - '.github/workflows/menu-buttons-functional.yml'
+  pull_request:
+    paths:
+      - 'app/src/main/java/hu/taks/world/MainMenuActionRouter.java'
+      - 'app/src/main/java/hu/taks/world/AcceptedWonderwerkMenu.java'
+      - 'app/src/main/java/hu/taks/world/MainActivity.java'
+      - 'tests/java/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  four-real-actions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Compile and execute all four actual menu callbacks
+        run: |
+          mkdir -p build-menu-test
+          javac -encoding UTF-8 -d build-menu-test \
+            app/src/main/java/hu/taks/world/MainMenuActionRouter.java \
+            app/src/main/java/hu/taks/world/MenuStoneTouch.java \
+            tests/java/hu/taks/world/MainMenuActionRouterTest.java \
+            tests/java/hu/taks/world/MenuStoneTouchTest.java
+          java -cp build-menu-test hu.taks.world.MainMenuActionRouterTest
+          java -cp build-menu-test hu.taks.world.MenuStoneTouchTest
+      - name: Prevent graphical placeholder buttons and broken wiring
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          menu=Path('app/src/main/java/hu/taks/world/AcceptedWonderwerkMenu.java').read_text()
+          activity=Path('app/src/main/java/hu/taks/world/MainActivity.java').read_text()
+          geometry=Path('app/src/main/java/hu/taks/world/MenuStoneTouch.java').read_text()
+          for key in ('new_game','settings','creator','exit'):
+              assert f'"{key}"' in geometry, key
+          assert 'addButton(host,MenuStoneTouch.COMMANDS[i]' in menu
+          assert 'captions.setClickable(true)' in menu
+          assert 'hotspots.get(selected).control.performClick()' in menu
+          assert 'onTouchEvent(MotionEvent event)' in menu
+          assert 'actions.run(key)' in menu
+          assert 'button.setText(titleFor(key))' in menu
+          assert 'c.drawText(title,CAPTION_X,CAPTION_Y[i],type)' in menu, "Labels must be visibly painted on top"
+          assert 'CAPTION_MAX_WIDTH=176f' in menu, "Text cannot protrude beyond stone edges"
+          assert 'c.clipRect(CAPTION_X-94f' in menu, "Captions must be clipped inside each stone"
+          assert 'CAPTION_TEXT_SIZE=28f' in menu, "Oversized lettering is forbidden"
+          overlay=Path('app/src/main/java/hu/taks/world/LivingWonderwerkOverlay.java').read_text()
+          assert 'new RadialGradient(' not in overlay, "A second sun must never be rendered"
+          assert 'Rendered moving nature frame' in overlay, "Animation must expose draw evidence"
+          overlay=Path('app/src/main/java/hu/taks/world/LivingWonderwerkOverlay.java').read_text()
+          assert 'new PorterDuffXfermode(PorterDuff.Mode.DST_IN)' in overlay
+          assert 'strips(canvas,water' not in overlay, "NEVER shift river rocks with water"
+          assert 'content.addView(captions,new FrameLayout.LayoutParams(-1,-1))' in menu
+          assert 'content.addView(button,new FrameLayout.LayoutParams(1,1))' in menu
+          assert 'setContentDescription(button.getText().toString())' in menu, "Accessible native buttons must remain"
+          assert 'new VideoView' not in menu and 'new TextureView' not in menu
+          assert 'MediaPlayer' not in menu, "No 8-second loop or visible transition can run"
+          assert 'environment=new LivingWonderwerkOverlay(host)' in menu
+          assert 'public void play(){if(!released)environment.resume();}' in menu
+          for callback in ('this::newWorldFromMenu','this::showSettings',
+                           'this::showCredits','this::confirmExit'):
+              assert callback in activity, callback
+          assert 'onNew,onSettings,onCreator,onExit' in menu
+          assert 'new MainMenuActionRouter(onNew,onSettings,onCreator,onExit)' in menu
+          assert 'int cw=Math.max(1,Math.round(DESIGN_W*s));' in menu, "Approved aspect ratio must be preserved"
+          assert 'int ch=Math.max(1,Math.round(DESIGN_H*s));' in menu, "Approved aspect ratio must be preserved"
+          assert 'Math.round(cw*item.x)' in menu and 'Math.round(ch*item.y)' in menu, "Button hotspots must track the art"
+          assert 'menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png' in menu, "Only the approved wide text-free background is allowed"
+          print('PASS all four buttons wired; original aspect ratio and touch positions preserved')
+          PY

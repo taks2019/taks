@@ -1,0 +1,31 @@
+{
+  "schema": "taks-world-approved-scene/1",
+  "approval_date": "2026-11-19",
+  "source_name": "Széljárta ősi szavanna a dolomitbarlangnál.png",
+  "source_sha256": "980ea229cb87bda9f18891681a9227db111a01ec56ad2e5149c6426b21b63aa5",
+  "source_bytes": 3946758,
+  "source_dimensions_px": [
+    1536,
+    1024
+  ],
+  "source_type": "image/png",
+  "approval_status": "elfogadott képi referencia – nem kész natív 3D jelenet",
+  "preservation_rules": {
+    "original_pixels_immutable": true,
+    "whole_cave_rock_preserved": true,
+    "no_replacement_scene_art": true,
+    "ortographic_isometric_visual_direction": true,
+    "original_separate_from_gameplay_layers": true,
+    "foreground_text_over_reference": false
+  },
+  "content": [
+    "teljes dolomitszikla és barlangbejárat",
+    "száraz füves szavanna és akáciafák",
+    "kisebb kő- és fűcsomók",
+    "nyílt vízmedence és vízlefolyás",
+    "őskori menedék és tűzhely",
+    "talajon látható nyomok, kövek és faágak"
+  ],
+  "canonical_word_reference": "TW62.docx – TER_GROUND_001 nyolcnézetes terepatlasz (külön referencia; nem a 2026-11-19-i barlangkép)",
+  "binary_not_committed": "Az eredeti PNG a felhasználó ChatGPT-fájlkönyvtárában és a külön átadott referencia ZIP-ben található; GitHubra még nincs feltöltve."
+}

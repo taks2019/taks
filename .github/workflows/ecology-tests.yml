@@ -1,0 +1,21 @@
+name: TAKS World / e lo okozati okoszisztema
+on:
+  push:
+    branches: [taks-world-ecology-step-2]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ecology-causality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build C++ live world tests
+        run: |
+          cmake -S engine -B build-ecosystem -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-ecosystem --parallel 2
+      - name: Run all deterministic conservation, ecology and migration tests
+        run: ctest --test-dir build-ecosystem --output-on-failure
+      - name: Check Android shares the same persistent ecology class
+        run: |
+          grep -F 'LivingWorld.cpp' app/src/main/cpp/CMakeLists.txt

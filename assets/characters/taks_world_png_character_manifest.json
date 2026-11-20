@@ -1,0 +1,80 @@
+{
+  "schema": "taks-world-2d-character/1",
+  "date": "2026-11-19",
+  "referenceScene": "Széljárta ősi szavanna a dolomitbarlangnál.png",
+  "preserveApprovedScene": true,
+  "characterAsset": "TAKS_CHR_PREHISTORIC_BASE_001",
+  "directions": [
+    0,
+    45,
+    90,
+    135,
+    180,
+    225,
+    270,
+    315
+  ],
+  "view": "orthographic-isometric",
+  "format": "PNG RGBA 448x448 per prototype idle view",
+  "origin": "foot anchor 224,436 (prototype); measured registration pending",
+  "actions": [
+    "idle",
+    "walk",
+    "run",
+    "crouch",
+    "prone",
+    "crawl",
+    "climb",
+    "jump",
+    "gather",
+    "carry",
+    "build",
+    "swim",
+    "rest"
+  ],
+  "garmentSlots": [
+    "torso",
+    "legs",
+    "feet",
+    "head",
+    "belt",
+    "back",
+    "hands",
+    "underwear_top",
+    "underwear_bottom",
+    "bra",
+    "socks",
+    "outerwear",
+    "jewelry",
+    "intimate_cover"
+  ],
+  "firstAtlasStatus": "8-idle directional PNGs generated, exported separately in conversation ZIP, not tracked in repository",
+  "skinningStatus": "2D skeletal pose and PNG limb segmentation not yet authored",
+  "androidRenderingStatus": "pending integration",
+  "provenance": "newly generated character preview in conversation; accepted Wonderwerk scene remains unchanged",
+  "bodyPlan": {
+    "baseBody": "independent anatomical base sprite atlas, per adult body profile and angle; not yet authored",
+    "independentUnderlayers": true,
+    "perViewOcclusionMasksRequired": true,
+    "anatomyReferenceTexturesStatus": "not generated",
+    "clothesDoNotMutateBodyShape": "per-garment contours and body profile fit need separate atlas variants",
+    "rig": "assets/characters/prehistoric_skeleton_2d_spec.json"
+  },
+  "adultPresentation": {
+    "characterAgeUnknownByDefault": true,
+    "adultMinimumYears": 18,
+    "matureContentOptInRequired": true,
+    "androidAgeGateImplemented": false,
+    "explicitAnatomyRendererImplemented": false,
+    "ageRatingCertified": false,
+    "youngerCharactersNotEligibleForMatureDepiction": true
+  },
+  "causalWardrobe": {
+    "itemIdRequired": true,
+    "rainIncreasesGarmentWetness": true,
+    "mudIncreasesGarmentSoiling": true,
+    "garmentWeightAffectsMovement": true,
+    "insulationAffectsHeatStress": true,
+    "manufacturingAndShopSupplyChains": "planned, not implemented"
+  }
+}

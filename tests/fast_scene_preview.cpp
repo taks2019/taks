@@ -8,9 +8,11 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 #include <chrono>
 
@@ -41,11 +43,11 @@ std::uint64_t pixelSum(const std::vector<std::uint8_t>& p) {
 }
 
 void loadRealModel(int id,const std::string& name){
-    const std::string base="app/src/main/assets/models/"+name;
+    const std::string base="app/src/main/assets/"+name;
     std::ifstream stream(base+".tkm",std::ios::binary);
     check(bool(stream),"missing real 3D model: "+name);
     std::vector<std::uint8_t> data((std::istreambuf_iterator<char>(stream)),std::istreambuf_iterator<char>());
-    check(data.size()>50000,"the model must contain genuine detailed 3D triangles, not primitives: "+name);
+    check(data.size()>(id==5?8u:50000u),"the model must contain genuine detailed 3D triangles, not primitives: "+name);
     png_image picture{};
     picture.version=PNG_IMAGE_VERSION;
     check(png_image_begin_read_from_file(&picture,(base+".png").c_str())!=0,
@@ -63,12 +65,38 @@ void loadRealModel(int id,const std::string& name){
     check(taks::RealModels::upload(id,data.data(),data.size(),argb.data(),
                                    int(picture.width),int(picture.height)),
           std::string("real model import failed: ")+taks::RealModels::errorMessage());
-    std::cout<<"Loaded actual CC0 textured scanned mesh: "<<name
+    std::cout<<"Loaded textured mesh: "<<name
              <<" (texture "<<picture.width<<"x"<<picture.height<<")\n";
     png_image_free(&picture);
 }
+void loadRiggedHuman(){
+    const std::string base="app/src/main/assets/models/makehuman_rigged";
+    std::ifstream stream(base+".tks",std::ios::binary);
+    check(bool(stream),"missing actual rigged 3D humanoid");
+    std::vector<std::uint8_t> data((std::istreambuf_iterator<char>(stream)),std::istreambuf_iterator<char>());
+    check(data.size()>1'000'000&&std::memcmp(data.data(),"TKS1",4)==0,
+          "human asset must retain source skin weights and skeleton data");
+    std::uint32_t vertices=0,joints=0,clips=0;
+    std::memcpy(&vertices,data.data()+4,4);std::memcpy(&joints,data.data()+8,4);std::memcpy(&clips,data.data()+12,4);
+    check(vertices>30000&&joints==53&&clips==7,"humanoid must contain the source 53-bone rig and seven clips");
+    png_image picture{};picture.version=PNG_IMAGE_VERSION;
+    check(png_image_begin_read_from_file(&picture,(base+".png").c_str())!=0,
+          "missing skinned humanoid texture atlas");
+    picture.format=PNG_FORMAT_RGBA;std::vector<std::uint8_t> rgba(PNG_IMAGE_SIZE(picture));
+    check(png_image_finish_read(&picture,nullptr,rgba.data(),0,nullptr)!=0,
+          "could not decode skinned humanoid texture atlas");
+    std::vector<std::uint32_t> argb(std::size_t(picture.width)*picture.height);
+    for(std::size_t i=0;i<argb.size();++i)
+        argb[i]=std::uint32_t(rgba[4*i+3])<<24|std::uint32_t(rgba[4*i])<<16|
+                std::uint32_t(rgba[4*i+1])<<8|rgba[4*i+2];
+    check(taks::RealModels::upload(6,data.data(),data.size(),argb.data(),int(picture.width),int(picture.height)),
+          std::string("GPU import of skinned humanoid failed: ")+taks::RealModels::errorMessage());
+    check(taks::RealModels::hasRealHuman(),"native model must retain a valid skeletal rig");
+    std::cout<<"Loaded skinned humanoid: "<<vertices<<" vertices, "<<joints<<" bones, "<<clips<<" clips\n";
+    png_image_free(&picture);
+}
 void loadActualTerrainPhoto(int slot,const std::string& slug){
-    const std::string filename="app/src/main/assets/models/"+slug+".png";
+    const std::string filename="app/src/main/assets/"+slug+".png";
     png_image picture{};picture.version=PNG_IMAGE_VERSION;
     check(png_image_begin_read_from_file(&picture,filename.c_str())!=0,
           "missing actual CC0 terrain photo: "+filename);
@@ -84,7 +112,7 @@ void loadActualTerrainPhoto(int slot,const std::string& slug){
     }
     check(taks::FastScene::uploadTerrainTexture(slot,argb.data(),int(picture.width),int(picture.height)),
           "real ground or cliff photograph GPU upload failed");
-    std::cout<<"Verified photographic CC0 terrain material: "<<slug
+    std::cout<<"Verified terrain material: "<<slug
              <<" ("<<picture.width<<"x"<<picture.height<<")\n";
     png_image_free(&picture);
 }
@@ -111,16 +139,21 @@ int main(){
     check(context!=EGL_NO_CONTEXT,"eglCreateContext");
     check(eglMakeCurrent(display,surface,surface,context)==EGL_TRUE,"eglMakeCurrent");
     check(taks::FastScene::init(),taks::FastScene::lastError());
-    loadRealModel(0,"rock_07");
-    loadRealModel(1,"namaqualand_boulders_01");
-    loadRealModel(2,"namaqualand_cliff_01");
-    loadActualTerrainPhoto(0,"ground_sandy_gravel");
-    loadActualTerrainPhoto(1,"wall_cliff_side");
+    loadRealModel(0,"models/rock_07");
+    loadRealModel(1,"models/namaqualand_boulders_01");
+    loadRealModel(2,"models/namaqualand_cliff_01");
+    loadRealModel(3,"models/grass_bermuda_01");
+    loadRealModel(4,"models/fern_02");
+    loadRealModel(5,"wonderwerk/akac");
+    loadActualTerrainPhoto(0,"wonderwerk/talaj");
+    loadActualTerrainPhoto(1,"wonderwerk/dolomit");
     check(taks::RealModels::complete(),"all three photo-scanned models must be uploaded to GPU");
 
     taks::FastFrame frame;
-    frame.playerX=0.f;frame.playerZ=-5.2f;frame.yaw=.785398f;frame.pitch=.615480f;
-    frame.zoom=14.f;frame.clock=11.0f;frame.rain=.15f;
+    frame.playerX=0.f;frame.playerZ=-5.2f;frame.yaw=-.785398f;frame.pitch=.615480f;
+    frame.zoom=19.f;frame.clock=11.0f;frame.rain=0.f;
+    frame.waters[0]=-4.7f;frame.waters[1]=-5.8f;frame.waters[2]=1.4f;frame.waters[3]=.76f;
+    frame.hearth=1.f;frame.fire=1.f;
     const float nodes[48]={
         -2.f,-5.5f,0,3,3.f,-4.f,0,3,-4.f,-1.2f,0,4,5.f,.5f,0,4,
         1.f,-5.4f,1,3,3.f,-.8f,1,3,-2.f,1.5f,1,2,
@@ -133,6 +166,17 @@ int main(){
         4.4f,-2.0f,2.f,0.f,-1.8f,-2.4f,3.f,0.f
     };
     std::copy(npc,npc+16,frame.npcs);
+    const float grass[16]={
+       -2.5f,-4.6f,.62f,.95f,2.25f,-4.2f,.57f,.90f,
+       -3.8f,.9f,.45f,.94f,4.4f,.5f,.53f,.91f
+    };
+    const float trees[12]={
+       -6.4f,-1.3f,2.0f,1.0f,5.7f,3.1f,1.6f,1.0f,
+       -5.8f,5.7f,.7f,1.0f
+    };
+    std::copy(grass,grass+16,frame.grass);
+    std::copy(trees,trees+12,frame.trees);
+    frame.verifiedFerns=false; // never show historically unverified plants
     for(int i=0;i<3;++i){frame.sites[4*i+2]=-1.f;frame.sites[4*i+3]=1.f;}
     frame.sites[0]=3.1f;frame.sites[1]=-1.55f;frame.sites[2]=3.f;
     frame.sites[4]=-3.1f;frame.sites[5]=-1.3f;frame.sites[6]=1.f;
@@ -151,23 +195,77 @@ int main(){
         check(nonBlank>W*H/20,"frame appears blank");
         return hash;
     };
+    // Keep the camera, clock and animal state fixed. Before the rig loads,
+    // no other mesh can animate between these two frames.
+    const auto initialFrame=frame;
+    frame.playerX=-2.5f;frame.playerZ=-4.6f;frame.zoom=7.f;
+    frame.rain=0;frame.fire=0;frame.animationTime=2.4f;frame.windStrength=0;
+    const auto calmFoliage=render("15-szelcsendes-noveny.ppm");
+    frame.windStrength=.78f;
+    const auto windyFoliage=render("16-szelmozgatott-noveny.ppm");
+    check(calmFoliage!=windyFoliage,"wind must deform visible rooted foliage");
+    frame.rain=.86f;
+    frame.moisture=.72f;
+    frame.mud=.68f;
+    const auto storm=render("17-zivatar-es-sar.ppm");
+    check(storm!=windyFoliage,"the rainy, muddy season must change the rendered world");
+    frame.rain=0;
+    frame.mud=0;
+    frame.moisture=0;
+    frame=initialFrame;
+    loadRiggedHuman();
     const auto iso=render("01-izometrikus-35fok.ppm");
+    check(taks::RealModels::lastHumanDrawCount()==5,
+          "The native GPU frame must draw exactly 1 real 3D player and 4 real 3D NPCs");
+    std::cout<<"GLES3 verified: 1 player + 4 separately animated 3D companions"<<std::endl;
     frame.yaw=2.3f;
     const auto rotated=render("02-forgatott-kamera.ppm");
     check(rotated!=iso,"yaw did not change the actual image");
-    frame.pitch=1.25f;frame.yaw=.785398f;
+    frame.pitch=1.25f;frame.yaw=-.785398f;
     const auto overhead=render("03-felulnezet.ppm");
     check(overhead!=iso && overhead!=rotated,"pitch did not change the actual image");
     frame.pitch=.45f;
     const auto low=render("04-alacsony-3d-kamera.ppm");
     check(low!=overhead,"low 3D camera angle did not change the actual image");
     frame.pitch=.615480f;
-    frame.yaw=.785398f;
+    frame.yaw=-.785398f;
     const auto scans=render("05-valodi-cc0-fotoalapu-kovek.ppm");
     check(scans!=0,"photogrammetry image rendered no pixels");
     for(int i=0;i<12;++i)if(int(frame.nodes[4*i+2]+.5f)==1)frame.nodes[4*i+3]=0;
     const auto mined=render("06-kitermelt-kovek.ppm");
     check(mined!=scans,"collecting rocks did not change photographic 3D mesh rendering");
+    // Real saved ecological biomass must alter actual GPU pixels.
+    frame.playerX=-5.2f;frame.playerZ=-1.7f;frame.zoom=8.2f;
+    frame.yaw=-.785398f;frame.pitch=.615480f;
+    const auto aliveGrass=render("07-valodi-elo-fu.ppm");
+    for(int i=0;i<4;++i)frame.grass[i*5+4]=1.f;
+    const auto trampledGrass=render("08-esoben-letaposott-fu.ppm");
+    check(aliveGrass!=trampledGrass,
+          "trampling must visibly thin and flatten the rendered grass patches");
+    for(int i=0;i<4;++i)frame.grass[i*5+2]=0.f;
+    const auto bareGround=render("09-legelt-fu-nelkul.ppm");
+    check(aliveGrass!=bareGround,
+          "real grass mesh must disappear after biomass was eaten");
+    // Fern stays hidden unless the ecology explicitly approves this plant.
+    frame.grass[2]=.62f;
+    frame.verifiedFerns=true;
+    const auto fernKnown=render("10-hitelesitett-pafrany.ppm");
+    frame.verifiedFerns=false;
+    const auto fernUnknown=render("11-nincs-megismert-pafrany.ppm");
+    check(fernKnown!=fernUnknown,
+          "fern geometry must be gated by world botanical approval");
+    // Camera close-up confirms the actual MakeHuman mesh is on the same GPU path.
+    frame.playerX=0.f;frame.playerZ=-5.2f;frame.zoom=6.5f;
+    frame.pitch=.48f;frame.yaw=-.785398f;
+    const auto idlePose=render("12-skinned-embermodellek-idle.ppm");
+    frame.playerMoving=true;
+    std::this_thread::sleep_for(std::chrono::milliseconds(320));
+    const auto walkPose=render("13-skinned-embermodellek-seta.ppm");
+    check(idlePose!=walkPose,"the 53-bone walk animation must alter actual GLES pixels");
+    frame.playerRunning=true;
+    std::this_thread::sleep_for(std::chrono::milliseconds(320));
+    const auto runPose=render("14-skinned-embermodellek-futas.ppm");
+    check(walkPose!=runPose,"walk-to-run animation transition must alter actual GLES pixels");
     taks::FastScene::shutdown();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroyContext(display,context);eglDestroySurface(display,surface);

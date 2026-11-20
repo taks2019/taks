@@ -1,0 +1,282 @@
+name: TAKS World 0.16.5 - native resolution, no gameplay logo
+on:
+  push:
+    branches: ['codex/taks-world-elfogadott-menu-mp4-2026-11-19']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  assets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install asset import tools (no Blender, no Canvas)
+        run: python -m pip install 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2' 'opencv-python-headless>=4.10,<5'
+      - name: Download real CC0 geology meshes and PBR photo surfaces
+        run: python scripts/import_cc0_rocks.py
+      - name: Download and bake original CC0 grass and fern
+        run: python scripts/import_cc0_foliage.py
+      - name: Download original skinned CC0 humanoid, hide-look clothing, and 7 source clips
+        run: python scripts/import_cc0_rigged_human.py
+      - name: Verify no missing offline assets
+        run: |
+          python - <<'PY'
+          import struct,zipfile,json
+          from pathlib import Path
+          base=Path('app/src/main/assets/models')
+          meshes=('rock_07','namaqualand_boulders_01','namaqualand_cliff_01',
+                  'grass_bermuda_01','fern_02')
+          for m in meshes:
+              data=(base/(m+'.tkm')).read_bytes()
+              assert data[:4]==b'TKM1'
+              count=struct.unpack('<I',data[4:8])[0]
+              assert count>=300 and count%3==0 and len(data)==8+count*32
+              assert (base/(m+'.png')).stat().st_size>10_000
+              print(m,'real triangles',count//3)
+          for png in ('ground_sandy_gravel.png','wall_cliff_side.png'):
+              assert (base/png).stat().st_size>100_000
+          rig=(base/'makehuman_rigged.tks').read_bytes()
+          assert rig[:4]==b'TKS1'
+          magic,vertices,joints,clips=__import__('struct').unpack_from('<4sIII',rig)
+          assert magic==b'TKS1' and vertices>30000 and joints==53 and clips==7
+          assert (base/'makehuman_rigged.png').stat().st_size>100_000
+          source=json.loads((base/'makehuman_rigged_source.json').read_text())
+          assert source['rig']=='53-joint mpfb-game_engine' and len(source['clips'])==7
+          assert source['historical_clothing_authenticity'].startswith('UNVERIFIED')
+          print('Skinned humanoid',vertices,'vertices;',joints,'joints;',clips,'clips')
+          assert json.loads((base/'foliage_manifest.json').read_text())['models']
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-Real-Geology-Flora-Human-Assets
+          path: app/src/main/assets/models/
+          if-no-files-found: error
+          retention-days: 7
+  engine-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build C++ living ecology and persistence
+        run: |
+          cmake -S engine -B build-eco -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-eco --parallel 2
+          ctest --test-dir build-eco --output-on-failure
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Test prehistoric menu and frame-rate-independent camera-relative movement
+        run: |
+          mkdir -p build-java
+          javac -d build-java \
+            app/src/main/java/hu/taks/world/PrehistoricMenuTheme.java \
+            app/src/main/java/hu/taks/world/TouchMovement.java \
+            app/src/main/java/hu/taks/world/LivingUiSkin.java \
+            tests/java/hu/taks/world/PrehistoricMenuThemeTest.java \
+            tests/java/hu/taks/world/TouchMovementTest.java \
+            tests/java/hu/taks/world/LivingUiSkinTest.java
+          java -cp build-java hu.taks.world.PrehistoricMenuThemeTest
+          java -cp build-java hu.taks.world.TouchMovementTest
+          java -cp build-java hu.taks.world.LivingUiSkinTest
+      - name: Test continuous synthesized sound and export reproducible audition
+        run: |
+          javac -encoding UTF-8 -d build-java app/src/main/java/hu/taks/world/ProceduralSoundscape.java tests/java/hu/taks/world/ProceduralSoundscapeTest.java
+          java -cp build-java hu.taks.world.ProceduralSoundscapeTest soundscape.pcm
+          python3 -c "import wave; w=wave.open('soundscape.wav','wb'); w.setparams((2,2,24000,0,'NONE','not compressed')); w.writeframes(open('soundscape.pcm','rb').read()); w.close()"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-procedural-audio-audition
+          path: soundscape.wav
+  real-gpu-screenshots:
+    needs: [assets,engine-tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          name: TAKS-World-Real-Geology-Flora-Human-Assets
+          path: app/src/main/assets/models/
+      - name: Mesa GLES3 and PNG for native GPU screenshot
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libegl-dev libgles-dev libgl1-mesa-dri libpng-dev
+      - name: Compile the SAME GLES3 renderer used by Android
+        run: |
+          mkdir -p build-previews
+          g++ -std=c++17 -O2 -Wall -Wextra -Iapp/src/main/cpp \
+            tests/fast_scene_preview.cpp app/src/main/cpp/FastScene.cpp app/src/main/cpp/RealModels.cpp \
+            -o build-previews/fast_scene_test -lEGL -lGLESv2 -lpng
+      - name: GPU image verification of grazing, fern discovery and anatomical 3D bodies
+        env:
+          EGL_PLATFORM: surfaceless
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          build-previews/fast_scene_test
+          python3 tests/ppm_to_png.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-First-Playable-GPU-Testkepek
+          path: build-previews/*.png
+          if-no-files-found: error
+          retention-days: 14
+  android-apk:
+    needs: [assets,engine-tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install original Wonderwerk scenery and transparent masks, never looping MP4
+        run: |
+          python3 -m pip install --disable-pip-version-check 'Pillow>=10,<13' 'opencv-python-headless>=4.8,<5'
+          python3 scripts/restore_approved_assets_from_git.py
+          python3 scripts/install_approved_android_game_assets.py
+      - name: Verify one seamless live menu and no obsolete movie
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          clip=Path('app/src/main/assets/menu/WONDERWERK_APPROVED_NATURE_NO_RAIN.mp4')
+          assert not clip.exists(), 'Looping MP4 can make visible transitions'
+          src=Path('app/src/main/java/hu/taks/world/AcceptedWonderwerkMenu.java').read_text()
+          assert 'MediaPlayer' not in src and 'TextureView' not in src
+          assert 'LivingWonderwerkOverlay' in src
+          print('PASS: single live scene, no movie and no timed jump.')
+          PY
+      - uses: actions/download-artifact@v4
+        with:
+          name: TAKS-World-Real-Geology-Flora-Human-Assets
+          path: app/src/main/assets/models/
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Verify optimized runtime copy of the approved original logo
+        run: |
+          test -s app/src/main/assets/logo/TAKS_WORLD_LOGO.webp
+          test -s app/src/main/assets/logo/TAKS_WORLD_RUNTIME.webp
+          test -s app/src/main/assets/menu/wonderwerk_main_menu.webp
+          python - <<'PY'
+          import hashlib
+          from pathlib import Path
+          p=Path('app/src/main/assets/logo/TAKS_WORLD_LOGO.webp')
+          b=p.read_bytes()
+          assert hashlib.sha1(b'blob '+str(len(b)).encode()+b'\x00'+b).hexdigest() == 'bc3fa5e3e27a9fa60c749314306dc027a66285d4'
+          print('Logo source verified:',len(b),'bytes')
+          runtime=Path('app/src/main/assets/logo/TAKS_WORLD_RUNTIME.webp').read_bytes()
+          assert hashlib.sha256(runtime).hexdigest() == 'd3a2d6b1c509030066262eb4e91e329d5bca9723a98329be66865858915c7195'
+          assert runtime[:4]==b'RIFF' and runtime[8:12]==b'WEBP'
+          print('Menu-sized original-logo derivative verified:',len(runtime),'bytes')
+          menu=Path('app/src/main/assets/menu/wonderwerk_main_menu.webp').read_bytes()
+          assert menu[:4]==b'RIFF' and menu[8:12]==b'WEBP' and len(menu)>100000
+          print('Wonderwerk main-menu background verified:',len(menu),'bytes')
+          PY
+      - name: Keep the Android test signing key across builds of this branch
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: taks-world-wonderwerk-debug-key-v1
+      - name: Build real native Android APK (not web)
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Verify all real assets are physically embedded in installable APK
+        run: |
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          f=Path('app/build/outputs/apk/debug/app-debug.apk')
+          assert f.stat().st_size>8_000_000, 'APK missing large genuine 3D assets'
+          with zipfile.ZipFile(f) as z:
+              names=set(z.namelist())
+              logo='assets/logo/TAKS_WORLD_RUNTIME.webp'
+              assert logo in names, 'The user-approved original TAKS WORLD emblem is missing'
+              assert z.getinfo(logo).file_size>30000, 'Original logo derivative is unexpectedly tiny'
+              assert z.read(logo)[:4]==b'RIFF', 'Original logo not valid WebP'
+              assert z.read(logo)[8:12]==b'WEBP'
+              print('VERIFIED SIZE-OPTIMIZED ORIGINAL USER LOGO DERIVATIVE inside native Android APK')
+              menu='assets/menu/wonderwerk_main_menu.webp'
+              assert menu in names and z.getinfo(menu).file_size>100000
+              assert z.read(menu)[:4]==b'RIFF' and z.read(menu)[8:12]==b'WEBP'
+              print('VERIFIED PHOTOREAL WONDERWERK MAIN-MENU PLATE inside native Android APK')
+              for m in ('rock_07','namaqualand_boulders_01',
+                        'namaqualand_cliff_01','grass_bermuda_01',
+                        'fern_02'):
+                  for ext in ('tkm','png'):
+                      path='assets/models/'+m+'.'+ext
+                      assert path in names and z.getinfo(path).file_size>10000,path
+              for path in ('assets/models/makehuman_rigged.tks',
+                           'assets/models/makehuman_rigged.png',
+                           'assets/models/makehuman_rigged_source.json'):
+                  assert path in names and z.getinfo(path).file_size>1000,path
+              for path in ('akac.tkm', 'akac.png', 'dolomit.png', 'talaj.png'):
+                  assert z.getinfo('assets/wonderwerk/'+path).file_size>100
+              rig=z.read('assets/models/makehuman_rigged.tks')
+              import struct
+              magic,vertices,joints,clips=struct.unpack_from('<4sIII',rig)
+              assert magic==b'TKS1' and vertices>30000 and joints==53 and clips==7
+              assert 'assets/menu/WONDERWERK_APPROVED_NATURE_NO_RAIN.mp4' not in names
+              print('VERIFIED APK HAS NO EIGHT-SECOND VIDEO.')
+              assert 'assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png' in names
+              for key in ('WATER_MASK','FERN_MASK','GRASS_MASK','CLOUD_MASK'):
+                  assert 'assets/menu/'+key+'.png' in names
+              for pose in ('idle','crouch'):
+                  for direction in ('N','NE','E','SE','S','SW','W','NW'):
+                      suffix='iso' if pose=='idle' else 'p00'
+                      assert 'assets/characters/actor_m01_'+pose+'_'+direction+'_'+suffix+'.png' in names
+              print('LIVE MENU + ALL 16 RGBA ACTORS actually embedded')
+              print('VERIFIED RIGGED 53-BONE HUMANOID AND 7 CLIPS EMBEDDED IN APK')
+              print('TAKS NATIVE ANDROID REAL-3D TEST APK VERIFIED:',f.stat().st_size,'bytes')
+          PY
+      - name: Check the phone package, architecture, version and signature
+        shell: bash
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk TAKS_World_Android_KIPROBALO.apk
+          apk=TAKS_World_Android_KIPROBALO.apk
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          "$tools/apksigner" verify --verbose "$apk"
+          "$tools/aapt" dump badging "$apk" > "$RUNNER_TEMP/taks-package.txt"
+          grep -F "package: name='hu.taks.world.wonderwerk' versionCode='20' versionName='0.16.5-native'" "$RUNNER_TEMP/taks-package.txt"
+          grep -F 'lib/arm64-v8a/libtaks_engine.so' <(unzip -Z1 "$apk")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-Android-First-Playable-APK
+          path: TAKS_World_Android_KIPROBALO.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Verify unchanged logo, accepted art and actual APK contents
+        run: python3 scripts/verify_audio_release.py TAKS_World_Android_KIPROBALO.apk
+      - name: Publish downloadable test release with hash evidence
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: taks-world-0.16.5-native-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: TAKS World 0.16.5 - native resolution test
+          prerelease: true
+          body: |
+            Native display resolution by default; rejected top-left gameplay title/logo panel removed.
+            Gameplay art remains rejected and unfinished; this is a sharpness/HUD fix only.
+            Installable debug test APK (hu.taks.world.wonderwerk), versionCode 20.
+            Original procedural synthesis, no third-party sound recordings.
+            Accepted branch menu and logo files unchanged; see JSON hashes.
+            Full separate approved logo PNG and 0.17 reference were unavailable; not certified.
+            Eight-direction male idle/crouch PNGs preserved. Other requested eight-direction sets unavailable.
+            This is a test release, not a claim of finished graphics or acoustically realistic species.
+          files: |
+            TAKS_World_Android_KIPROBALO.apk
+            audio-release-verification.json

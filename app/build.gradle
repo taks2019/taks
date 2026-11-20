@@ -7,11 +7,14 @@ android {
         applicationId 'hu.taks.world'
         minSdk 26
         targetSdk 35
-        versionCode 8
-        versionName '0.8.0-cc0-photogrammetry'
+        versionCode 20
+        versionName '0.16.5-native'
         externalNativeBuild { cmake { cppFlags '-std=c++17'; arguments '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON' } }
     }
-    buildTypes { release { minifyEnabled false } }
+    buildTypes {
+        debug { applicationIdSuffix '.wonderwerk' }
+        release { minifyEnabled false }
+    }
     externalNativeBuild { cmake { path 'src/main/cpp/CMakeLists.txt'; version '3.22.1' } }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }

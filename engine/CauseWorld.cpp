@@ -1,4 +1,5 @@
 #include "CauseWorld.h"
+#include "AfricanClimate.h"
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
@@ -6,6 +7,85 @@
 
 namespace taks {
 namespace { double clamp(double v, double lo, double hi){return std::max(lo, std::min(hi,v));} }
+
+// ---------------- Egyedi tárgyak főkönyve ----------------
+void World::logCause(const std::string& line){
+    std::ostringstream o;o<<'#'<<eventCounter<<" t="<<std::fixed<<std::setprecision(2)<<hours<<"h "<<line;
+    causeLog.push_back(o.str());
+    if(causeLog.size()>64)causeLog.erase(causeLog.begin(),causeLog.begin()+(causeLog.size()-64));
+}
+unsigned World::countItems(int type,int where,int node,int by) const{
+    unsigned n=0;
+    for(const Item& it:items)
+        if(it.type==type&&it.where==where&&(node<0||it.node==node)&&(by<0||it.by==by))++n;
+    return n;
+}
+void World::rebuildLedgerFromCounts(){
+    items.clear();
+    for(int i=0;i<resourceCount;++i){
+        const int type=nodes[i].type;if(type>1)continue;
+        for(int k=0;k<nodes[i].amount;++k)items.push_back({nextItemId++,type,0,i,-1});
+    }
+    for(int k=0;k<carriedWood;++k)items.push_back({nextItemId++,0,1,-1,-1});
+    for(int k=0;k<carriedStone;++k)items.push_back({nextItemId++,1,1,-1,-1});
+    for(int k=0;k<campStock[0];++k)items.push_back({nextItemId++,0,2,-1,-1});
+    for(int k=0;k<campStock[1];++k)items.push_back({nextItemId++,1,2,-1,-1});
+    for(int i=0;i<npcCount;++i)
+        if(npcs[i].carrying>0&&npcs[i].role<2)
+            for(int k=0;k<npcs[i].carrying;++k)items.push_back({nextItemId++,npcs[i].role,4,-1,i});
+    ledgerReady=true;
+}
+void World::ensureLedger(){ if(!ledgerReady)rebuildLedgerFromCounts(); }
+bool World::ledgerConsistent() const{
+    if(!ledgerReady)return true;
+    for(int i=0;i<resourceCount;++i){
+        const int type=nodes[i].type;if(type>1)continue;
+        if(countItems(type,0,i)!=static_cast<unsigned>(nodes[i].amount))return false;
+    }
+    if(countItems(0,1)!=static_cast<unsigned>(carriedWood)||countItems(1,1)!=static_cast<unsigned>(carriedStone))return false;
+    if(countItems(0,2)!=static_cast<unsigned>(campStock[0])||countItems(1,2)!=static_cast<unsigned>(campStock[1]))return false;
+    for(int i=0;i<npcCount;++i){
+        unsigned held=0;
+        for(const Item& it:items)if(it.where==4&&it.by==i)++held;
+        const unsigned expected=(npcs[i].role<2)?static_cast<unsigned>(npcs[i].carrying):0u;
+        if(held!=expected)return false;
+    }
+    for(size_t a=0;a<items.size();++a){
+        if(items[a].id==0||items[a].id>=nextItemId)return false;
+        for(size_t b=a+1;b<items.size();++b)if(items[a].id==items[b].id)return false;
+    }
+    return true;
+}
+void World::moveItem(int type,int fromWhere,int fromNode,int fromBy,int toWhere,int toNode,int toBy,const char* cause){
+    ensureLedger();
+    int idx=-1;
+    for(size_t i=0;i<items.size();++i){
+        const Item& it=items[i];
+        if(it.type==type&&it.where==fromWhere&&(fromNode<0||it.node==fromNode)&&(fromBy<0||it.by==fromBy)){idx=static_cast<int>(i);break;}
+    }
+    if(idx<0)return;
+    Item& it=items[idx];
+    std::ostringstream o;o<<(type==0?"faág":"kő")<<" #"<<it.id<<" ["<<cause<<"]: hely "<<fromWhere<<"->"<<toWhere;
+    it.where=toWhere;it.node=toNode;it.by=toBy;
+    logCause(o.str());
+}
+void World::grantCarriedForTest(int type,int count){
+    ensureLedger();
+    if(type<0||type>1)return;
+    for(int k=0;k<count;++k){items.push_back({nextItemId++,type,1,-1,-1});(type==0?carriedWood:carriedStone)++;}
+    logCause("TESZT: tárgyak adva a játékosnak");
+}
+void World::consumeItems(int type,int count,const char* cause){
+    ensureLedger();
+    for(int k=0;k<count;++k){
+        int idx=-1;
+        for(size_t i=0;i<items.size();++i)if(items[i].type==type&&items[i].where==1){idx=static_cast<int>(i);break;}
+        if(idx<0)return;
+        std::ostringstream o;o<<(type==0?"faág":"kő")<<" #"<<items[idx].id<<" ["<<cause<<"]: elhasználva";
+        items.erase(items.begin()+idx);++consumedItems[type];
+        logCause(o.str());
+    }
+}
 int World::nearbySiteIndex(double range) const {
     int chosen=-1;
     double minSq=range*range;
@@ -68,7 +148,32 @@ std::string World::nextObjective() const {
     if(!underShelter)return "CÉL: Lépj a kész menedék közelébe, és húzódj alá.";
     if(!hearthBuilt)return "CÉL: Gyűjts 3 faágat és 2 követ a tűzhelyhez.";
     if(!fireLit)return "CÉL: Szerezz száraz tüzelőt és gyújtóst, majd gyújts tüzet.";
+    if(waterCollectorStage==0)
+        return "CÉL: Építs esővízgyűjtőt: 2 megmunkált cölöp, 2 kő, majd 6 leveles ág kell.";
+    if(waterCollectorStage==1)
+        return "CÉL: Fejezd be a gyűjtő fedését 6 leveles ággal; az eső után vizet tárol.";
     return "Az első menedék és tűz elkészült. Kísérletezz az időjárással, a tűzzel és a mentéssel.";
+}
+std::string World::causalReport() const {
+    std::ostringstream out;
+    out<<std::fixed<<std::setprecision(1);
+    out<<"ÉLŐ OK → OKOZAT\n"
+       <<"Csapadék "<<rainIntensity*100<<"% → talajnedvesség "
+       <<ecology.soilWater*100<<"% → sár "<<ecology.mud*100
+       <<"% → lassabb járás: sebesség "<<ecology.walkSpeedFactor()*100<<"%\n"
+       <<"Szél "<<windStrength()*100<<"% → növények lengése és tűz tüzelőanyag-fogyása\n"
+       <<"Fű "<<ecology.grassCover()*100<<"% → állatok legelési lehetősége\n"
+       <<"Tűz: "<<(fireLit?"ég, valós tüzelőanyagot használ":"nem ég")
+       <<" · fa nedvessége "<<woodMoisture*100<<"%\n";
+    if(causeLog.empty()){
+        out<<"Legutóbbi események: még nincs feljegyzett kölcsönhatás.";
+    }else{
+        out<<"LEGUTÓBBI OKOZATI ESEMÉNYEK (csak az aktuális játékfolyamatban):";
+        const std::size_t begin=causeLog.size()>8?causeLog.size()-8:0;
+        for(std::size_t i=begin;i<causeLog.size();++i)
+            out<<"\n"<<causeLog[i];
+    }
+    return out.str();
 }
 std::string World::campStatus() const {
     std::ostringstream out;
@@ -79,7 +184,7 @@ std::string World::campStatus() const {
 }
 std::string World::npcStatus() const {
     static const char* roleNames[]={"Fa gyűjtése","Kő keresése","Levél gyűjtése","Gyújtós keresése"};
-    static const char* taskNames[]={"Készülődik","Lelőhelyhez tart","Táborba szállít","Pihen","Nincs szabad anyag"};
+    static const char* taskNames[]={"Készülődik","Lelőhelyhez tart","Táborba szállít","Pihen","Nincs szabad anyag","Veszély elől menekül","Vízhez tart"};
     std::ostringstream out;out<<std::fixed<<std::setprecision(1);
     for(int i=0;i<npcCount;++i){
         const auto& npc=npcs[i];
@@ -88,25 +193,145 @@ std::string World::npcStatus() const {
            <<" · pozíció "<<npc.x<<", "<<npc.z
            <<" · erő "<<npc.energy<<"%"
            <<" · éhség "<<npc.hunger<<"%"
+           <<" · szomjúság "<<npc.thirst<<"%"
+           <<" · félelem "<<npc.fear*100<<"%"
            <<" · szállít "<<npc.carrying
-           <<" · leadott "<<npc.delivered;
+           <<" · leadott "<<npc.delivered
+           <<" · megismert "<<npc.discoveries
+           <<" · hallomás "<<npc.rumorsHeard
+           <<" · tanult út "<<npc.completedTrips
+           <<" · téves nyom "<<npc.falseLeads
+           <<" · vizes munka "<<npc.wetTrips
+           <<" · elkerült veszély "<<npc.fleeEvents
+           <<" · itatások "<<npc.waterTrips
+           <<" · veszélytapasztalat "<<npc.dangerExperience;
         if(i+1<npcCount)out<<"\n";
     }
     return out.str();
 }
 void World::updateNpcs(double dt){
     if(!std::isfinite(dt)||dt<=0)return;
+    ensureLedger();
     npcSimulatedHours+=dt;
     // Rögzített szimulációs részlés: 1 óra 25 lépés, mentés után is determinisztikus.
     const int roles[4]={0,1,3,2};
+    const double wind=africanWeatherAt(hours).windStrength;
     constexpr double tick=0.04;
+    auto walkNpc=[this](Npc& npc,double tx,double tz,double pace){
+        const double dx=tx-npc.x,dz=tz-npc.z;
+        const double distance=std::hypot(dx,dz);
+        if(distance<1.e-8)return;
+        double traction=ecology.walkSpeedFactor()*(npc.wetness>.6?.65:1.);
+        for(const auto& water:ecology.waters){
+            const double wx=npc.x-water.x,wz=npc.z-water.z;
+            if(water.level>.28&&wx*wx+wz*wz<water.radius*water.radius)
+                traction=std::min(traction,.70);
+        }
+        const double intended=std::min(distance,pace*traction);
+        const double stepX=dx/distance*intended,stepZ=dz/distance*intended;
+        auto passable=[this](double x,double z){
+            if(x< -7.45||x>7.45||z< -7.45||z>12.95)return false;
+            if(z>2.67&&z<4.23&&std::abs(x)>1.22)return false;
+            for(const auto& tree:ecology.trees){
+                if(!tree.alive||tree.heightM<=.5)continue;
+                const double tx=x-tree.x,tz=z-tree.z;
+                if(tx*tx+tz*tz<.42*.42)return false;
+            }
+            return true;
+        };
+        const double beforeX=npc.x,beforeZ=npc.z;
+        if(passable(npc.x+stepX,npc.z+stepZ)){
+            npc.x+=stepX;npc.z+=stepZ;
+        }else{
+            // Same real cave/trunk collision family as the player's movement.
+            // Retain unblocked component rather than ghosting through a rock.
+            if(passable(npc.x+stepX,npc.z))npc.x+=stepX;
+            if(passable(npc.x,npc.z+stepZ))npc.z+=stepZ;
+        }
+        const double traveled=std::hypot(npc.x-beforeX,npc.z-beforeZ);
+        npc.walkPhase+=traveled*5;
+        const double practice=std::min(npc.completedTrips,12)/12.0;
+        npc.energy=clamp(npc.energy-traveled*.44*(1.0-.16*practice),0,100);
+    };
     int loopGuard=0;
     while(npcSimulatedHours+1.e-9>=tick && loopGuard++<600){
         npcSimulatedHours-=tick;
         for(int i=0;i<npcCount;++i){
             Npc& npc=npcs[i];const int type=roles[npc.role];
             npc.hunger=clamp(npc.hunger+0.11,0,100);
-            npc.wetness=clamp(npc.wetness+rainIntensity*.027-.005,0,1);
+            npc.thirst=clamp(npc.thirst+.085+.025*std::max(0.,ecology.temperatureC-30.)/10.,0,100);
+            npc.fear=clamp(npc.fear-.035,0,1);
+            npc.wetness=clamp(npc.wetness+rainIntensity*.027-.005*(1.0+.55*wind),0,1);
+
+            // Survival over routine: only predators within visual range can
+            // trigger immediate flight. Personal experience widens detection.
+            const LivingWorld::Animal* threat=nullptr;
+            double nearestDanger=1e9;
+            const double sight=3.1+std::min(npc.dangerExperience,10)*.12;
+            for(const auto& animal:ecology.animals){
+                if(!animal.alive||animal.kind!=1)continue;
+                const double dx=npc.x-animal.x,dz=npc.z-animal.z;
+                const double d2=dx*dx+dz*dz;
+                if(d2<sight*sight&&d2<nearestDanger){
+                    threat=&animal;nearestDanger=d2;
+                }
+            }
+            if(threat){
+                // A visible encounter updates saved experience once per danger
+                // episode, while repeated ticks retain the physical response.
+                if(npc.task!=5){
+                    ++npc.fleeEvents;
+                    npc.dangerExperience=std::min(100,npc.dangerExperience+1);
+                    ++eventCounter;
+                    logCause("Társ "+std::to_string(i+1)+
+                             ": ragadozó észlelve → menekülés → veszélyhely emléke");
+                }
+                npc.lastDangerX=threat->x;
+                npc.lastDangerZ=threat->z;
+                npc.dangerMemoryUntil=hours+.65;
+                npc.fear=clamp(npc.fear+.22,0,1);
+                npc.task=5;
+                double dx=npc.x-threat->x,dz=npc.z-threat->z;
+                if(dx*dx+dz*dz<.01){dx=(i%2==0?1.:-1.);dz=-.6;}
+                const double distance=std::hypot(dx,dz);
+                walkNpc(npc,npc.x+dx/distance*2.,npc.z+dz/distance*2.,.42);
+                continue;
+            }
+            // Urgent drinking uses the SAME finite water as the player and
+            // animals. Empty pools cannot magically reset thirst.
+            if(npc.thirst>=64.0){
+                int source=-1;
+                double nearest=1e12;
+                for(int w=0;w<LivingWorld::waterBodyCount;++w){
+                    const auto& water=ecology.waters[w];
+                    if(water.level<.055)continue;
+                    const double dx=water.x-npc.x,dz=water.z-npc.z;
+                    const double distSq=dx*dx+dz*dz;
+                    if(distSq<nearest){source=w;nearest=distSq;}
+                }
+                if(source>=0){
+                    auto& water=ecology.waters[source];
+                    const double distance=std::sqrt(nearest);
+                    if(distance<=water.radius+.35){
+                        const double used=std::min(.025,water.level);
+                        water.level=clamp(water.level-used,0,1);
+                        npc.thirst=clamp(npc.thirst-35.,0,100);
+                        npc.fear=clamp(npc.fear-.05,0,1);
+                        ++npc.waterTrips;++eventCounter;
+                        logCause("Társ "+std::to_string(i+1)+
+                                 ": szomjúság → természetes vízivás → medence vízszintje csökkent");
+                        npc.task=0;
+                    }else{
+                        npc.task=6;
+                        walkNpc(npc,water.x,water.z,.25);
+                    }
+                    continue;
+                }
+                // None left: no fictitious drink, recovery or resource.
+                if(npc.thirst>90)npc.energy=clamp(npc.energy-.20,0,100);
+                npc.task=3;
+                continue;
+            }
             if(npc.hunger>=96){npc.task=3;continue;} // élelem nélkül nem végtelen munkagépek
             if(npc.energy<=17){
                 npc.task=3;
@@ -117,50 +342,122 @@ void World::updateNpcs(double dt){
                 npc.energy=clamp(npc.energy+2.4,0,100);
                 continue;
             }
+            // Perception: a location's stock is only reliable when observed.
+            // Walking near a depleted patch corrects remembered or rumored facts.
+            for(int j=0;j<resourceCount;++j){
+                const auto& observed=nodes[j];
+                const double ox=observed.x-npc.x,oz=observed.z-npc.z;
+                if(ox*ox+oz*oz>2.8*2.8)continue;
+                const int old=npc.rememberedAmounts[j];
+                if((old==-1||old==-2)&&observed.amount>0){
+                    ++npc.discoveries;
+                    logCause("Társ "+std::to_string(i+1)+" személyesen megfigyelte a "+std::to_string(j+1)+". lelőhelyet");
+                }
+                if((old>0||old==-2)&&observed.amount==0){
+                    ++npc.falseLeads;
+                    logCause("Társ "+std::to_string(i+1)+" ellenőrzött és elvetett egy korábbi lelőhelyismeretet");
+                }
+                npc.rememberedAmounts[j]=observed.amount;
+            }
+            // Physical encounter at the camp transfers an unverified report,
+            // never a guaranteed fact. Different NPCs can disagree.
+            const double toCampX=npc.x+.30,toCampZ=npc.z+3.40;
+            if(toCampX*toCampX+toCampZ*toCampZ<1.6*1.6){
+                for(int other=0;other<npcCount;++other){
+                    if(other==i)continue;
+                    Npc& listener=npcs[other];
+                    const double hx=listener.x+.30,hz=listener.z+3.40;
+                    if(hx*hx+hz*hz>1.6*1.6)continue;
+                    for(int j=0;j<resourceCount;++j){
+                        if(npc.rememberedAmounts[j]>0&&listener.rememberedAmounts[j]==-1){
+                            listener.rememberedAmounts[j]=-2;
+                            ++listener.rumorsHeard;
+                            logCause("Társ "+std::to_string(other+1)+" hallomást kapott a "+
+                                     std::to_string(j+1)+". lelőhelyről");
+                        }
+                    }
+                }
+            }
             if(npc.carrying>0) {
                 npc.task=2;
                 const double dx=-.30-npc.x,dz=-3.40-npc.z;
                 const double length=std::sqrt(dx*dx+dz*dz);
                 if(length<.58){
+                    if(npc.role<2)moveItem(npc.role,4,-1,i,2,-1,-1,"társ leadja a táborban");
                     campStock[npc.role]+=npc.carrying;
                     npc.delivered+=npc.carrying;
+                    ++npc.completedTrips;
+                    if(npc.wetness>.48)++npc.wetTrips;
                     npc.carrying=0;
                     npc.task=0;
+                    logCause("Társ "+std::to_string(i+1)+" sikeres munkautat tanult");
                     ++eventCounter;
                 }else{
-                    const double step=std::min(length,.25*(npc.wetness>.6?.65:1.));
-                    npc.x+=dx/length*step;npc.z+=dz/length*step;
-                    npc.walkPhase+=step*5;
-                    npc.energy=clamp(npc.energy-step*.42,0,100);
+                    walkNpc(npc,-.30,-3.40,.25);
                 }
                 continue;
             }
             int chosen=-1;double best=1.e10;
             for(int j=0;j<resourceCount;++j){
                 const ResourceNode& node=nodes[j];
-                if(node.amount<=0||node.type!=type)continue;
+                const int recollection=npc.rememberedAmounts[j];
+                if(node.type!=type||(recollection<=0&&recollection!=-2))continue;
                 const double dx=node.x-npc.x,dz=node.z-npc.z;
                 const double distSq=dx*dx+dz*dz;
-                if(distSq<best){chosen=j;best=distSq;}
+                // Heard reports are less reliable than direct observation.
+                double score=distSq+(recollection==-2?8.0:0.0);
+                const double rx=node.x-npc.lastDangerX,rz=node.z-npc.lastDangerZ;
+                if(hours<npc.dangerMemoryUntil&&rx*rx+rz*rz<3.2*3.2)
+                    score+=150.0; // Learned avoidance, not global predator knowledge.
+                if(score<best){chosen=j;best=score;}
             }
-            if(chosen<0){npc.task=4;continue;}
+            if(chosen<0){
+                // All NPCs use the same non-magical exploration circuit.
+                // Actual resources become visible only through local sensing.
+                static constexpr double patrol[][2]={
+                    {-1.6,-4.4},{3.4,-3.1},{-3.8,-1.3},{3.8,.35},
+                    {-1.6,1.0},{1.2,-.9},{-4.6,-4.3},{4.6,-5.2}
+                };
+                constexpr int patrolCount=int(sizeof(patrol)/sizeof(patrol[0]));
+                if(npc.scoutSteps>=patrolCount){npc.task=4;continue;}
+                // Skip a remembered unsafe patrol point until the evidence ages.
+                const double px=patrol[npc.scoutSteps][0]-npc.lastDangerX;
+                const double pz=patrol[npc.scoutSteps][1]-npc.lastDangerZ;
+                if(hours<npc.dangerMemoryUntil&&px*px+pz*pz<3.2*3.2){
+                    ++npc.scoutSteps;
+                    continue;
+                }
+                npc.task=1;
+                const double dx=patrol[npc.scoutSteps][0]-npc.x;
+                const double dz=patrol[npc.scoutSteps][1]-npc.z;
+                const double length=std::hypot(dx,dz);
+                if(length<.65){++npc.scoutSteps;continue;}
+                walkNpc(npc,patrol[npc.scoutSteps][0],patrol[npc.scoutSteps][1],.22);
+                continue;
+            }
             npc.task=1;
             ResourceNode& node=nodes[chosen];
             const double dx=node.x-npc.x,dz=node.z-npc.z;
             const double length=std::sqrt(dx*dx+dz*dz);
             if(length<.62){
+                if(node.amount<=0){
+                    npc.rememberedAmounts[chosen]=0;
+                    ++npc.falseLeads;
+                    npc.task=0;
+                    logCause("Társ "+std::to_string(i+1)+" üres lelőhelyhez érkezett");
+                    continue;
+                }
                 if(npc.energy<3){npc.task=3;continue;}
+                if(node.type<2)moveItem(node.type,0,chosen,-1,4,-1,i,"társ felveszi");
                 --node.amount;
+                npc.rememberedAmounts[chosen]=node.amount;
                 npc.carrying=1;
                 npc.task=2;
                 npc.energy-=1.8;
                 syncGroundCounts();
                 ++eventCounter;
             }else{
-                const double step=std::min(length,.22*(npc.wetness>.6?.65:1.));
-                npc.x+=dx/length*step;npc.z+=dz/length*step;
-                npc.walkPhase+=step*5;
-                npc.energy=clamp(npc.energy-step*.44,0,100);
+                walkNpc(npc,node.x,node.z,.22);
             }
         }
     }
@@ -184,29 +481,141 @@ std::string World::nearby() const{
     else out<<" · menj közelebb";
     return out.str();
 }
-std::string World::move(double dx,double dz){
+std::string World::move(double dx,double dz,bool airborne){
     if(!std::isfinite(dx)||!std::isfinite(dz))return "Érvénytelen mozgás.";
-    const double requested=std::sqrt(dx*dx+dz*dz);
+    const double requested=std::hypot(dx,dz);
     if(requested<0.00001)return "A karakter helyben maradt.";
     if(stamina<0.5)return "A karakter kimerült: pihennie kell.";
-    // Az érintéses mozgás egy-egy kicsi világkoordináta-lépés; nem teleport.
-    const double factor=std::min(1.0,0.75/requested);
+
+    // Native step is a distance, not an arbitrary frames-per-second velocity.
+    // Cap any unexpectedly large JNI request and incorporate real soil grip.
+    double wadingFactor=1.0;
+    for(const auto& water:ecology.waters){
+        const double wx=playerX-water.x,wz=playerZ-water.z;
+        if(!airborne&&water.level>.28&&wx*wx+wz*wz<water.radius*water.radius)
+            wadingFactor=std::min(wadingFactor,.72);
+    }
+    const double factor=std::min(1.0,0.75/requested)*
+                        (airborne?.65:ecology.walkSpeedFactor())*wadingFactor;
     dx*=factor;dz*=factor;
-    const double nx=playerX+dx,nz=playerZ+dz;
-    if(nx< -7.5||nx>7.5||nz< -7.5||nz>13.0)return "A világ jelenlegi bejárható határához értél.";
-    // A barlang homlokzatának oldalsó sziklafalán nem lehet átsétálni.
-    if(nz>2.75 && nz<4.15 && std::abs(nx)>1.45 && std::abs(nx)<7.8)
-        return "A sziklafal elállja az utat. A barlangnyílás középen található.";
-    const double length=std::sqrt(dx*dx+dz*dz);
-    playerX=nx;playerZ=nz;walkPhase+=length*5.5;
-    stamina=clamp(stamina-length*(0.50+groundMoisture*0.65),0.0,100.0);
-    step(length*.013);
-    // A menedék nem véd, ha elhagytuk a valódi fedett területet.
-    if(underShelter && !protectedAtPlayer())underShelter=false;
+    const double distance=std::hypot(dx,dz);
+    const int slices=std::max(1,static_cast<int>(std::ceil(distance/.10)));
+    const double sx=dx/slices,sz=dz/slices;
+
+    auto walkable=[this](double x,double z)->bool{
+        // Body radius avoids walking through the edge of the cave wall.
+        if(x< -7.5||x>7.5||z< -7.5||z>13.0)return false;
+        if(z>2.67&&z<4.23&&std::abs(x)>1.22&&std::abs(x)<7.8)return false;
+        // Living tree trunks are solid until the tree dies, not invisible.
+        for(const auto& tree:ecology.trees){
+            if(!tree.alive||tree.heightM<=.5)continue;
+            const double ax=x-tree.x,az=z-tree.z;
+            if(ax*ax+az*az<.38*.38)return false;
+        }
+        return true;
+    };
+    double mx=playerX,mz=playerZ,traveled=0;
+    // Swept substeps: cannot jump over narrow stone/trunk obstacles.
+    // If a diagonal hits a wall, preserve the unobstructed direction:
+    // physically slide along the wall instead of freezing the whole stick.
+    for(int i=0;i<slices;++i){
+        const double originalX=mx,originalZ=mz;
+        if(walkable(mx+sx,mz+sz)){
+            mx+=sx;mz+=sz;
+        }else{
+            const bool tryXFirst=std::abs(sx)>=std::abs(sz);
+            if(tryXFirst){
+                if(walkable(mx+sx,mz))mx+=sx;
+                if(walkable(mx,mz+sz))mz+=sz;
+            }else{
+                if(walkable(mx,mz+sz))mz+=sz;
+                if(walkable(mx+sx,mz))mx+=sx;
+            }
+        }
+        traveled+=std::hypot(mx-originalX,mz-originalZ);
+    }
+    if(traveled<.00001){
+        if(std::abs(playerX)>=7.49||playerZ<=-7.49||playerZ>=12.99)
+            return "A világ jelenlegi bejárható határához értél.";
+        return "A sziklafal vagy egy fatörzs elállja az utat.";
+    }
+    const double oldX=playerX,oldZ=playerZ;
+    playerX=mx;playerZ=mz;
+    if(!airborne){
+        ecology.trampleTrail(oldX,oldZ,playerX,playerZ,clamp(ecology.mud+groundMoisture*.45,0,1));
+        ecology.stampFootstep(playerX,playerZ,std::atan2(dx,dz));
+    }
+    walkPhase+=traveled*5.5;
+    stamina=clamp(stamina-traveled*(0.50+groundMoisture*.65+ecology.mud*.8+
+                   ecology.snowDepth*.35+ecology.slipRisk()*.4),0.0,100.0);
+    step(traveled*.013);
+    if(underShelter&&!protectedAtPlayer())underShelter=false;
     ++eventCounter;
     return nearby();
 }
 std::string World::act(const std::string& action) {
+    ensureLedger();
+    if(action=="jump"){
+        for(const auto& water:ecology.waters){
+            const double dx=playerX-water.x,dz=playerZ-water.z;
+            if(water.level>.38&&dx*dx+dz*dz<water.radius*water.radius)
+                return "A mély vízben nem tudsz elrugaszkodni; előbb érj a partra.";
+        }
+        const double cost=8.0+ecology.mud*4.0;
+        if(stamina<cost)return "Nincs elég állóképesség az ugráshoz; pihenj meg.";
+        stamina-=cost;
+        ++eventCounter;
+        return "Elrugaszkodtál a talajról.";
+    }
+    if(action=="drink"){
+        if(playerThirst<15.0)return "Most nem vagy szomjas; a vízkészletet nem használtad fel.";
+        if(waterCollectorStage>=2&&storedRainwater>.05&&
+           isNear(waterCollectorX,waterCollectorZ,2.1)){
+            const double amount=std::min(1.0,storedRainwater);
+            storedRainwater-=amount;
+            playerThirst=clamp(playerThirst-42.0,0,100);
+            stamina=clamp(stamina+1.0,0,100);
+            step(.03);++eventCounter;
+            return "Ittál a gyűjtő véges esővízkészletéből. A szomjúság csökkent, a tárolt víz fogyott.";
+        }
+        const int index=ecology.nearestWaterBody(playerX,playerZ);
+        if(index<0)return "Nincs elérhető felszíni víz. Menj a forrásmedencéhez, vagy építs esővízgyűjtőt.";
+        auto& water=ecology.waters[index];
+        const double dx=playerX-water.x,dz=playerZ-water.z;
+        if(dx*dx+dz*dz>(water.radius+.75)*(water.radius+.75))
+            return "A vízmedence még nincs ivási távolságban. Menj közelebb.";
+        if(water.level<.045)return "A medence majdnem kiszáradt; várj esőre vagy talajvíz-utánpótlásra.";
+        water.level=clamp(water.level-.035,0,1);
+        playerThirst=clamp(playerThirst-38.0,0,100);
+        stamina=clamp(stamina+1.0,0,100);
+        step(.03);++eventCounter;
+        return water.quality<.40
+            ?"Ittál a zavaros természetes medencéből. A vízszint csökkent; tisztítási rendszer még nincs.":
+             "Ittál a természetes medencéből. A szomjúság csökkent, a véges vízszint is csökkent.";
+    }
+    if(action=="catchment_frame"){
+        if(!isNear(waterCollectorX,waterCollectorZ,2.4))
+            return "A vízgyűjtőt a tábor melletti kijelölt sík helyen építsd.";
+        if(waterCollectorStage>0)return "A vízgyűjtő tartóváza már elkészült.";
+        if(preparedPoles<2)return "A tartóvázhoz 2 megmunkált cölöp szükséges.";
+        if(carriedStone<2)return "A vízgyűjtő alapjához 2 kő szükséges.";
+        if(stamina<8)return "A tartóváz építéséhez pihenned kell.";
+        consumeItems(1,2,"esővízgyűjtő kőalapja");
+        preparedPoles-=2;carriedStone-=2;stamina-=8;waterCollectorStage=1;
+        step(.65);++eventCounter;
+        return "A vízgyűjtő tartóváza elkészült: a cölöpök és kövek elfogytak.";
+    }
+    if(action=="catchment_roof"){
+        if(!isNear(waterCollectorX,waterCollectorZ,2.4))
+            return "Menj vissza a vízgyűjtő tartóvázához.";
+        if(waterCollectorStage<1)return "Előbb építsd meg a vízgyűjtő tartóvázát.";
+        if(waterCollectorStage>=2)return "A fedett esővízgyűjtő már működik.";
+        if(carriedLeaves<6)return "A tetőhöz 6 leveles ág szükséges.";
+        if(stamina<7)return "A fedés elkészítéséhez pihenned kell.";
+        carriedLeaves-=6;stamina-=7;waterCollectorStage=2;
+        step(.55);++eventCounter;
+        return "A fedés elkészült. Esőben a gyűjtő vizet tárol, napsütésben lassan párolog.";
+    }
     if(action=="npc_talk"){
         for(int i=0;i<npcCount;++i){
             const auto& n=npcs[i];
@@ -225,6 +634,7 @@ std::string World::act(const std::string& action) {
         const int role=action=="camp_wood"?0:action=="camp_stone"?1:action=="camp_leaves"?2:3;
         if(campStock[role]<=0)return "Ebből az anyagból a társak még nem hoztak a táborba.";
         if(stamina<.5)return "Kimerült vagy, előbb pihenj.";
+        if(role<2)moveItem(role,2,-1,-1,1,-1,-1,"játékos átveszi a tábori készletből");
         --campStock[role];
         int* bag=role==0?&carriedWood:role==1?&carriedStone:role==2?&carriedLeaves:&carriedTinder;
         ++(*bag);stamina-=.5;step(.025);++eventCounter;
@@ -250,6 +660,7 @@ std::string World::act(const std::string& action) {
         ResourceNode& node=nodes[nodeId];
         const int type=node.type;
         int* bag=type==0?&carriedWood:type==1?&carriedStone:type==2?&carriedTinder:&carriedLeaves;
+        if(type<2)moveItem(type,0,nodeId,-1,1,-1,-1,"játékos felveszi a lelőhelyről");
         --node.amount;++(*bag);syncGroundCounts();
         stamina-=2;step(.10);++eventCounter;
         return type==0?"Faág felvéve a lelőhelyről. A világ készlete 1-gyel csökkent.":
@@ -261,6 +672,7 @@ std::string World::act(const std::string& action) {
         if(chippedEdgeWear>0) return "Már van használható kőéled; a követ a későbbi munkára tartalékold.";
         if(carriedStone<2) return "Kőeszköz: két kő szükséges (ütőkő és nyersanyag).";
         if(stamina<6) return "Kőmegmunkálás: előbb pihenned kell.";
+        consumeItems(1,2,"kőmegmunkálás: ütőkő és nyersanyag");
         carriedStone-=2;stoneDebris+=1;chippedEdgeWear=6;stamina-=6;step(0.40);++eventCounter;
         return "Éles kőszilánk készült: 2 kő -> 1 használható él + kőhulladék. A szerszám kopik.";
     }
@@ -269,6 +681,7 @@ std::string World::act(const std::string& action) {
         if(carriedWood<1) return "Nincs nyers faág, amiből cölöp készülhetne.";
         if(stamina<5) return "Cölöp készítése: nincs elég állóképességed.";
         if(woodMoisture>0.85) return "A fa nagyon átázott: várj a megmunkálással.";
+        consumeItems(0,1,"faág cölöppé munkálva");
         --carriedWood;++preparedPoles;--chippedEdgeWear;
         if(chippedEdgeWear==0)++stoneDebris;
         stamina-=5;step(0.30);++eventCounter;
@@ -280,12 +693,18 @@ std::string World::act(const std::string& action) {
             return "Itt nincs elegendő szabad építési terület: menj síkabb, nyitott részre.";
         if(isNear(-.30,-3.40,1.9)||isNear(-1.15,-1.8,1.8))
             return "A tábori készletet és a tűzhelyet nem lehet beépíteni.";
+        for(const auto& water:ecology.waters){
+            const double dx=playerX-water.x,dz=playerZ-water.z;
+            if(water.level>.12&&dx*dx+dz*dz<(water.radius+.8)*(water.radius+.8))
+                return "A medence partja vizes; jelölj ki száraz, stabilabb építési helyet.";
+        }
         for(int i=0;i<siteCount;++i){
             const double dx=playerX-sites[i].x,dz=playerZ-sites[i].z;
             if(dx*dx+dz*dz<3.7*3.7)return "Az új menedék túl közel lenne egy másikhoz.";
         }
         if(carriedStone<1)return "Az építési hely kijelöléséhez egy követ kell elhelyezned a terepen.";
         if(stamina<2)return "A kijelöléshez előbb pihenned kell.";
+        consumeItems(1,1,"építési hely jelölőköve");
         --carriedStone;stamina-=2;
         auto& site=sites[siteCount++];
         site.x=playerX;site.z=playerZ;site.stage=0;site.condition=100.0;
@@ -301,6 +720,7 @@ std::string World::act(const std::string& action) {
             if(preparedPoles<2)return "Oszlopok: két megmunkált cölöp hiányzik.";
             if(carriedStone<2)return "Oszlopok: két támasztókő hiányzik.";
             if(stamina<12)return "Oszlopok: a munkához kevés az állóképesség.";
+            consumeItems(1,2,"oszlop támasztókövei");
             preparedPoles-=2;carriedStone-=2;stamina-=12;site.stage=1;
             shelterStage=std::max(shelterStage,site.stage);
             step(1.0);++eventCounter;
@@ -347,12 +767,74 @@ std::string World::act(const std::string& action) {
         underShelter=false;step(0.10);++eventCounter;
         return "Elhagytad a menedéket: újra közvetlenül ér a környezet.";
     }
+    if(action=="part_pole"||action=="part_beam"||action=="part_stone"||action=="part_plank"){
+        const int kind=action=="part_pole"?PART_POLE:action=="part_beam"?PART_BEAM:action=="part_stone"?PART_STONE:PART_PLANK;
+        const int poleCost=kind==PART_BEAM?2:(kind==PART_POLE||kind==PART_PLANK)?1:0;
+        if(poleCost>0&&preparedPoles<poleCost)return kind==PART_BEAM?"Gerendához két megmunkált cölöp kell.":"Ehhez egy megmunkált cölöp kell.";
+        if(kind==PART_STONE&&carriedStone<1)return "Nincs nálad kő, amit le lehetne rakni.";
+        if(stamina<3)return "Az építéshez előbb pihenned kell.";
+        // Új alkatrész a játékos előtt áll; ha alatta már van alkatrész, rá kerül (és rögzül hozzá).
+        const double px=playerX+0.6,pz=playerZ;
+        double y=0.0;unsigned underId=0;
+        for(const auto& q:structure.parts){
+            const double dx=q.x-px,dz=q.z-pz;
+            if(dx*dx+dz*dz>0.45*0.45)continue;
+            double top=q.y+(q.kind==PART_POLE||q.kind==PART_STONE?q.length:(q.kind==PART_BEAM?0.25:0.1));
+            if(top>y){y=top;underId=q.id;}
+        }
+        std::string why;
+        const unsigned before=structure.nextId;
+        const unsigned id=structure.addPart(kind,px,y,pz,0.0,&why);
+        if(id==0)return why.empty()?"Ide nem rakható alkatrész.":why;
+        if(underId!=0&&!structure.addJoint(id,underId,0,&why)){
+            // Rögzítés nélkül nem marad ott: visszavonjuk a lerakást, anyag nem fogyott.
+            structure.undo();structure.nextId=std::max(structure.nextId,before+1);
+            return "Nem sikerült rögzíteni az alkatrészt: "+why;
+        }
+        if(poleCost>0)preparedPoles-=poleCost;
+        if(kind==PART_STONE)consumeItems(1,1,"szerkezet alkatrésze: kő");
+        if(kind==PART_STONE)--carriedStone;
+        stamina-=3;step(.2);++eventCounter;
+        std::ostringstream out;
+        out<<"Alkatrész lerakva (#"<<id<<"). ";
+        const StructureReport rep=structure.analyze();
+        out<<(rep.stable?"A szerkezet most stabil.":"FIGYELEM: a szerkezet nem stabil (túlterhelt vagy lebegő rész).");
+        return out.str();
+    }
+    if(action=="part_cut"||action=="part_turn"){
+        // A játékoshoz legközelebbi alkatrész (1,5 m-en belül).
+        unsigned target=0;double best=1.5*1.5;
+        for(const auto& q:structure.parts){
+            const double dx=q.x-playerX,dz=q.z-playerZ;const double d=dx*dx+dz*dz;
+            if(d<best){best=d;target=q.id;}
+        }
+        if(target==0)return "Nincs alkatrész a közelben: menj közelebb.";
+        std::string why;
+        if(action=="part_turn"){
+            if(stamina<1)return "A forgatáshoz előbb pihenned kell.";
+            const Part* p=structure.find(target);
+            if(!structure.rotatePart(target,p->yaw+0.7853981633974483,&why))return why;
+            stamina-=1;step(0.05);++eventCounter;
+            return "Az alkatrész (#"+std::to_string(target)+") elfordítva 45°-kal.";
+        }
+        if(chippedEdgeWear<=0)return "Vágáshoz éles kőeszköz kell.";
+        if(stamina<4)return "A vágáshoz előbb pihenned kell.";
+        const unsigned created=structure.cutPart(target,0.5,&why);
+        if(created==0)return why.empty()?"Nem vágható el.":why; // hiba: sem kopás, sem idő nem fogy
+        --chippedEdgeWear;if(chippedEdgeWear==0)++stoneDebris;
+        stamina-=4;step(0.3);++eventCounter;
+        std::ostringstream out;
+        out<<"Az alkatrész (#"<<target<<") kettévágva; új darab: #"<<created<<". Kőél kopott, az anyag megmaradt. ";
+        out<<(structure.analyze().stable?"A szerkezet stabil.":"FIGYELEM: a szerkezet nem stabil.");
+        return out.str();
+    }
     if(action=="hearth") {
         if(!isNear(-1.15,-1.8,2.7))return "Tűzhelyet csak a kijelölt munkaterületen építhetsz: menj oda.";
         if(hearthBuilt) return "A tűzhely már felépült.";
         if(carriedWood<3) return "Tűzhely: 3 faág szükséges.";
         if(carriedStone<2) return "Tűzhely: 2 kő szükséges.";
         if(stamina<12) return "Tűzhely: a munkához túl kevés az állóképességed.";
+        consumeItems(0,3,"tűzhely építése: faág");consumeItems(1,2,"tűzhely építése: kő");
         carriedWood-=3;carriedStone-=2;stamina-=12;hearthBuilt=true;step(0.75);++eventCounter;
         return "A tűzhely elkészült. 3 faág, 2 kő és 0,75 játékóra elfogyott.";
     }
@@ -365,6 +847,7 @@ std::string World::act(const std::string& action) {
         if(woodMoisture>0.40) return "A fa túl nedves: előbb száradnia kell.";
         if(rainIntensity>0.60) return "Az erős eső eláztatja az előkészítetlen tűzhelyet.";
         if(stamina<4) return "Tűzgyújtáshoz pihenned kell.";
+        consumeItems(0,2,"tűzgyújtás: tüzelő faág");
         --carriedTinder;carriedWood-=2;stamina-=4;fireFuel=2.0;fireLit=true;++eventCounter;
         return "A tűz meggyulladt. Gyújtós és tüzelő fogyott; fény és hő keletkezett.";
     }
@@ -379,30 +862,59 @@ void World::forceRainForTest(double intensity){ testWeather=true; rainIntensity=
 void World::step(double hoursElapsed) {
     if(!std::isfinite(hoursElapsed) || hoursElapsed<=0.0 || hoursElapsed>24.0) return;
     hours+=hoursElapsed;
+    if(underShelter && !protectedAtPlayer())underShelter=false;
+    const AfricanWeather climate=africanWeatherAt(hours);
+    humidity=climate.humidity;
+    if(!testWeather) rainIntensity=climate.precipitation;
+    woodMoisture=clamp(woodMoisture+rainIntensity*0.23*hoursElapsed-
+                       (1-rainIntensity)*0.07*(1.0+.55*climate.windStrength)*hoursElapsed,0,1);
+    const double sunlight=clamp(1.-std::abs(std::fmod(hours,24.)-13.)/12.,0.,1.);
+    // The ecology owns the one soil-water reservoir. Rain enters it once;
+    // gameplay traction, renderer moisture and the menu all read its result.
+    const double oldMud=ecology.mud;
+    ecology.step(hoursElapsed,rainIntensity,ecology.soilWater,sunlight,
+                 climate.temperatureC,climate.windStrength);
+    groundMoisture=ecology.soilWater;
+    if(oldMud<.30 && ecology.mud>=.30 && rainIntensity>.02){
+        ++eventCounter;
+        logCause("Csapadék → nedves talaj → sár → lassabb járás");
+    }else if(oldMud>=.30&&ecology.mud<.30){
+        ++eventCounter;
+        logCause("Talaj száradása → kevesebb sár → biztosabb járás");
+    }
+    const double heat=std::max(0.0,climate.temperatureC-26.0);
+    const double heatExposure=underShelter?.35:1.0;
+    playerThirst=clamp(playerThirst+hoursElapsed*(.85+.11*heat*heatExposure),0,100);
+    if(waterCollectorStage>=2){
+        storedRainwater=clamp(storedRainwater+rainIntensity*hoursElapsed*.72-
+                              sunlight*hoursElapsed*.018,0,60);
+    }
+    structure.wear(hoursElapsed*(0.002+rainIntensity*0.03)); // az eső koptatja az alkatrészeket
     updateNpcs(hoursElapsed);
     for(int i=0;i<siteCount;++i){
         auto& site=sites[i];
         if(site.stage>=1){
-            site.condition=clamp(site.condition-hoursElapsed*(0.10+rainIntensity*1.15),0.,100.);
+            site.condition=clamp(site.condition-hoursElapsed*(0.10+rainIntensity*1.15+
+                             std::max(0.0,climate.windStrength-.42)*.18),0.,100.);
         }
     }
-    if(underShelter && !protectedAtPlayer())underShelter=false;
-    // Közelítő determinisztikus időjárás, nem hiteles paleoklimatológiai rekonstrukció.
-    humidity=clamp(0.38+0.32*std::sin(hours*0.30),0.04,0.98);
-    if(!testWeather) rainIntensity=clamp((humidity-0.62)*2.8,0.0,1.0);
-    groundMoisture=clamp(groundMoisture+rainIntensity*0.25*hoursElapsed-(1-rainIntensity)*0.035*hoursElapsed,0,1);
-    woodMoisture=clamp(woodMoisture+rainIntensity*0.23*hoursElapsed-(1-rainIntensity)*0.07*hoursElapsed,0,1);
     // A tető NEM teleportálja szárazra a játékost. Csak fedett menedékbe húzódva véd.
     const double exposure=(underShelter && protectedAtPlayer())?0.07:1.0;
     playerWetness=clamp(playerWetness+rainIntensity*0.34*exposure*hoursElapsed
-                        -(underShelter?0.09:0.035)*hoursElapsed,0.0,1.0);
+                        -(underShelter?0.09:0.035)*(1.0+.50*climate.windStrength)*hoursElapsed,0.0,1.0);
     if(fireLit) {
-        fireFuel-=hoursElapsed*(0.35+0.15*rainIntensity);
-        if(rainIntensity>0.85 || fireFuel<=0.0){fireFuel=0.0;fireLit=false;++eventCounter;}
+        fireFuel-=hoursElapsed*(0.35+0.15*rainIntensity+0.24*climate.windStrength);
+        if(rainIntensity>0.85 || fireFuel<=0.0){
+            fireFuel=0.0;fireLit=false;++eventCounter;
+            logCause(rainIntensity>0.85?"Heves eső → tűz kialudt":
+                                      "Tüzelőanyag elfogyott → tűz kialudt");
+        }
     }
     const double gain=(underShelter?0.85:0.35)*hoursElapsed;
     const double dampPenalty=playerWetness>0.70?1.6*hoursElapsed:0.0;
-    stamina=clamp(stamina+gain-dampPenalty,0.0,100.0);
+    const double coldWindPenalty=std::max(0.0,8.0-climate.temperatureC)*
+                                 climate.windStrength*(playerWetness>.45?.12:.035)*hoursElapsed;
+    stamina=clamp(stamina+gain-dampPenalty-coldWindPenalty-heat*.05*heatExposure*hoursElapsed,0.0,100.0);
 }
 std::string World::shelterStatus() const {
     std::ostringstream os;os<<std::fixed<<std::setprecision(1);
@@ -421,15 +933,27 @@ std::string World::shelterStatus() const {
         }
     }
     os<<"\nKŐÉL: "<<chippedEdgeWear<<"/6 · CÖLÖP: "<<preparedPoles
-      <<" · LEVEL: "<<carriedLeaves;
+      <<" · LEVEL: "<<carriedLeaves
+      <<"\nESŐVÍZGYŰJTŐ: "<<(waterCollectorStage==0?"nincs":waterCollectorStage==1?"tartóváz":"fedett")
+      <<" · tárolt víz "<<storedRainwater<<"/60 L";
     if(underShelter)os<<"\nA karakter védett helyen van.";
     return os.str();
 }
 std::string World::summary() const {
     std::ostringstream os;os<<std::fixed<<std::setprecision(2);
+    const AfricanWeather climate=africanWeatherAt(hours);
+    const double seasonDay=std::fmod(hours/24.0,365.0);
+    const char* season=seasonDay<59.0||seasonDay>=334.0?"nyár":
+                       seasonDay<151.0?"ősz":seasonDay<243.0?"tél":"tavasz";
+    const char* windLabel=climate.windStrength<.30?"csendes":climate.windStrength<.52?"mérsékelt":"élénk";
     os<<"IDŐ: "<<hours<<" óra\n"
+      <<"ÉVSZAK: "<<season<<" · hőmérséklet "<<climate.temperatureC<<" °C | SZÉL: "
+      <<climate.windStrength*100<<"% ("<<windLabel<<")\n"
       <<"CSAPADÉK: "<<rainIntensity*100<<"% | TALAJNEDVESSÉG: "<<groundMoisture*100<<"%\n"
       <<"FA NEDVESSÉGE: "<<woodMoisture*100<<"% | ÁTÁZÁS: "<<playerWetness*100<<"%\n"
+      <<"SZOMJÚSÁG: "<<playerThirst<<"% | ESŐVÍZGYŰJTŐ: "
+      <<(waterCollectorStage==0?"nincs":waterCollectorStage==1?"tartóváz":"fedett")
+      <<" · tárolt víz "<<storedRainwater<<"/60 L\n"
       <<"KÖRNYEZET: "<<groundWood<<" faág, "<<groundStone<<" kő, "<<groundLeaves<<" leveles ág, "<<groundTinder<<" gyújtós\n"
       <<"KÉSZLET: "<<carriedWood<<" faág, "<<carriedStone<<" kő, "<<carriedLeaves<<" leveles ág, "<<carriedTinder<<" gyújtós\n"      <<"JÁTÉKOS: "<<playerX<<" m, "<<playerZ<<" m | "<<nearby()<<"\n"
 
@@ -438,13 +962,17 @@ std::string World::summary() const {
       <<"MENEDÉKEK: "<<siteCount<<" db | LEGFEJLETTEBB: "<<shelterStage<<"/3 | VÉDETT: "<<(underShelter?"igen":"nem")<<"\n"
       <<"TŰZHELY: "<<(hearthBuilt?"felépült":"hiányzik")<<" | TŰZ: "<<(fireLit?"ég":"nem ég")<<"\n"
       <<"TÁBOR: "<<campStatus()<<"\n"
-      <<"KÖZÖSSÉG: 4 társ · önálló munkavégzés\n"
-      <<"OKOZATI ESEMÉNYEK: "<<eventCounter;
+      <<"KÖZÖSSÉG: 4 társ · önálló munkavégzés és személyes tanulás\n"
+      <<"OKOZATI ESEMÉNYEK: "<<eventCounter<<"\n"
+      <<ecology.status();
     return os.str();
+}
+double World::windStrength() const {
+    return africanWeatherAt(hours).windStrength;
 }
 std::string World::save() const {
     std::ostringstream o;o<<std::setprecision(17);
-    o<<"TAKS_NATIVE_5 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
+    o<<"TAKS_NATIVE_12 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
      <<carriedWood<<' '<<carriedStone<<' '<<carriedTinder<<' '
      <<hours<<' '<<humidity<<' '<<rainIntensity<<' '<<woodMoisture<<' '
      <<groundMoisture<<' '<<stamina<<' '<<fireFuel<<' '
@@ -458,28 +986,50 @@ std::string World::save() const {
     for(const auto& n:npcs)
         o<<' '<<n.x<<' '<<n.z<<' '<<n.energy<<' '<<n.hunger<<' '<<n.wetness
          <<' '<<n.role<<' '<<n.carrying<<' '<<n.task<<' '<<n.delivered<<' '<<n.walkPhase;
+    // Separate saved learning, after legacy NPC fields: old save formats are unchanged.
+    o<<" NPCLEARN1";
+    for(const auto& n:npcs){
+        o<<' '<<n.discoveries<<' '<<n.rumorsHeard<<' '<<n.completedTrips
+         <<' '<<n.falseLeads<<' '<<n.wetTrips<<' '<<n.scoutSteps;
+        for(int observation:n.rememberedAmounts)o<<' '<<observation;
+    }
+    o<<" NPCSURV1";
+    for(const auto& n:npcs){
+        o<<' '<<n.thirst<<' '<<n.fear<<' '<<n.dangerExperience
+         <<' '<<n.fleeEvents<<' '<<n.waterTrips
+         <<' '<<n.lastDangerX<<' '<<n.lastDangerZ<<' '<<n.dangerMemoryUntil;
+    }
     o<<' '<<siteCount;
     for(const auto& site:sites)
         o<<' '<<site.x<<' '<<site.z<<' '<<site.stage<<' '<<site.condition;
+    ecology.write(o);
+    o<<' '<<playerThirst<<' '<<waterCollectorStage<<' '<<storedRainwater;
+    // Egyedi tárgyak főkönyve (LEDG1): csak a meglévő tárgyak; az elhasználtakat számláló őrzi.
+    o<<" LEDG1 "<<nextItemId<<' '<<consumedItems[0]<<' '<<consumedItems[1]<<' '<<items.size();
+    for(const Item& it:items)o<<' '<<it.id<<' '<<it.type<<' '<<it.where<<' '<<it.node<<' '<<it.by;
+    o<<' '<<structure.save(); // F2: szerkezetek (STRUCT2; a STRUCT1 is betölthető)
     return o.str();
 }
 bool World::load(const std::string& data) {
     std::istringstream is(data);std::string header;World tmp;int hearth=0,fire=0,covered=0;
     if(!(is>>header) ||
-       (header!="TAKS_NATIVE_1" && header!="TAKS_NATIVE_2" && header!="TAKS_NATIVE_3" && header!="TAKS_NATIVE_4" && header!="TAKS_NATIVE_5"))return false;
+       header.rfind("TAKS_NATIVE_",0)!=0)return false;
+    int version=1;
+    while(version<=12&&header!="TAKS_NATIVE_"+std::to_string(version))++version;
+    if(version>12)return false;
     if(!(is>>tmp.groundWood>>tmp.groundStone>>tmp.groundTinder
       >>tmp.carriedWood>>tmp.carriedStone>>tmp.carriedTinder
       >>tmp.hours>>tmp.humidity>>tmp.rainIntensity>>tmp.woodMoisture
       >>tmp.groundMoisture>>tmp.stamina>>tmp.fireFuel>>hearth>>fire>>tmp.eventCounter))return false;
-    if(header!="TAKS_NATIVE_1"){
+    if(version>=2){
         if(!(is>>tmp.groundLeaves>>tmp.carriedLeaves>>tmp.chippedEdgeWear>>tmp.stoneDebris
               >>tmp.preparedPoles>>tmp.shelterStage>>tmp.playerWetness>>covered))return false;
     }
-    if(header=="TAKS_NATIVE_3"||header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"){
+    if(version>=3){
         if(!(is>>tmp.playerX>>tmp.playerZ>>tmp.walkPhase))return false;
         for(auto& node:tmp.nodes){if(!(is>>node.amount))return false;}
     }
-    if(header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"){
+    if(version>=4){
         for(int& amount:tmp.campStock)if(!(is>>amount))return false;
         if(!(is>>tmp.npcSimulatedHours))return false;
         for(auto& n:tmp.npcs) {
@@ -487,10 +1037,70 @@ bool World::load(const std::string& data) {
                    >>n.role>>n.carrying>>n.task>>n.delivered>>n.walkPhase))return false;
         }
     }
-    if(header=="TAKS_NATIVE_5"){
+    if(version>=11){
+        std::string learnTag;
+        if(!(is>>learnTag)||learnTag!="NPCLEARN1")return false;
+        for(auto& n:tmp.npcs){
+            if(!(is>>n.discoveries>>n.rumorsHeard>>n.completedTrips
+                 >>n.falseLeads>>n.wetTrips>>n.scoutSteps))return false;
+            for(int& observed:n.rememberedAmounts)if(!(is>>observed))return false;
+        }
+    }
+    if(version>=12){
+        std::string survivalTag;
+        if(!(is>>survivalTag)||survivalTag!="NPCSURV1")return false;
+        for(auto& n:tmp.npcs){
+            if(!(is>>n.thirst>>n.fear>>n.dangerExperience>>n.fleeEvents
+                 >>n.waterTrips>>n.lastDangerX>>n.lastDangerZ
+                 >>n.dangerMemoryUntil))return false;
+        }
+    }
+    if(version>=5){
         if(!(is>>tmp.siteCount))return false;
         for(auto& site:tmp.sites)
             if(!(is>>site.x>>site.z>>site.stage>>site.condition))return false;
+    }
+    using EcoFormat=LivingWorld::SaveFormat;
+    EcoFormat format=EcoFormat::Initial;
+    if(version>=6 && !tmp.ecology.read(is,&format))return false;
+    const bool classicEcology=format==EcoFormat::Initial||format==EcoFormat::TrampledGrass;
+    // Version 7/8 had two writers. Their ecology layouts decide which suffix
+    // is mandatory, so truncation cannot turn a damaged ledger into a new one.
+    const bool hasLedger=version>=10||(version>=7&&version<=9&&classicEcology);
+    const bool hasStruct=hasLedger&&version>=8;
+    const bool hasWater=version>=10||(version==8&&format==EcoFormat::Water);
+    if((version==6&&!classicEcology)||(version==7&&!hasLedger&&format!=EcoFormat::Footprints)||
+       (version==8&&!hasLedger&&!hasWater)||(version==9&&!hasLedger)||
+       (version>=10&&format!=EcoFormat::Combined))return false;
+    if(hasWater&&!(is>>tmp.playerThirst>>tmp.waterCollectorStage>>tmp.storedRainwater))return false;
+    if(version>=6){
+        // V6+ store a second moisture value. Preserve the ecology state on load
+        // and restore the older field as its renderer/save compatibility mirror.
+        if(!std::isfinite(tmp.groundMoisture)||tmp.groundMoisture<0||tmp.groundMoisture>1)return false;
+        tmp.groundMoisture=tmp.ecology.soilWater;
+    }else{
+        // Older saves predate the ecology reservoir; migrate their ground value.
+        tmp.ecology.soilWater=tmp.groundMoisture;
+        tmp.ecology.mud=clamp((tmp.ecology.soilWater-.27)*1.7+
+                              tmp.rainIntensity*.16-tmp.ecology.ice*.15,0.,1.);
+    }
+    std::vector<Item> loadedItems;unsigned loadedNext=1,loadedConsumed[2]={0,0};
+    if(hasLedger){
+        std::string tag;size_t n=0;
+        if(!(is>>tag)||tag!="LEDG1"||!(is>>loadedNext>>loadedConsumed[0]>>loadedConsumed[1]>>n)||n>100000)return false;
+        for(size_t i=0;i<n;++i){
+            Item it;
+            if(!(is>>it.id>>it.type>>it.where>>it.node>>it.by))return false;
+            if(it.type<0||it.type>1||(it.where!=0&&it.where!=1&&it.where!=2&&it.where!=4))return false;
+            if(it.where==0&&(it.node<0||it.node>=World::resourceCount))return false;
+            if(it.where==4&&(it.by<0||it.by>=World::npcCount))return false;
+            loadedItems.push_back(it);
+        }
+    }
+    Structure loadedStructure;
+    if(hasStruct){
+        std::string rest;std::getline(is,rest);
+        if(!loadedStructure.load(rest))return false;
     }
     std::string trailing;
     if(is>>trailing)return false;
@@ -506,29 +1116,51 @@ bool World::load(const std::string& data) {
        !std::isfinite(tmp.stamina)||tmp.stamina<0||tmp.stamina>100||
        !std::isfinite(tmp.fireFuel)||tmp.fireFuel<0||
        !std::isfinite(tmp.playerWetness)||tmp.playerWetness<0||tmp.playerWetness>1||
+       !std::isfinite(tmp.playerThirst)||tmp.playerThirst<0||tmp.playerThirst>100||
+       tmp.waterCollectorStage<0||tmp.waterCollectorStage>2||
+       !std::isfinite(tmp.storedRainwater)||tmp.storedRainwater<0||tmp.storedRainwater>60||
        !std::isfinite(tmp.playerX)||tmp.playerX<-7.5||tmp.playerX>7.5||
        !std::isfinite(tmp.playerZ)||tmp.playerZ<-7.5||tmp.playerZ>13.0||
        !std::isfinite(tmp.walkPhase)||tmp.walkPhase<0||tmp.walkPhase>1e9||
        (hearth!=0&&hearth!=1)||(fire!=0&&fire!=1)||(covered!=0&&covered!=1))return false;
     if(covered && tmp.shelterStage!=3)return false;
     if(fire && !hearth)return false;
+    if((tmp.waterCollectorStage<2&&tmp.storedRainwater>.000001)||
+       (tmp.waterCollectorStage==0&&tmp.storedRainwater!=0.0))return false;
 
-    if(header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"){
+    if(version>=4){
         if(!std::isfinite(tmp.npcSimulatedHours)||tmp.npcSimulatedHours<0||tmp.npcSimulatedHours>=0.0400001)return false;
         for(int amount:tmp.campStock)if(amount<0||amount>100000)return false;
         for(int i=0;i<npcCount;++i){
             const auto& n=tmp.npcs[i];
             if(n.role!=i||n.carrying<0||n.carrying>1||n.delivered<0||n.delivered>100000||
-               n.task<0||n.task>4||
+               n.task<0||n.task>(version>=12?6:4)||
                !std::isfinite(n.x)||n.x<-7.5||n.x>7.5||
                !std::isfinite(n.z)||n.z<-7.5||n.z>13.0||
                !std::isfinite(n.energy)||n.energy<0||n.energy>100||
                !std::isfinite(n.hunger)||n.hunger<0||n.hunger>100||
                !std::isfinite(n.wetness)||n.wetness<0||n.wetness>1||
-               !std::isfinite(n.walkPhase)||n.walkPhase<0||n.walkPhase>1e9)return false;
+               !std::isfinite(n.walkPhase)||n.walkPhase<0||n.walkPhase>1e9||
+               n.discoveries<0||n.discoveries>12||
+               n.rumorsHeard<0||n.rumorsHeard>12||
+               n.completedTrips<0||n.completedTrips>100000||
+               n.falseLeads<0||n.falseLeads>100000||
+               n.wetTrips<0||n.wetTrips>100000||
+               n.scoutSteps<0||n.scoutSteps>8||
+               !std::isfinite(n.thirst)||n.thirst<0||n.thirst>100||
+               !std::isfinite(n.fear)||n.fear<0||n.fear>1||
+               n.dangerExperience<0||n.dangerExperience>100||
+               n.fleeEvents<0||n.fleeEvents>100000||
+               n.waterTrips<0||n.waterTrips>100000||
+               !std::isfinite(n.lastDangerX)||n.lastDangerX< -7.5||n.lastDangerX>7.5||
+               !std::isfinite(n.lastDangerZ)||n.lastDangerZ< -7.5||n.lastDangerZ>13||
+               !std::isfinite(n.dangerMemoryUntil)||n.dangerMemoryUntil<0||
+               n.dangerMemoryUntil>tmp.hours+1)return false;
+            for(int observed:n.rememberedAmounts)
+                if(observed< -2||observed>100000)return false;
         }
     }
-    if(header=="TAKS_NATIVE_3"||header=="TAKS_NATIVE_4"||header=="TAKS_NATIVE_5"){
+    if(version>=3){
         // Sérült/túlírt mentésből nem szabad nyersanyagot teremteni.
         for(const auto& node:tmp.nodes)if(node.amount<0 || node.amount>100000)return false;
         const int expected[4]={tmp.groundWood,tmp.groundStone,tmp.groundTinder,tmp.groundLeaves};
@@ -552,7 +1184,7 @@ bool World::load(const std::string& data) {
         }
         tmp.syncGroundCounts();
     }
-    if(header!="TAKS_NATIVE_5"){
+    if(version<5){
         // Régi APK-kban a menedék egy rögzített helyen állt.
         // Csak a már megépített szerkezetet migráljuk, ingyen építési helyet nem hozunk létre.
         if(tmp.shelterStage>0){
@@ -576,6 +1208,15 @@ bool World::load(const std::string& data) {
             }else if(site.stage!=0||site.x!=0||site.z!=0||site.condition!=100)return false;
         }
         if(maxStage!=tmp.shelterStage)return false;
+    }
+    if(hasLedger){
+        tmp.items=loadedItems;tmp.nextItemId=loadedNext;
+        tmp.consumedItems[0]=loadedConsumed[0];tmp.consumedItems[1]=loadedConsumed[1];
+        tmp.ledgerReady=true;
+        tmp.structure=loadedStructure;
+        if(!tmp.ledgerConsistent())return false; // a főkönyv és a készlet nem térhet el
+    }else{
+        tmp.rebuildLedgerFromCounts(); // régi mentés: azonosítók a készletből, előzmény nélkül
     }
     tmp.hearthBuilt=hearth!=0;tmp.fireLit=fire!=0;tmp.underShelter=covered!=0;
     // Sérült mentésben a fedés nem védhet a távolból.

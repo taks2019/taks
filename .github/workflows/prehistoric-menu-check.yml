@@ -1,0 +1,30 @@
+name: TAKS World / elso lepes / oskori UI szabalytesztek
+on:
+  push:
+    branches: [taks-world-biblia-menu-step-1]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prehistoric-menu-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: World-driven UI and no neon
+        run: |
+          mkdir -p build-ui
+          javac -d build-ui app/src/main/java/hu/taks/world/PrehistoricMenuTheme.java tests/java/hu/taks/world/PrehistoricMenuThemeTest.java
+          java -cp build-ui hu.taks.world.PrehistoricMenuThemeTest
+      - name: Ensure legacy causality tests remain sound
+        run: |
+          cmake -S engine -B build-cause -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-cause --parallel 2
+          ctest --test-dir build-cause --output-on-failure
+      - name: Ensure fixed blue clearcolor was eliminated
+        run: |
+          ! grep -F 'glClearColor(.56f,.63f,.67f' app/src/main/cpp/FastScene.cpp
+          grep -F 'const float skyR=' app/src/main/cpp/FastScene.cpp

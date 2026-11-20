@@ -1,0 +1,77 @@
+name: TAKS World / photo-real visual ecology 3D integration
+on:
+  push:
+    branches: [taks-world-visual-ecology-step-3]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-photographic-plants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install real authored GLTF geometry and texture import dependencies
+        run: python -m pip install 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2'
+      - name: Download CC0 photographed terrain and 3D geology
+        run: python scripts/import_cc0_rocks.py
+      - name: Import genuine multi-mesh grass / fern / tree preserving alpha
+        run: python scripts/import_cc0_foliage.py
+      - name: Validate model assets, geometry and texture manifest
+        run: |
+          python - <<'PY'
+          import json,struct
+          from pathlib import Path
+          d=Path('app/src/main/assets/models')
+          m=json.loads((d/'foliage_manifest.json').read_text())
+          assert len(m['models'])==2
+          for x in m['models']:
+              name=x['name']
+              data=(d/(name+'.tkm')).read_bytes()
+              assert data[:4]==b'TKM1'
+              v=struct.unpack('<I',data[4:8])[0]
+              assert v>300 and v%3==0 and len(data)==8+v*32
+              assert x['real_meshes']>=1 and x['triangles']==v//3
+              assert x['material_images']>=1 and (d/(name+'.png')).is_file()
+              print(name,'triangles',x['triangles'],'parts',x['real_meshes'],
+                    'unique-textures',x['material_images'],
+                    'RGBA cutouts',x['texture_alpha'])
+          PY
+      - name: Install headless EGL/GLES3 for real GPU render
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libegl-dev libgles-dev libgl1-mesa-dri libpng-dev
+      - name: Build actual native world renderer
+        run: |
+          mkdir -p build-previews
+          g++ -std=c++17 -O2 -Wall -Wextra -Iapp/src/main/cpp \
+            tests/fast_scene_preview.cpp app/src/main/cpp/FastScene.cpp app/src/main/cpp/RealModels.cpp \
+            -o build-previews/fast_scene_test -lEGL -lGLESv2 -lpng
+      - name: Test real grass biomass and tree lifecycle in GPU image
+        env:
+          EGL_PLATFORM: surfaceless
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          build-previews/fast_scene_test
+          python tests/ppm_to_png.py
+      - name: Upload verifiable 3D screenshots, source manifest and materials
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TAKS-World-real-3D-ecology-proofs
+          path: |
+            build-previews/*.png
+            app/src/main/assets/models/foliage_manifest.json
+          if-no-files-found: warn
+  native-causal-simulation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ecology / living-world simulation
+        run: |
+          cmake -S engine -B build-cause -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-cause --parallel 2
+          ctest --test-dir build-cause --output-on-failure

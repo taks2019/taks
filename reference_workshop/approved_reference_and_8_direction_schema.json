@@ -1,0 +1,118 @@
+{
+  "schema": "TAKS.World.Reference.1",
+  "accepted_at": "2026-11-19",
+  "master": {
+    "file": "Széljárta ősi szavanna a dolomitbarlangnál.png",
+    "dimensions": [
+      1536,
+      1024
+    ],
+    "sha256": "980ea229cb87bda9f18891681a9227db111a01ec56ad2e5149c6426b21b63aa5",
+    "immutable": true
+  },
+  "atlas": {
+    "order_degrees": [
+      0,
+      45,
+      90,
+      135,
+      180,
+      225,
+      270,
+      315
+    ],
+    "layout": "4x2",
+    "production_master_target_px": [
+      8192,
+      8192
+    ],
+    "existing_directions": [],
+    "status": "not_yet_produced"
+  },
+  "cast": [
+    {
+      "id": "PLAYER",
+      "kind": "player"
+    },
+    {
+      "id": "NPC_01",
+      "kind": "ai"
+    },
+    {
+      "id": "NPC_02",
+      "kind": "ai"
+    },
+    {
+      "id": "NPC_03",
+      "kind": "ai"
+    },
+    {
+      "id": "NPC_04",
+      "kind": "ai"
+    }
+  ],
+  "bones": [
+    "root",
+    "pelvis",
+    "spine_01",
+    "spine_02",
+    "neck",
+    "head",
+    "clavicle_L",
+    "upper_arm_L",
+    "forearm_L",
+    "hand_L",
+    "clavicle_R",
+    "upper_arm_R",
+    "forearm_R",
+    "hand_R",
+    "thigh_L",
+    "shin_L",
+    "foot_L",
+    "toes_L",
+    "thigh_R",
+    "shin_R",
+    "foot_R",
+    "toes_R"
+  ],
+  "hand_finger_chains": [
+    "thumb",
+    "index",
+    "middle",
+    "ring",
+    "pinky"
+  ],
+  "ik": [
+    "left_grip",
+    "right_grip",
+    "left_foot",
+    "right_foot"
+  ],
+  "motion_clips_required": [
+    "idle",
+    "walk",
+    "run",
+    "crouch",
+    "bend",
+    "grasp",
+    "lift",
+    "carry",
+    "build",
+    "drink",
+    "eat",
+    "rest",
+    "slip_recover"
+  ],
+  "causal_relations": [
+    "wind->water_ripples",
+    "wind->foliage_bend",
+    "wind->smoke_advection",
+    "rain->ground_saturation",
+    "saturation->mud_adhesion->walking_slowdown",
+    "foot_contact+mud->footprints",
+    "rain->fire_extinguish",
+    "fuel_consumption->fire_heat",
+    "hunger+thirst+fatigue->NPC_choice"
+  ],
+  "status": "draft: source imagery has not been segmented into accepted 8-direction sprite masters"
+}

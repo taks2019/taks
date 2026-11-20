@@ -1,0 +1,62 @@
+{
+  "01_Wonderwerk_Teljes_Kulso_Barlang.png": [
+    530,
+    0,
+    1536,
+    690
+  ],
+  "02_Fa_fo_izometrikus_kivagas.png": [
+    0,
+    125,
+    575,
+    665
+  ],
+  "03_Fa_hattersav_izometrikus_kivagas.png": [
+    360,
+    0,
+    845,
+    370
+  ],
+  "04_Fa_jobb_izometrikus_kivagas.png": [
+    1080,
+    650,
+    1536,
+    1152
+  ],
+  "05_Fu_es_novenyzet_talajfolt.png": [
+    390,
+    690,
+    850,
+    1120
+  ],
+  "06_Vizmedence_es_lefolyas.png": [
+    0,
+    630,
+    555,
+    1152
+  ],
+  "07_Menedek_es_tuzhely.png": [
+    505,
+    300,
+    1165,
+    790
+  ],
+  "08_Faag_keszlet.png": [
+    1090,
+    435,
+    1536,
+    805
+  ],
+  "09_Kokupac_keszlet.png": [
+    835,
+    635,
+    1210,
+    1030
+  ],
+  "10_Taposott_nedves_talaj_labnyomokkal.png": [
+    500,
+    700,
+    965,
+    1152
+  ]
+}

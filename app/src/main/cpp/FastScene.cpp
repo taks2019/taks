@@ -1,5 +1,6 @@
 #include "FastScene.h"
 #include "RealModels.h"
+#include "../../../../engine/SpriteOrientation.h"
 #include <GLES3/gl3.h>
 #include <algorithm>
 #include <array>
@@ -17,9 +18,33 @@ struct Vertex { float x,y,z,nx,ny,nz,kind; };
 struct Mat4 { float a[16]{}; };
 std::string error;
 GLuint program=0,staticVAO=0,staticVBO=0,dynamicVAO=0,dynamicVBO=0;
-GLint uVP=-1,uRain=-1,uClock=-1,uEye=-1,uGround=-1,uCliff=-1;
+GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uAnimation=-1,uWind=-1,uGround=-1,uCliff=-1;
 GLuint terrainTexture[2]={0,0};
-std::vector<Vertex> terrainMesh,objectsMesh;
+// Dedicated world-space 2D asset renderer (NOT a second browser/game engine).
+GLuint actorProgram=0,actorVAO=0,actorVBO=0;
+GLuint actorTextures[16]={};
+GLint actorVP=-1,actorSampler=-1,actorLight=-1;
+const char* ACTOR_VERT=R"GLSL(#version 300 es
+precision highp float;
+layout(location=0) in vec3 inPosition;
+layout(location=1) in vec2 inUv;
+uniform mat4 uVP;
+out vec2 vUv;
+void main(){vUv=inUv;gl_Position=uVP*vec4(inPosition,1.0);}
+)GLSL";
+const char* ACTOR_FRAG=R"GLSL(#version 300 es
+precision mediump float;
+in vec2 vUv;
+uniform sampler2D uSprite;
+uniform float uLight;
+out vec4 color;
+void main(){
+    vec4 c=texture(uSprite,vUv);
+    if(c.a<0.075)discard;
+    color=vec4(c.rgb*uLight,c.a);
+}
+)GLSL";
+std::vector<Vertex> terrainMesh,objectsMesh,weatherMesh;
 Vec3 add(Vec3 a,Vec3 b){return {a.x+b.x,a.y+b.y,a.z+b.z};}
 Vec3 sub(Vec3 a,Vec3 b){return {a.x-b.x,a.y-b.y,a.z-b.z};}
 Vec3 mul(Vec3 v,float s){return {v.x*s,v.y*s,v.z*s};}
@@ -36,7 +61,10 @@ float surfaceHeight(float x,float z){
                  .09f*std::sin(x*.87f+z*.57f)+.065f*std::cos(z*.73f-x*.42f);
     return -.48f+(relief+.48f)*e;
 }
-float top(float x){return 4.45f+.62f*std::sin(x*.29f+.48f)+.37f*std::sin(x*.81f);}
+float top(float x){
+    const float taper=std::sqrt(std::max(0.f,1.f-x*x/(9.4f*9.4f)));
+    return 5.15f*taper+.24f*taper*std::sin(x*.83f);
+}
 void triangle(std::vector<Vertex>& v,Vec3 a,Vec3 b,Vec3 c,float kind){
     Vec3 n=norm(cross(sub(b,a),sub(c,a)));
     v.push_back({a.x,a.y,a.z,n.x,n.y,n.z,kind});
@@ -59,6 +87,48 @@ void axisBar(std::vector<Vertex>& v,Vec3 a,Vec3 b,float radius,float kind,int si
         triangle(v,b,add(b,r0),add(b,r1),kind);
     }
 }
+void muddyFootprint(std::vector<Vertex>& v,float x,float z,float heading,float strength){
+    if(strength<.025f)return;
+    // A low, ground-conforming sole impression. It appears only after a step
+    // in soft mud and fades with the same saved ground-state simulation.
+    constexpr float halfWidth=.052f,halfLength=.125f;
+    constexpr float shape[10][2]={
+        {-.54f,-.72f},{.54f,-.72f},{.77f,-.49f},{.72f,-.05f},{.61f,.42f},
+        {.34f,.78f},{-.34f,.78f},{-.61f,.42f},{-.72f,-.05f},{-.77f,-.49f}
+    };
+    const float c=std::cos(heading),s=std::sin(heading);
+    std::array<Vec3,10> points{};
+    Vec3 center{};
+    for(int i=0;i<10;++i){
+        const float lx=shape[i][0]*halfWidth,lz=shape[i][1]*halfLength;
+        const float wx=x+lx*c+lz*s,wz=z-lx*s+lz*c;
+        points[i]={wx,surfaceHeight(wx,wz)+.008f,wz};
+        center=add(center,points[i]);
+    }
+    center=mul(center,.1f);
+    const float kind=12.f+std::clamp(strength,0.f,1.f)*.49f;
+    for(int i=0;i<10;++i)triangle(v,center,points[(i+1)%10],points[i],kind);
+}
+void waterFan(std::vector<Vertex>& v,float x,float z,float radius,float y,float phase){
+    constexpr int sides=28;
+    const Vec3 center{x,y,z};
+    for(int i=0;i<sides;++i){
+        const float a=2.f*PI*float(i)/float(sides);
+        const float b=2.f*PI*float(i+1)/float(sides);
+        const float ra=radius*(.91f+.06f*std::sin(a*3.f+phase));
+        const float rb=radius*(.91f+.06f*std::sin(b*3.f+phase));
+        Vec3 p0{x+std::cos(a)*ra,y+.012f*std::sin(a*4.f+phase),z+std::sin(a)*ra*.82f};
+        Vec3 p1{x+std::cos(b)*rb,y+.012f*std::sin(b*4.f+phase),z+std::sin(b)*rb*.82f};
+        triangle(v,center,p1,p0,11.f);
+    }
+}
+void addMudFootprints(const FastFrame& f){
+    for(int i=0;i<32;++i){
+        const int at=i*4;
+        muddyFootprint(objectsMesh,f.footprints[at],f.footprints[at+1],
+                       f.footprints[at+2],f.footprints[at+3]);
+    }
+}
 void irregularRock(std::vector<Vertex>& v,float x,float z,float radius,float scale,float kind,int seed=0){
     constexpr int sides=9;
     float h=surfaceHeight(x,z);
@@ -73,6 +143,93 @@ void irregularRock(std::vector<Vertex>& v,float x,float z,float radius,float sca
         Vec3 shoulder1{x+std::cos(b)*r1*.7f,h+radius*scale*(.45f+.05f*std::sin(float(i+1)+seed)),z+std::sin(b)*r1*.65f};
         quad(v,base0,base1,shoulder1,shoulder0,kind);
         triangle(v,shoulder0,shoulder1,centerTop,kind);
+    }
+}
+void addWater(const FastFrame& scene){
+    for(int i=0;i<2;++i){
+        const float* water=scene.waters+i*4;
+        const float level=std::clamp(water[3],0.f,1.f);
+        if(level<.015f)continue;
+        const float x=water[0],z=water[1];
+        const float radius=water[2]*(.40f+.60f*level);
+        const float y=surfaceHeight(x,z)+.10f+.08f*level;
+        waterFan(objectsMesh,x,z,radius,y,scene.animationTime*.55f+float(i));
+        // Loose limestone at the changing shoreline gives the pool a bank.
+        for(int k=0;k<7;++k){
+            const float a=2.f*PI*float(k)/7.f+float(i)*.4f;
+            const float r=radius*1.12f;
+            irregularRock(objectsMesh,x+std::cos(a)*r,z+std::sin(a)*r*.82f,
+                          .10f,.42f,2.f,k+i*7);
+        }
+    }
+}
+Vec3 animalPoint(float x,float z,float groundY,float heading,float lx,float ly,float lz){
+    const float c=std::cos(heading),s=std::sin(heading);
+    return {x+lx*c+lz*s,groundY+ly,z-lx*s+lz*c};
+}
+void ellipsoid(std::vector<Vertex>& v,float x,float z,float groundY,float heading,
+               float lx,float ly,float lz,float rx,float ry,float rz,float material){
+    constexpr int rings=8,sides=16;
+    Vec3 points[rings+1][sides]{};
+    for(int r=0;r<=rings;++r){
+        const float latitude=-.5f*PI+PI*float(r)/float(rings);
+        const float radial=std::cos(latitude),vertical=std::sin(latitude);
+        for(int s=0;s<sides;++s){
+            const float longitude=2.f*PI*float(s)/float(sides);
+            points[r][s]=animalPoint(x,z,groundY,heading,
+                lx+rx*radial*std::cos(longitude),
+                ly+ry*vertical,
+                lz+rz*radial*std::sin(longitude));
+        }
+    }
+    for(int r=0;r<rings;++r)for(int s=0;s<sides;++s){
+        const int next=(s+1)%sides;
+        const Vec3 a=points[r][s],b=points[r+1][s];
+        const Vec3 c=points[r+1][next],d=points[r][next];
+        triangle(v,a,b,c,material);triangle(v,a,c,d,material);
+    }
+}
+void addWildlife(const FastFrame& scene){
+    for(int i=0;i<8;++i){
+        const float* animal=scene.animals+i*6;
+        if(animal[3]<.5f)continue;
+        const float x=animal[0],z=animal[1],kind=animal[2];
+        const bool moving=scene.animalMoving[i]>.5f;
+        const float heading=std::isfinite(scene.animalHeadings[i])?
+                            scene.animalHeadings[i]:0.f;
+        const float ground=surfaceHeight(x,z);
+        const float scale=kind>.5f?.88f:1.0f;
+        const float coat=kind>.5f?5.f:7.f;
+        const float sway=moving?.19f:.025f;
+        const float phase=scene.animationTime*4.1f+float(i)*1.7f;
+        ellipsoid(objectsMesh,x,z,ground,heading,0.f,.70f,0.f,
+                  .38f*scale,.29f*scale,.67f*scale,coat);
+        axisBar(objectsMesh,animalPoint(x,z,ground,heading,0,.72f,.40f*scale),
+                animalPoint(x,z,ground,heading,0,.88f,.63f*scale),.14f*scale,coat,7);
+        ellipsoid(objectsMesh,x,z,ground,heading,0.f,.94f,.75f*scale,
+                  .22f*scale,.20f*scale,.28f*scale,coat);
+        ellipsoid(objectsMesh,x,z,ground,heading,0.f,.84f,1.00f*scale,
+                  .12f*scale,.10f*scale,.12f*scale,2.f);
+        for(int side=-1;side<=1;side+=2){
+            ellipsoid(objectsMesh,x,z,ground,heading,.17f*scale*side,.99f,.86f*scale,
+                      .028f,.028f,.028f,2.f);
+            axisBar(objectsMesh,animalPoint(x,z,ground,heading,.13f*scale*side,1.08f,.65f*scale),
+                    animalPoint(x,z,ground,heading,.18f*scale*side,1.19f,.62f*scale),
+                    .035f*scale,coat,5);
+        }
+        axisBar(objectsMesh,animalPoint(x,z,ground,heading,0,.69f,-.61f*scale),
+                animalPoint(x,z,ground,heading,0,.40f,-.91f*scale),.033f*scale,coat,5);
+        for(int leg=0;leg<4;++leg){
+            const float side=(leg%2==0)?-1.f:1.f;
+            const bool front=leg<2;
+            const float hipZ=(front?.38f:-.40f)*scale;
+            const float stride=std::sin(phase+(front?0.f:PI)+(side>0?PI:0.f))*sway;
+            const Vec3 hip=animalPoint(x,z,ground,heading,side*.23f*scale,.53f,hipZ);
+            const Vec3 knee=animalPoint(x,z,ground,heading,side*.24f*scale,.29f,hipZ+stride*.45f);
+            const Vec3 hoof=animalPoint(x,z,ground,heading,side*.24f*scale,.045f,hipZ+stride);
+            axisBar(objectsMesh,hip,knee,.071f*scale,coat,6);
+            axisBar(objectsMesh,knee,hoof,.046f*scale,coat,6);
+        }
     }
 }
 float cliffZ(float x,float y){return 3.63f+.13f*std::sin(x*.74f+y*.28f)+.12f*std::sin(x*2.3f+y*2.1f);}
@@ -98,18 +255,28 @@ void buildStatic(){
     const int mx=95,my=34;
     for(int j=0;j<my;++j)for(int i=0;i<mx;++i){
         float x=-9.4f+18.8f*float(i)/mx,xx=-9.4f+18.8f*float(i+1)/mx;
-        float y=5.5f*float(j)/my,yy=5.5f*float(j+1)/my;
-        float midX=(x+xx)*.5f,midY=(y+yy)*.5f;
-        if(cliffOpen(midX,midY))continue;
-        if(midY>top(midX))continue;
-        Vec3 a{x,y,cliffZ(x,y)},b{xx,y,cliffZ(xx,y)},c{xx,yy,cliffZ(xx,yy)},d{x,yy,cliffZ(x,yy)};
-        quad(terrainMesh,a,b,c,d,1.f);
+        const float t=float(j)/my,tt=float(j+1)/my;
+        const float y=top(x)*t,yy=top(x)*tt;
+        const float r=top(xx)*t,rr=top(xx)*tt;
+        if(cliffOpen((x+xx)*.5f,(y+yy+r+rr)*.25f))continue;
+        Vec3 a{x,y,cliffZ(x,y)},b{xx,r,cliffZ(xx,r)},c{xx,rr,cliffZ(xx,rr)},d{x,yy,cliffZ(x,yy)};
+        quad(terrainMesh,a,d,c,b,1.f);
     }
-    // A fal kap egy felső felszínt és valódi oldalakat.
+    // Close the full rock formation down to the ground behind the entrance.
+    constexpr int depthSegments=30;
     for(int i=0;i<80;++i){
-        float x=-9.4f+18.8f*i/80.f,xx=-9.4f+18.8f*(i+1)/80.f;
-        float y=top(x),yy=top(xx);
-        quad(terrainMesh,{x,y,cliffZ(x,y)},{xx,yy,cliffZ(xx,yy)},{xx,yy-.25f,12.2f},{x,y-.25f,12.2f},1.f);
+        const float x=-9.4f+18.8f*i/80.f,xx=-9.4f+18.8f*(i+1)/80.f;
+        auto crest=[](float x,float t){
+            const float y=top(x);
+            const float z=cliffZ(x,y)+(12.2f-cliffZ(x,y))*t;
+            const float ground=surfaceHeight(x,z);
+            const float ripple=.24f*std::sin(x*1.7f+t*31.f)*std::sin(t*PI);
+            return Vec3{x,ground+(y-ground)*std::cos(t*PI*.5f)+ripple,z};
+        };
+        for(int j=0;j<depthSegments;++j){
+            const float a=float(j)/depthSegments,b=float(j+1)/depthSegments;
+            quad(terrainMesh,crest(x,a),crest(x,b),crest(xx,b),crest(xx,a),1.f);
+        }
     }
     // A barlang sötét belseje az elülső arch mögött található.
     for(int i=0;i<13;++i){
@@ -120,7 +287,7 @@ void buildStatic(){
         quad(terrainMesh,a,b,bb,aa,6.f);
     }
     quad(terrainMesh,{-1.45f,surfaceHeight(-1.45f,3.75f),3.75f},{1.45f,surfaceHeight(1.45f,3.75f),3.75f},
-        {1.45f,surfaceHeight(1.45f,6.7f),6.7f},{-1.45f,surfaceHeight(-1.45f,6.7f),6.7f},1.f);
+        {1.45f,surfaceHeight(1.45f,6.7f),6.7f},{-1.45f,surfaceHeight(-1.45f,6.7f),6.7f},6.f);
     quad(terrainMesh,{-1.1f,0.0f,6.7f},{1.1f,0.0f,6.7f},
         {1.1f,2.7f,6.7f},{-1.1f,2.7f,6.7f},6.f);
     // The previous 8 angular polygon-stones are removed: natural stones are now true photogrammetry meshes.
@@ -225,38 +392,58 @@ void addBuildings(const FastFrame& scene){
         }
     }
 }
-void addPlayerAndNpcs(const FastFrame& scene){
-    auto addCharacter=[](float x,float z,float phase,float accent){
-        float h=surfaceHeight(x,z);
-        // A végleges embermodell helyett az animált mozgási és pozíciós teszt geometria.
-        float w=.10f*std::sin(phase);
-        axisBar(objectsMesh,{x,h+.9f,z},{x,h+1.40f,z},.135f,5.f,8);
-        irregularRock(objectsMesh,x,z,.13f,1.05f,5.f,3);
-        axisBar(objectsMesh,{x-.095f,h+.88f,z},{x-.13f,h+.1f,z+w},.06f,5.f,7);
-        axisBar(objectsMesh,{x+.095f,h+.88f,z},{x+.13f,h+.1f,z-w},.06f,5.f,7);
-        axisBar(objectsMesh,{x-.14f,h+1.27f,z},{x-.28f,h+.84f,z-w*.5f},.047f,5.f,6);
-        axisBar(objectsMesh,{x+.14f,h+1.27f,z},{x+.28f,h+.84f,z+w*.5f},.047f,5.f,6);
-        // Azonosító gyűrűként nem lebegő UI elem: a talajra fektetett 3D geometria.
-        for(int j=0;j<16;++j){
-            float a=2*PI*j/16,b=2*PI*(j+1)/16;
-            Vec3 p{x+.33f*std::cos(a),h+.025f,z+.33f*std::sin(a)};
-            Vec3 q{x+.33f*std::cos(b),h+.025f,z+.33f*std::sin(b)};
-            axisBar(objectsMesh,p,q,.018f,accent,4);
-        }
-    };
-    addCharacter(scene.playerX,scene.playerZ,scene.walkPhase,7.f);
-    for(int i=0;i<4;++i){
-        const float* n=scene.npcs+i*4;
-        float x=n[0],z=n[1],h=surfaceHeight(x,z),c=8.f+float(i%2);
-        // A társak még nem fotórealisztikusak: egyszerű térbeli helyzetjelölő.
-        axisBar(objectsMesh,{x,h+.05f,z},{x,h+.46f,z},.045f,c,5);
-        for(int j=0;j<12;++j){
-            float a=2*PI*j/12,b=2*PI*(j+1)/12;
-            Vec3 p{x+.22f*std::cos(a),h+.025f,z+.22f*std::sin(a)};
-            Vec3 q{x+.22f*std::cos(b),h+.025f,z+.22f*std::sin(b)};
-            axisBar(objectsMesh,p,q,.016f,c,3);
-        }
+void addWaterCollector(const FastFrame& scene){
+    if(scene.collectorStage<.5f)return;
+    constexpr float x=1.0f,z=-3.4f;
+    const float h=surfaceHeight(x,z);
+    for(int ix=0;ix<2;++ix)for(int iz=0;iz<2;++iz){
+        const float px=x-.66f+float(ix)*1.32f;
+        const float pz=z-.43f+float(iz)*.86f;
+        axisBar(objectsMesh,{px,surfaceHeight(px,pz)+.08f,pz},
+                {px,h+1.48f,pz},.075f,3.f,6);
     }
+    axisBar(objectsMesh,{x-.72f,h+1.43f,z-.46f},{x+.72f,h+1.43f,z-.46f},.07f,3.f,6);
+    axisBar(objectsMesh,{x-.72f,h+1.43f,z+.46f},{x+.72f,h+1.43f,z+.46f},.07f,3.f,6);
+    if(scene.collectorStage>1.5f){
+        // The leaf roof slopes toward a shallow stone trough; rain collection
+        // and its stored-water amount are simulated by the same World state.
+        quad(objectsMesh,{x-.79f,h+1.48f,z-.55f},{x+.79f,h+1.48f,z-.55f},
+             {x+.79f,h+1.24f,z+.57f},{x-.79f,h+1.24f,z+.57f},4.f);
+        irregularRock(objectsMesh,x+.98f,z+.34f,.31f,.24f,2.f,11);
+        if(scene.collectorWater>.005f)
+            waterFan(objectsMesh,x+.98f,z+.34f,.12f,
+                     surfaceHeight(x+.98f,z+.34f)+.075f,scene.animationTime*.8f);
+    }
+}
+void addWeather(const FastFrame& scene,Vec3 right){
+    weatherMesh.clear();
+    const float gust=scene.windStrength;
+    const int drops=int(scene.rain*260.f);
+    const int dust=int(100.f*gust*(1.f-scene.rain)*
+                       std::clamp((.30f-scene.moisture)*4.f,0.f,1.f));
+    const float time=scene.animationTime;
+    auto fraction=[](float value){return value-std::floor(value);};
+    for(int i=0;i<drops+dust;++i){
+        const bool rain=i<drops;
+        const float seed=float(i+1);
+        const float age=fraction(seed*.618034f+time*(rain?1.24f:.23f));
+        const float travel=age*(rain?1.6f:5.2f)*gust;
+        float x=scene.playerX+24.f*(fraction(seed*.7548777f)-.5f)+scene.windX*travel;
+        float z=scene.playerZ+4.f+22.f*(fraction(seed*.5698403f)-.5f)+scene.windZ*travel;
+        const float y=surfaceHeight(x,z)+(rain?.07f+5.2f*(1.f-age):.08f+.32f*age);
+        if(z>3.7f&&z<12.2f&&std::abs(x)<9.4f&&y<top(x))continue;
+        const Vec3 p{x,y,z};
+        const Vec3 extent=mul(right,rain?.013f:.13f);
+        const Vec3 tip=add(p,rain?Vec3{-scene.windX*gust*.18f,.30f,-scene.windZ*gust*.18f}
+                                 :Vec3{0,.06f,0});
+        quad(weatherMesh,sub(p,extent),add(p,extent),add(tip,extent),sub(tip,extent),
+             rain?13.f:14.f);
+    }
+}
+
+void addHearth(const FastFrame& scene,Vec3 right){
+    // No white mannequins or rod people. The animated, source-skinned humanoids
+    // are drawn by RealModels; a missing asset reports an import error.
     if(scene.hearth>.5f){
         float x=-1.15f,z=-1.8f,h=surfaceHeight(x,z);
         for(int k=0;k<7;++k){
@@ -265,9 +452,28 @@ void addPlayerAndNpcs(const FastFrame& scene){
         }
         axisBar(objectsMesh,{x-.33f,h+.12f,z-.18f},{x+.31f,h+.16f,z+.16f},.056f,3.f,6);
         if(scene.fire>.5f){
-            // Kis lángsík csak valósan égő tűznél jelenik meg.
-            quad(objectsMesh,{x-.09f,h+.16f,z},{x+.09f,h+.16f,z},
-                 {x+.01f,h+.66f,z},{x-.01f,h+.64f,z},10.f);
+            const float gust=scene.windStrength;
+            const Vec3 base{x,h+.16f,z};
+            const float flicker=.42f+.12f*std::sin(scene.animationTime*13.f);
+            const Vec3 tip=add(base,{scene.windX*.46f*gust,flicker,scene.windZ*.46f*gust});
+            const Vec3 width=mul(right,.115f);
+            triangle(objectsMesh,sub(base,width),add(base,width),tip,10.f);
+            for(int i=9;i>=0;--i){
+                const float age=std::fmod(scene.animationTime*.48f+float(i)*.1f,1.f);
+                const float drift=1.7f*age*age*gust;
+                const Vec3 center{x+scene.windX*drift,h+.56f+1.85f*age,z+scene.windZ*drift};
+                const float radius=.061f+.16f*age;
+                const Vec3 side=mul(right,radius);
+                const Vec3 up{0,radius*.54f,0};
+                constexpr int segments=8;
+                for(int j=0;j<segments;++j){
+                    const float a=2.f*PI*j/segments,b=2.f*PI*(j+1)/segments;
+                    const Vec3 edgeA=add(center,add(mul(side,std::cos(a)),mul(up,std::sin(a))));
+                    const Vec3 edgeB=add(center,add(mul(side,std::cos(b)),mul(up,std::sin(b))));
+                    triangle(weatherMesh,center,edgeA,edgeB,15.f);
+                    weatherMesh[weatherMesh.size()-3].kind+=.44f*(1.f-age);
+                }
+            }
         }
     }
 }
@@ -279,17 +485,20 @@ layout(location=2) in float materialId;
 uniform mat4 u_viewProjection;
 out vec3 wPos;
 out vec3 wNorm;
+out float materialValue;
 flat out int matId;
 void main(){
     wPos=position;
     wNorm=normal;
+    materialValue=materialId;
     matId=int(materialId+.5);
     gl_Position=u_viewProjection*vec4(position,1.);
 })GLSL";
 const char* FRAG=R"GLSL(#version 300 es
-precision mediump float;
-in vec3 wPos;in vec3 wNorm;flat in int matId;
-uniform float u_rain;uniform float u_clock;
+precision highp float;
+in vec3 wPos;in vec3 wNorm;in float materialValue;flat in int matId;
+uniform float u_rain;uniform float u_mud;uniform float u_clock;uniform float u_animationTime;
+uniform vec2 u_wind;
 uniform sampler2D u_groundTexture;
 uniform sampler2D u_cliffTexture;
 out vec4 fragColor;
@@ -298,10 +507,29 @@ void main(){
     float grain=hash(floor(wPos*12.));
     float lines=.5+.5*sin(wPos.y*8.5+sin(wPos.x*.69+wPos.z*.21)*1.8);
     vec3 base;
+    if(matId==13){fragColor=vec4(.63,.73,.78,.36);return;}
+    if(matId==14){fragColor=vec4(.63,.49,.28,.15);return;}
+    if(matId==15){fragColor=vec4(.61,.59,.54,(materialValue-15.)*.39);return;}
     if(matId==0){
-        base=texture(u_groundTexture,wPos.xz*.45).rgb * (0.85+0.15*grain);
+        // Two scales of the SAME authentic gravel photograph break up the
+        // old coarse diagonal tile pattern. Fine grit stays visible near feet.
+        vec3 micro=texture(u_groundTexture,wPos.xz*1.41).rgb;
+        vec3 macro=texture(u_groundTexture,vec2(wPos.z*.19,wPos.x*.23)).rgb;
+        float blendWeight=clamp(.45+.25*sin(wPos.x*.38+wPos.z*.27)*
+                                        sin(wPos.z*.51-wPos.x*.16),0.,1.);
+        base=mix(macro,micro,blendWeight)*(.90+.10*grain);
+        // Soil dampness/mud follows saved ecological simulation and darkens
+        // the photographic surface instead of painting a new brown slab.
+        float drainage=.30*sin(wPos.x*1.54+wPos.z*.81)+.17*sin(wPos.z*3.8-wPos.x*2.9);
+        float mudCoverage=smoothstep(.12,.77,u_mud+drainage*.43)*smoothstep(.02,.20,u_mud);
+        base=mix(base,base*vec3(.48,.44,.38),mudCoverage);
+        base+=vec3(.065,.058,.049)*mudCoverage*mudCoverage*pow(.5+.5*sin(lines*6.+wPos.x*3.),4.);
     }else if(matId==1){
-        base=texture(u_cliffTexture,vec2(wPos.x*.25,wPos.y*.34)).rgb * (0.88+0.12*lines);
+        vec3 weights=pow(abs(normalize(wNorm)),vec3(4.));
+        weights/=max(dot(weights,vec3(1.)),.001);
+        base=(texture(u_cliffTexture,wPos.zy*.64).rgb*weights.x+
+              texture(u_cliffTexture,wPos.xz*.64).rgb*weights.y+
+              texture(u_cliffTexture,wPos.xy*.64).rgb*weights.z)*(.88+.12*lines);
     }else if(matId==2){
         base=mix(vec3(.32,.30,.27),vec3(.59,.53,.46),grain*.7);
     }else if(matId==3){
@@ -311,10 +539,26 @@ void main(){
     }else if(matId==5){
         base=vec3(.40,.29,.22);
     }else if(matId==6){
-        base=vec3(.055,.052,.046);
+        float shade=mix(.54,.15,smoothstep(3.7,6.7,wPos.z));
+        base=vec3(.21,.16,.115)*(shade+grain*.035);
     }else if(matId==7){base=vec3(.70,.61,.39);}
     else if(matId==8){base=vec3(.46,.62,.52);}
     else if(matId==9){base=vec3(.57,.60,.73);}
+    else if(matId==11){
+        float windSpeed=length(u_wind);
+        vec2 direction=windSpeed>.001?u_wind/windSpeed:vec2(1.,0.);
+        float crosswind=dot(wPos.xz,vec2(-direction.y,direction.x));
+        float ripple=.5+.5*sin(dot(wPos.xz,direction)*12.-u_animationTime*3.+sin(crosswind*2.1));
+        ripple*=.24+.76*max(windSpeed,u_rain);
+        float glint=pow(max(0.,sin(u_animationTime*1.2+wPos.x*1.7-wPos.z*2.1)),10.);
+        base=mix(vec3(.035,.115,.12),vec3(.12,.31,.29),ripple*.72);
+        base+=vec3(.18,.21,.17)*glint;
+    }
+    else if(matId==12){
+        float imprint=clamp((materialValue-12.0)/.49,0.0,1.0);
+        base=mix(vec3(.34,.24,.15),vec3(.15,.10,.065),imprint);
+        base*=1.0-.12*clamp(u_mud,0.0,1.0);
+    }
     else {base=vec3(1.4,.50,.15);}
     vec3 normal=normalize(wNorm);
     float daylight=clamp(1.-abs(mod(u_clock,24.)-13.)/12.,.2,1.);
@@ -333,6 +577,12 @@ void main(){
 const std::string& lastError(){return error;}
 void shutdown(){
     if(terrainTexture[0]||terrainTexture[1])glDeleteTextures(2,terrainTexture);
+    glDeleteTextures(16,actorTextures);
+    std::fill(std::begin(actorTextures),std::end(actorTextures),0u);
+    if(actorVBO)glDeleteBuffers(1,&actorVBO);
+    if(actorVAO)glDeleteVertexArrays(1,&actorVAO);
+    if(actorProgram)glDeleteProgram(actorProgram);
+    actorVBO=actorVAO=actorProgram=0;
     terrainTexture[0]=terrainTexture[1]=0;
     if(staticVBO)glDeleteBuffers(1,&staticVBO);
     if(dynamicVBO)glDeleteBuffers(1,&dynamicVBO);
@@ -358,7 +608,10 @@ bool init(){
     if(!linked){error="A gyors 3D motor shaderprogramja nem kapcsolódott.";shutdown();return false;}
     uVP=glGetUniformLocation(program,"u_viewProjection");
     uRain=glGetUniformLocation(program,"u_rain");
+    uWind=glGetUniformLocation(program,"u_wind");
+    uMud=glGetUniformLocation(program,"u_mud");
     uClock=glGetUniformLocation(program,"u_clock");
+    uAnimation=glGetUniformLocation(program,"u_animationTime");
     uGround=glGetUniformLocation(program,"u_groundTexture");
     uCliff=glGetUniformLocation(program,"u_cliffTexture");
     buildStatic();
@@ -367,6 +620,34 @@ bool init(){
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
     glDisable(GL_CULL_FACE);
+    // Shader/program for the eight actual alpha PNGs, with GPU depth test.
+    GLuint vs=compile(GL_VERTEX_SHADER,ACTOR_VERT);
+    GLuint fs=compile(GL_FRAGMENT_SHADER,ACTOR_FRAG);
+    if(!vs||!fs){
+        if(vs)glDeleteShader(vs);
+        if(fs)glDeleteShader(fs);
+        shutdown();return false;
+    }
+    actorProgram=glCreateProgram();
+    glAttachShader(actorProgram,vs);glAttachShader(actorProgram,fs);
+    glLinkProgram(actorProgram);
+    glDeleteShader(vs);glDeleteShader(fs);
+    GLint actorLinked=GL_FALSE;
+    glGetProgramiv(actorProgram,GL_LINK_STATUS,&actorLinked);
+    if(!actorLinked){error="Az átlátszó karakter-PNG GPU shaderje hibás.";shutdown();return false;}
+    actorVP=glGetUniformLocation(actorProgram,"uVP");
+    actorSampler=glGetUniformLocation(actorProgram,"uSprite");
+    actorLight=glGetUniformLocation(actorProgram,"uLight");
+    glGenVertexArrays(1,&actorVAO);
+    glBindVertexArray(actorVAO);
+    glGenBuffers(1,&actorVBO);
+    glBindBuffer(GL_ARRAY_BUFFER,actorVBO);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(float)*30,nullptr,GL_STREAM_DRAW);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,5*sizeof(float),(void*)0);
+    glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,5*sizeof(float),(void*)(3*sizeof(float)));
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glBindVertexArray(0);
     if(!taks::RealModels::init()){error=taks::RealModels::errorMessage();return false;}
     return glGetError()==GL_NO_ERROR;
 }
@@ -389,8 +670,8 @@ bool uploadTerrainTexture(int slot,const std::uint32_t* argb,int width,int heigh
     glTexImage2D(GL_TEXTURE_2D,0,GL_SRGB8_ALPHA8,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE,rgba.data());
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_MIRRORED_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_MIRRORED_REPEAT);
     glGenerateMipmap(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D,0);
     if(glGetError()!=GL_NO_ERROR){
@@ -398,13 +679,94 @@ bool uploadTerrainTexture(int slot,const std::uint32_t* argb,int width,int heigh
     }
     return true;
 }
+bool uploadActorSprite(int view,const std::uint32_t* argb,int width,int height){
+    if(view<0||view>=16||!argb||width<128||height<128||width>2048||height>2048||!actorProgram)
+        return false;
+    bool anyOpaque=false,anyClear=false;
+    const std::size_t n=std::size_t(width)*std::size_t(height);
+    std::vector<std::uint8_t> rgba(n*4);
+    for(std::size_t i=0;i<n;++i){
+        const std::uint32_t color=argb[i];
+        const std::uint8_t alpha=static_cast<std::uint8_t>(color>>24);
+        rgba[i*4+0]=static_cast<std::uint8_t>(color>>16);
+        rgba[i*4+1]=static_cast<std::uint8_t>(color>>8);
+        rgba[i*4+2]=static_cast<std::uint8_t>(color);
+        rgba[i*4+3]=alpha;
+        anyOpaque|=alpha>220;
+        anyClear|=alpha==0;
+    }
+    if(!anyOpaque||!anyClear){error="A karakter-PNG nem rendelkezik valódi alfa-kivágással.";return false;}
+    if(actorTextures[view])glDeleteTextures(1,&actorTextures[view]);
+    actorTextures[view]=0;
+    glGenTextures(1,&actorTextures[view]);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D,actorTextures[view]);
+    glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+    glTexImage2D(GL_TEXTURE_2D,0,GL_SRGB8_ALPHA8,width,height,0,GL_RGBA,GL_UNSIGNED_BYTE,rgba.data());
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D,0);
+    if(glGetError()!=GL_NO_ERROR){
+        glDeleteTextures(1,&actorTextures[view]);actorTextures[view]=0;
+        error="A telefon GPU-ja visszautasította az izometrikus karakter-PNG-t.";return false;
+    }
+    return true;
+}
+bool actorSpritesComplete(){
+    if(!actorProgram)return false;
+    for(GLuint t:actorTextures)if(!t)return false;
+    return true;
+}
+void drawActorSprite(const Mat4& vp,const FastFrame& f,Vec3 right){
+    if(!actorSpritesComplete()||taks::RealModels::hasRealHuman())return;
+    // PNG fallback only when an actual skinned 3D body cannot be loaded.
+    const int dir=taks::SpriteOrientation::cameraRelativeDirection(f.yaw,f.playerHeading);
+    const float y=surfaceHeight(f.playerX,f.playerZ)+.08f+
+                  std::clamp(f.playerJumpHeight,0.f,2.f);
+    // 512px atlas padded by source; character feet remain at one world-space position.
+    const Vec3 base{f.playerX,y,f.playerZ};
+    constexpr float quadW=2.13f,quadH=2.18f;
+    const Vec3 left=mul(right,-quadW*.5f),rightHalf=mul(right,quadW*.5f);
+    const Vec3 bl=add(base,left),br=add(base,rightHalf);
+    const Vec3 tl=add(bl,{0,quadH,0}),tr=add(br,{0,quadH,0});
+    const float v[30]={
+        tl.x,tl.y,tl.z, 0.f,0.f,
+        bl.x,bl.y,bl.z, 0.f,1.f,
+        br.x,br.y,br.z, 1.f,1.f,
+        tl.x,tl.y,tl.z, 0.f,0.f,
+        br.x,br.y,br.z, 1.f,1.f,
+        tr.x,tr.y,tr.z, 1.f,0.f
+    };
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+    glUseProgram(actorProgram);
+    glUniformMatrix4fv(actorVP,1,GL_FALSE,vp.a);
+    const float tod=std::fmod(std::fmod(f.clock,24.f)+24.f,24.f);
+    const float sun=std::clamp(1.f-std::abs(tod-13.f)/11.f,.38f,1.f);
+    glUniform1f(actorLight,sun*(1.f-.18f*std::clamp(f.rain,0.f,1.f)));
+    glActiveTexture(GL_TEXTURE2);
+    int spriteIndex=f.playerCrouching&&actorTextures[8+dir]?8+dir:dir;
+    glBindTexture(GL_TEXTURE_2D,actorTextures[spriteIndex]);
+    glUniform1i(actorSampler,2);
+    glBindVertexArray(actorVAO);
+    glBindBuffer(GL_ARRAY_BUFFER,actorVBO);
+    glBufferData(GL_ARRAY_BUFFER,sizeof(v),v,GL_STREAM_DRAW);
+    glDrawArrays(GL_TRIANGLES,0,6);
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D,0);
+    glDisable(GL_BLEND);
+}
 void render(int width,int height,const FastFrame& f){
     if(!program)return;
     width=std::max(width,1);height=std::max(height,1);
     float aspect=float(width)/float(height);
     float yaw=f.yaw,pitch=std::clamp(f.pitch,.349066f,1.396263f);
     float distance=std::max(18.f,f.zoom*2.f);
-    Vec3 focus{f.playerX,surfaceHeight(f.playerX,f.playerZ)+.90f,f.playerZ+1.2f};
+    Vec3 focus{f.playerX,surfaceHeight(f.playerX,f.playerZ)+.90f,f.playerZ+1.65f+std::clamp((f.zoom-10.f)*.29f,0.f,3.f)};
     Vec3 delta{std::sin(yaw)*std::cos(pitch)*distance,
                std::sin(pitch)*distance,
                -std::cos(yaw)*std::cos(pitch)*distance};
@@ -412,14 +774,31 @@ void render(int width,int height,const FastFrame& f){
     Mat4 vp=multiply(orthographic(f.zoom*.99f*aspect,f.zoom*.99f),lookAt(eye,focus));
 
     objectsMesh.clear();
-    addResources(f);addBuildings(f);addPlayerAndNpcs(f);
+    addWater(f);addWildlife(f);addMudFootprints(f);addResources(f);addBuildings(f);
+    const Vec3 right{std::cos(yaw),0,std::sin(yaw)};
+    addWeather(f,right);
+    addWaterCollector(f);addHearth(f,right);
     glViewport(0,0,width,height);
-    glClearColor(.56f,.63f,.67f,1.f);
+    // Stone Age menu/game atmosphere derives from the actual clock and weather.
+    // Never use a fixed blue/neon backdrop: nighttime charcoal, daylight dust,
+    // and rain-darkened limestone are natural environmental consequences.
+    const float timeOfDay=std::fmod(std::fmod(f.clock,24.f)+24.f,24.f);
+    const float daylight=std::clamp(1.f-std::abs(timeOfDay-13.f)/9.f,0.f,1.f);
+    const float rainfall=std::clamp(f.rain,0.f,1.f);
+    const float duskR=.085f, duskG=.074f, duskB=.058f;
+    const float dayR=.56f, dayG=.46f, dayB=.34f;
+    const float skyR=(duskR+(dayR-duskR)*daylight)*(1.f-.35f*rainfall);
+    const float skyG=(duskG+(dayG-duskG)*daylight)*(1.f-.29f*rainfall);
+    const float skyB=(duskB+(dayB-duskB)*daylight)*(1.f-.24f*rainfall);
+    glClearColor(skyR,skyG,skyB,1.f);
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
     glUseProgram(program);
     glUniformMatrix4fv(uVP,1,GL_FALSE,vp.a);
     if(uRain>=0)glUniform1f(uRain,f.rain);
+    glUniform2f(uWind,f.windX*f.windStrength,f.windZ*f.windStrength);
+    if(uMud>=0)glUniform1f(uMud,f.mud);
     if(uClock>=0)glUniform1f(uClock,f.clock);
+    if(uAnimation>=0)glUniform1f(uAnimation,f.animationTime);
     glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,terrainTexture[0]);
     if(uGround>=0)glUniform1i(uGround,0);
     glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,terrainTexture[1]);
@@ -432,6 +811,25 @@ void render(int width,int height,const FastFrame& f){
                  objectsMesh.empty()?nullptr:objectsMesh.data(),GL_STREAM_DRAW);
     glDrawArrays(GL_TRIANGLES,0,(GLsizei)objectsMesh.size());
     glBindVertexArray(0);
-    taks::RealModels::render(vp.a,f.nodes);
+    taks::RealModels::render(vp.a,f.nodes,f.grass,f.trees,f.verifiedFerns,
+        f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,f.playerJumpHeight,
+        true,f.playerMoving,f.playerRunning,f.npcs,
+        f.npcHeadings,f.npcMoving,f.animationTime,f.windStrength,
+        f.windX,f.windZ,f.wetSeason,f.moisture);
+    drawActorSprite(vp,f,right);
+    if(!weatherMesh.empty()){
+        glUseProgram(program);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(GL_FALSE);
+        glBindVertexArray(dynamicVAO);
+        glBindBuffer(GL_ARRAY_BUFFER,dynamicVBO);
+        glBufferData(GL_ARRAY_BUFFER,GLsizeiptr(weatherMesh.size()*sizeof(Vertex)),
+                     weatherMesh.data(),GL_STREAM_DRAW);
+        glDrawArrays(GL_TRIANGLES,0,GLsizei(weatherMesh.size()));
+        glBindVertexArray(0);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+    }
 }
 }

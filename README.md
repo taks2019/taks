@@ -1,14 +1,9 @@
 # TAKS WORLD · natív Android / C++ TAKS Engine
 
-> **ELUTASÍTOTT PROTOTÍPUS — NEM A JÓVÁHAGYOTT JÁTÉK.**
-> A felhasználó 2026-11-17-én elutasította a 0.6–0.7 Android grafikát és a nem eredeti logót.
-> A háromszög-primitívekből felépített FastScene, az egyszerű emberfigurák és a jelenlegi GUI
-> **nem vehetők át végleges grafikai vagy UI-referenciaként**. Ezt a vonalat nem csiszoljuk tovább.
-> A korábbi APK-k tesztverziók; nem szabad őket a Biblia megvalósításaként reklámozni.
+> **KIINDULÓ ÁLLAPOT — ELUTASÍTOTT PROTOTÍPUS.**
+> A 2026-11-17-i képernyőkép a korábbi, statikus fehér emberfigurákat, egyszerű talajt és hiányzó eredeti HUD-logót mutatja. A jelenlegi módosítás ezt az állapotot célozza, de nem állítja, hogy már kész a teljes, hiteles Wonderwerk-játék. A korábbi APK-k továbbra is tesztverziók.
 >
-> **Az eredeti TAKS WORLD logó helye:** `app/src/main/assets/logo/TAKS_WORLD_LOGO.png`.
-> A korábbi tévesen azonosított fájl eltávolítva. Csak a tulajdonos által megerősített
-> képet szabad ide visszatenni.
+> **Az eredeti TAKS WORLD logó:** a teljes átadási ZIP `original_assets/TAKS_WORLD_ORIGINAL.png` útvonalán található változatlanul. Az Android APK a menühöz méretezett, arányhelyes WebP változatot használja; az eredeti PNG-t nem írjuk felül.
 
 ## Újratervezéshez kötelező elfogadási kapuk
 
@@ -23,6 +18,10 @@
 
 
 **Jelenlegi mérföldkő: 0.6.0-isometric-fast — natív gyors 3D hálókirajzolás, valódi izometrikus kamera és kétirányú forgatás.**
+
+## Következő oksági bővítés — szél és növénymozgás
+
+A mentett időjárásból egyetlen szélerősség származik. Ugyanaz az érték hat a talaj- és faanyag-száradásra, a tűz fogyására, a státuszjelzésre és a GLES3 fotótextúrás növényhálók folyamatos lengésére. Ez egy tesztelhető játékrendszer-bővítés; önmagában nem kész grafikai mérföldkő vagy kész játék.
 
 Ez a felhasználó saját játékmotorjának **valódi natív Android** fejlesztése, nem HTML/Canvas, Unity vagy Godot.
 
@@ -116,3 +115,15 @@ A GitHub Actions debug APK-k alkalmi debug kulccsal készülnek. Ennek aláírá
 Olvasd el: **[FEJLESZTESI_TERV.md](FEJLESZTESI_TERV.md)**.
 
 **Elsődleges szabály:** nyersanyag -> munka -> alkatrész -> szerkezet -> használat -> kopás -> javítás; minden állapotváltozásnak azonosítható oka van.
+
+## 2026-11-18 — natív humanoid- és logófrissítés
+
+- A static TKM1 embertest helyére 121 422 csúcsos, GPU-s bőrsúlyozást és 53 forráscsontot tartalmazó TKS1 asset került. A projekt a forrás `idle`, `idle_breathe`, `idle_fidget`, `walk`, `run`, `strafe_left` és `strafe_right` animációit használja; a mozgásállapot-váltás 280 ms alatt keveredik.
+- A játékos és a négy NPC ugyanezt a csontozott modellt használja. A 3D rúdember-tartalékrajzolás törölve; a natív szereplőmodell hibája esetén a program hibát jelez, nem mutat fehér bábut.
+- Az NPC-k szimulált koordinátáit a natív renderer a 1,8 másodperces szimulációs lépés között interpolálja. A játék GPU-képe 40 ms-onként frissül, a szimuláció ettől független, ritkább időlépésekkel fut.
+- Az eredeti logó arányhelyes, 512×341-es WebP másolata szerepel a főmenüben és a játék HUD-ján; a teljes felbontású PNG változatlanul a kiadási ZIP-be kerül. A környezeti keret a mentett világ esőjére, tüzére és napszakára reagál.
+- A renderer a meglévő, valódi fotogrammetriai sziklákat több terepponton is elhelyezi. A terep és a barlang azonban továbbra sem a Wonderwerk helyszíni felmérése, a növények és az éghajlat sem régészetileg hitelesített.
+- A CharacterCreator-eredetű ruhahálók CC0-k; a bőr-szerű textúra saját generált anyag. A szabás kortárs, ezért a ruházat és a humanoid fajazonossága **nincs történetileg hitelesítve**.
+- A build 13 GLES3 tesztképet készít és Android emulátoron ellenőrzi az eredeti logót, a 53 csontos asset betöltését, a beállítások/almenük X gombját, az érintőpadról történő mozgást és a mentésfájl létrejöttét.
+
+Az ellenőrzött build állapotát, teszteredményeit és további hiányosságait a [2026-11-18-i változásnapló](CHANGELOG_2026-11-18.md) rögzíti.

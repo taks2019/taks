@@ -1,0 +1,81 @@
+{
+  "schema": "TAKS_WORLD_ASSET_REVIEW_V1",
+  "project": "TAKS World / MEGALODON",
+  "phase": "ecology-step-2",
+  "notes": [
+    "Only direct original CC0 sources, NOT Innerscene or web Canvas.",
+    "These are source candidates, NOT downloaded, embedded, validated for Wonderwerk, or user-approved.",
+    "Ecological/specific species suitability must be confirmed before placement into the world.",
+    "Mobile vegetation needs real alpha/normal/LOD import, not flat color or primitive replacement."
+  ],
+  "excluded_sources": [
+    {
+      "name": "Innerscene",
+      "reason": "Browser-first, OpenSCAD/primitive organic form simplification; user explicitly rejected"
+    }
+  ],
+  "candidates": [
+    {
+      "id": "fern_02",
+      "source": "https://polyhaven.com/a/fern_02",
+      "license": "CC0",
+      "purpose": "fern vegetation and biological menu motif",
+      "source_claim": "photorealistic fern clumps ~6k triangles",
+      "historical_relevance": "UNVERIFIED",
+      "mobile_import": "needs transparent cutout shading and proper model import",
+      "downloaded": false,
+      "model_imported": false,
+      "ecology_linked": false,
+      "user_approved": false
+    },
+    {
+      "id": "moss_01",
+      "source": "https://polyhaven.com/a/moss_01",
+      "license": "CC0",
+      "purpose": "wet weather and rock/wood moss overlays",
+      "source_claim": "moss clump ~246k triangles",
+      "historical_relevance": "UNVERIFIED",
+      "mobile_import": "requires low LOD and alpha support",
+      "downloaded": false,
+      "model_imported": false,
+      "ecology_linked": false,
+      "user_approved": false
+    },
+    {
+      "id": "grass_bermuda_01",
+      "source": "https://polyhaven.com/a/grass_bermuda_01",
+      "license": "CC0",
+      "purpose": "grass lifecycle and grazable biomass",
+      "historical_relevance": "UNVERIFIED",
+      "mobile_import": "mobile LOD, realistic wind, alpha shading",
+      "downloaded": false,
+      "model_imported": false,
+      "ecology_linked": false,
+      "user_approved": false
+    },
+    {
+      "id": "tree_small_02",
+      "source": "https://polyhaven.com/a/tree_small_02",
+      "license": "CC0",
+      "purpose": "growing tree with visual growth stages",
+      "historical_relevance": "UNVERIFIED",
+      "mobile_import": "multi mesh and material LOD, no static mature tree for seedlings",
+      "downloaded": false,
+      "model_imported": false,
+      "ecology_linked": false,
+      "user_approved": false
+    },
+    {
+      "id": "wild_rooibos_bush",
+      "source": "https://polyhaven.com/a/wild_rooibos_bush",
+      "license": "CC0",
+      "purpose": "South African flora reference only",
+      "historical_relevance": "NOT CONFIRMED FOR PLEISTOCENE WONDERWERK",
+      "mobile_import": "LOD and historical botanical review",
+      "downloaded": false,
+      "model_imported": false,
+      "ecology_linked": false,
+      "user_approved": false
+    }
+  ]
+}

@@ -1,19 +1,42 @@
 #include <jni.h>
 #include <GLES3/gl3.h>
 #include <android/log.h>
+#include <algorithm>
 #include "CauseWorld.h"
+#include "AudioScene.h"
+#include "AfricanClimate.h"
 #include "FastScene.h"
 #include "RealModels.h"
+#include "../../../../engine/PlayerTraversal.h"
 #include <vector>
 #include <string>
 #include <mutex>
 #include <cmath>
+#include <chrono>
+#include <array>
 
 namespace {
 taks::World world;
 std::mutex worldLock;
 GLuint program=0, vertexArray=0;
-float orbit=0.785398f, pitch=0.615480f, zoom=14.0f;
+float orbit=-0.785398f, pitch=0.615480f, zoom=19.0f;
+float playerHeading=0.0f;
+bool playerCrouching=false;
+taks::PlayerJump playerJump;
+double monotonicSeconds(){
+    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+std::chrono::steady_clock::time_point playerMovementDeadline{};
+std::chrono::steady_clock::time_point playerRunDeadline{};
+std::array<float,8> npcPrevious{};
+std::array<float,8> npcTarget{};
+std::array<float,4> npcFacing{};
+std::array<float,16> animalPrevious{},animalTarget{};
+std::array<float,8> animalFacing{};
+std::chrono::steady_clock::time_point animalSegmentStart{};
+bool animalInterpolationReady=false;
+std::chrono::steady_clock::time_point npcSegmentStart{};
+bool npcInterpolationReady=false;
 std::string rendererError;
 jstring toJava(JNIEnv* env,const std::string& s){return env->NewStringUTF(s.c_str());}
 GLuint compile(GLenum type,const char* source){
@@ -43,11 +66,41 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeDo(JN
     const std::string act=txt?txt:"";
     if(txt)env->ReleaseStringUTFChars(command,txt);
     std::lock_guard<std::mutex> guard(worldLock);
-    return toJava(env,world.act(act));
+    const std::string result=world.act(act);
+    npcInterpolationReady=false;animalInterpolationReady=false;
+    return toJava(env,result);
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeMove(JNIEnv* env,jobject,jfloat dx,jfloat dz){
     std::lock_guard<std::mutex> guard(worldLock);
-    return toJava(env,world.move(static_cast<double>(dx),static_cast<double>(dz)));
+    const double beforeX=world.playerX,beforeZ=world.playerZ;
+    const std::string result=world.move(static_cast<double>(dx),static_cast<double>(dz),
+                                          playerJump.airborne(monotonicSeconds()));
+    const double deltaX=world.playerX-beforeX,deltaZ=world.playerZ-beforeZ;
+    if(std::hypot(deltaX,deltaZ)>.00001){
+        playerHeading=static_cast<float>(std::atan2(deltaX,deltaZ));
+        const auto now=std::chrono::steady_clock::now();
+        playerMovementDeadline=now+std::chrono::milliseconds(130);
+        if(std::hypot(dx,dz)>.075)playerRunDeadline=now+std::chrono::milliseconds(130);
+    }
+    return toJava(env,result);
+}
+extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetCrouch(
+    JNIEnv*,jobject,jboolean crouch){
+    std::lock_guard<std::mutex> guard(worldLock);
+    playerCrouching=(crouch==JNI_TRUE);
+}
+extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeJump(JNIEnv* env,jobject){
+    std::lock_guard<std::mutex> guard(worldLock);
+    const double now=monotonicSeconds();
+    if(playerCrouching)return toJava(env,"Ugrás előtt állj fel.");
+    if(playerJump.airborne(now))return toJava(env,"Még a levegőben vagy.");
+    const std::string response=world.act("jump");
+    if(response=="Elrugaszkodtál a talajról."){
+        const double impulse=std::clamp(3.85-world.ecology.mud*1.2-world.playerWetness*.28,
+                                       2.0,4.0);
+        playerJump.launch(now,impulse);
+    }
+    return toJava(env,response);
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeGoal(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
@@ -57,20 +110,62 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeNpcSt
     std::lock_guard<std::mutex> guard(worldLock);
     return toJava(env,world.npcStatus());
 }
+extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeCausalReport(JNIEnv* env,jobject){
+    std::lock_guard<std::mutex> guard(worldLock);
+    return toJava(env,world.causalReport());
+}
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeCampStatus(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
     return toJava(env,world.campStatus());
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeTick(JNIEnv*,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
+    if(!animalInterpolationReady){
+        for(int i=0;i<taks::LivingWorld::animalCount;++i){
+            const auto& a=world.ecology.animals[i];
+            animalPrevious[i*2]=animalTarget[i*2]=static_cast<float>(a.x);
+            animalPrevious[i*2+1]=animalTarget[i*2+1]=static_cast<float>(a.z);
+        }
+        animalInterpolationReady=true;
+    }else animalPrevious=animalTarget;
+    if(!npcInterpolationReady){
+        for(int i=0;i<taks::World::npcCount;++i){
+            npcPrevious[i*2]=npcTarget[i*2]=static_cast<float>(world.npcs[i].x);
+            npcPrevious[i*2+1]=npcTarget[i*2+1]=static_cast<float>(world.npcs[i].z);
+        }
+        npcInterpolationReady=true;
+    }else npcPrevious=npcTarget;
     world.step(0.04);
+    for(int i=0;i<taks::LivingWorld::animalCount;++i){
+        const auto& a=world.ecology.animals[i];
+        animalTarget[i*2]=static_cast<float>(a.x);
+        animalTarget[i*2+1]=static_cast<float>(a.z);
+        const float dx=animalTarget[i*2]-animalPrevious[i*2];
+        const float dz=animalTarget[i*2+1]-animalPrevious[i*2+1];
+        if(dx*dx+dz*dz>1.e-7f)animalFacing[i]=std::atan2(dx,dz);
+    }
+    animalSegmentStart=std::chrono::steady_clock::now();
+    for(int i=0;i<taks::World::npcCount;++i){
+        npcTarget[i*2]=static_cast<float>(world.npcs[i].x);
+        npcTarget[i*2+1]=static_cast<float>(world.npcs[i].z);
+        const float deltaX=npcTarget[i*2]-npcPrevious[i*2];
+        const float deltaZ=npcTarget[i*2+1]-npcPrevious[i*2+1];
+        if(deltaX*deltaX+deltaZ*deltaZ>1.e-5f)
+            npcFacing[i]=std::atan2(deltaX,deltaZ);
+    }
+    npcSegmentStart=std::chrono::steady_clock::now();
+}
+extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeLogoUnlocked(JNIEnv*,jobject){
+    std::lock_guard<std::mutex> guard(worldLock);
+    return world.logoUnlocked()?JNI_TRUE:JNI_FALSE;
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeNearby(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
     return toJava(env,world.nearby());
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeAdvance(JNIEnv*,jobject){
-    std::lock_guard<std::mutex> guard(worldLock);world.step(1.0);
+    std::lock_guard<std::mutex> guard(worldLock);
+    world.step(1.0);npcInterpolationReady=false;animalInterpolationReady=false;
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeState(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);return toJava(env,world.summary());
@@ -90,10 +185,21 @@ extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeLoad
     const char* txt=env->GetStringUTFChars(payload,nullptr);
     std::string raw=txt?txt:"";
     if(txt)env->ReleaseStringUTFChars(payload,txt);
-    std::lock_guard<std::mutex> guard(worldLock);return world.load(raw)?JNI_TRUE:JNI_FALSE;
+    std::lock_guard<std::mutex> guard(worldLock);
+    const bool loaded=world.load(raw);
+    if(loaded){
+        npcInterpolationReady=false;animalInterpolationReady=false;
+        playerJump.reset();playerCrouching=false;
+        npcFacing.fill(0.f);animalFacing.fill(0.f);
+    }
+    return loaded?JNI_TRUE:JNI_FALSE;
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeReset(JNIEnv*,jobject){
     std::lock_guard<std::mutex> guard(worldLock);world=taks::World();
+    playerMovementDeadline=playerRunDeadline=std::chrono::steady_clock::time_point{};
+    playerJump.reset();playerCrouching=false;
+    npcInterpolationReady=false;npcFacing.fill(0.f);
+    animalInterpolationReady=false;animalFacing.fill(0.f);
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetView(JNIEnv*,jobject,jfloat yaw,jfloat cameraPitch,jfloat scale){
     std::lock_guard<std::mutex> guard(worldLock);
@@ -125,6 +231,68 @@ extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUplo
     if(env->ExceptionCheck())return JNI_FALSE;
     return taks::RealModels::upload(id,mesh.data(),mesh.size(),texture.data(),width,height)?JNI_TRUE:JNI_FALSE;
 }
+// World-space PNG character. All eight true-alpha views are required.
+extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUploadActorSprite(
+    JNIEnv* env,jobject,jint view,jintArray pixels,jint width,jint height){
+    if(!pixels||view<0||view>=16||width<128||height<128||width>2048||height>2048)
+        return JNI_FALSE;
+    const std::size_t count=std::size_t(width)*std::size_t(height);
+    if(static_cast<std::size_t>(env->GetArrayLength(pixels))!=count)return JNI_FALSE;
+    std::vector<std::uint32_t> data(count);
+    env->GetIntArrayRegion(pixels,0,static_cast<jsize>(count),reinterpret_cast<jint*>(data.data()));
+    if(env->ExceptionCheck())return JNI_FALSE;
+    return taks::FastScene::uploadActorSprite(view,data.data(),width,height)
+        ?JNI_TRUE:JNI_FALSE;
+}
+// Exactly the saved simulation's causal facts feed the prehistoric menu.
+// Unknown fern, vine and rope species/skills remain locked; leaf resources
+// do not magically become a discovered plant species.
+extern "C" JNIEXPORT jfloatArray JNICALL Java_hu_taks_world_MainActivity_nativeMenuCues(
+    JNIEnv* env,jobject){
+    jfloat snapshot[11]={};
+    {
+        std::lock_guard<std::mutex> guard(worldLock);
+        snapshot[0]=static_cast<jfloat>(world.hours);
+        snapshot[1]=static_cast<jfloat>(world.rainIntensity);
+        snapshot[2]=static_cast<jfloat>(world.groundMoisture);
+        snapshot[3]=world.fireLit?1.f:0.f;
+        // Real ecological biomass and verified plant knowledge, not fake unlocks.
+        snapshot[4]=world.ecology.grassCover()>.15f?1.f:0.f;
+        snapshot[5]=world.stoneDebris>0?1.f:0.f;
+        snapshot[6]=(world.preparedPoles>0||world.shelterStage>0)?1.f:0.f;
+        snapshot[7]=world.shelterStage>0?1.f:0.f;
+        // The current World does not yet have a real fern, vine or rope system.
+        snapshot[8]=world.ecology.verifiedFerns?1.f:0.f;
+        snapshot[9]=world.ecology.verifiedVines?1.f:0.f;
+        snapshot[10]=0.f; // Rope craft not yet implemented in this milestone.
+    }
+    jfloatArray arr=env->NewFloatArray(11);
+    if(arr)env->SetFloatArrayRegion(arr,0,11,snapshot);
+    return arr;
+}
+// Isolated snapshot for animated menu. No pause-induced false weather.
+// hour, rain, soil water, wind strength, wind X/Z, actual source pool level, fern.
+extern "C" JNIEXPORT jfloatArray JNICALL Java_hu_taks_world_MainActivity_nativeMenuClimate(
+    JNIEnv* env,jobject) {
+    jfloat snapshot[10]{};
+    {
+        std::lock_guard<std::mutex> guard(worldLock);
+        const taks::AfricanWeather w=taks::africanWeatherAt(world.hours);
+        snapshot[0]=static_cast<jfloat>(world.hours);
+        snapshot[1]=static_cast<jfloat>(world.rainIntensity);
+        snapshot[2]=static_cast<jfloat>(world.ecology.soilWater);
+        snapshot[3]=static_cast<jfloat>(w.windStrength);
+        snapshot[4]=static_cast<jfloat>(w.windX);
+        snapshot[5]=static_cast<jfloat>(w.windZ);
+        snapshot[6]=static_cast<jfloat>(world.ecology.waters[0].level);
+        snapshot[7]=world.ecology.verifiedFerns?1.f:0.f;
+        snapshot[8]=static_cast<jfloat>(world.ecology.aliveAnimals(0));
+        snapshot[9]=static_cast<jfloat>(world.ecology.aliveAnimals(1));
+    }
+    jfloatArray result=env->NewFloatArray(10);
+    if(result)env->SetFloatArrayRegion(result,0,10,snapshot);
+    return result;
+}
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeRendererError(JNIEnv* env,jobject){
     const auto& e=taks::FastScene::lastError();
     if(!e.empty())return toJava(env,e);
@@ -145,22 +313,106 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         f.clock=static_cast<float>(world.hours);
         f.rain=static_cast<float>(world.rainIntensity);
         f.moisture=static_cast<float>(world.groundMoisture);
+        const auto climate=taks::africanWeatherAt(world.hours);
+        f.wetSeason=static_cast<float>(climate.wetSeason);
+        f.windStrength=static_cast<float>(climate.windStrength);
+        f.windX=static_cast<float>(climate.windX);
+        f.windZ=static_cast<float>(climate.windZ);
+        f.temperatureC=static_cast<float>(climate.temperatureC);
+        f.mud=static_cast<float>(world.ecology.mud);
         f.hearth=world.hearthBuilt?1.f:0.f;
         f.fire=world.fireLit?1.f:0.f;
         f.playerX=static_cast<float>(world.playerX);
         f.playerZ=static_cast<float>(world.playerZ);
         f.walkPhase=static_cast<float>(world.walkPhase);
+        f.playerHeading=playerHeading;
+        f.playerCrouching=playerCrouching;
+        f.playerJumpHeight=static_cast<float>(playerJump.height(monotonicSeconds()));
+        const auto frameNow=std::chrono::steady_clock::now();
+        f.animationTime=static_cast<float>(std::fmod(std::chrono::duration<double>(frameNow.time_since_epoch()).count(),4096.0));
+        f.playerMoving=frameNow<playerMovementDeadline;
+        f.playerRunning=f.playerMoving&&frameNow<playerRunDeadline;
         for(int i=0;i<taks::World::resourceCount;++i){
             f.nodes[i*4+0]=static_cast<float>(world.nodes[i].x);
             f.nodes[i*4+1]=static_cast<float>(world.nodes[i].z);
             f.nodes[i*4+2]=static_cast<float>(world.nodes[i].type);
             f.nodes[i*4+3]=static_cast<float>(world.nodes[i].amount);
         }
+        for(int i=0;i<taks::LivingWorld::grassCount;++i){
+            const auto& g=world.ecology.grass[i];
+            f.grass[i*5+0]=static_cast<float>(g.x);
+            f.grass[i*5+1]=static_cast<float>(g.z);
+            f.grass[i*5+2]=static_cast<float>(g.biomass);
+            f.grass[i*5+3]=static_cast<float>(g.health);
+            f.grass[i*5+4]=static_cast<float>(g.trampling);
+        }
+        for(int i=0;i<taks::LivingWorld::treeCount;++i){
+            const auto& t=world.ecology.trees[i];
+            f.trees[i*4+0]=static_cast<float>(t.x);
+            f.trees[i*4+1]=static_cast<float>(t.z);
+            f.trees[i*4+2]=static_cast<float>(t.heightM);
+            f.trees[i*4+3]=t.alive?1.f:0.f;
+        }
+        for(int i=0;i<taks::LivingWorld::footprintCount;++i){
+            const auto& mark=world.ecology.footprints[i];
+            f.footprints[i*4+0]=static_cast<float>(mark.x);
+            f.footprints[i*4+1]=static_cast<float>(mark.z);
+            f.footprints[i*4+2]=static_cast<float>(mark.heading);
+            f.footprints[i*4+3]=static_cast<float>(mark.intensity);
+        }
+        for(int i=0;i<taks::LivingWorld::waterBodyCount;++i){
+            const auto& water=world.ecology.waters[i];
+            f.waters[i*4+0]=static_cast<float>(water.x);
+            f.waters[i*4+1]=static_cast<float>(water.z);
+            f.waters[i*4+2]=static_cast<float>(water.radius);
+            f.waters[i*4+3]=static_cast<float>(water.level);
+        }
+        const auto animalNow=std::chrono::steady_clock::now();
+        if(!animalInterpolationReady){
+            for(int i=0;i<taks::LivingWorld::animalCount;++i){
+                const auto& a=world.ecology.animals[i];
+                animalPrevious[i*2]=animalTarget[i*2]=static_cast<float>(a.x);
+                animalPrevious[i*2+1]=animalTarget[i*2+1]=static_cast<float>(a.z);
+            }
+            animalSegmentStart=animalNow;animalInterpolationReady=true;
+        }
+        const float animalBlend=std::clamp(
+            std::chrono::duration<float>(animalNow-animalSegmentStart).count()/1.8f,0.f,1.f);
+        for(int i=0;i<taks::LivingWorld::animalCount;++i){
+            const auto& a=world.ecology.animals[i];
+            const float dx=animalTarget[i*2]-animalPrevious[i*2];
+            const float dz=animalTarget[i*2+1]-animalPrevious[i*2+1];
+            f.animals[i*6]=animalPrevious[i*2]+dx*animalBlend;
+            f.animals[i*6+1]=animalPrevious[i*2+1]+dz*animalBlend;
+            f.animals[i*6+2]=static_cast<float>(a.kind);
+            f.animals[i*6+3]=a.alive?1.f:0.f;
+            f.animals[i*6+4]=static_cast<float>(a.thirst);
+            f.animals[i*6+5]=static_cast<float>(a.hunger);
+            f.animalHeadings[i]=animalFacing[i];
+            f.animalMoving[i]=animalBlend<1.f&&(dx*dx+dz*dz)>1.e-6f?1.f:0.f;
+        }
+        f.collectorStage=static_cast<float>(world.waterCollectorStage);
+        f.collectorWater=static_cast<float>(world.storedRainwater/60.0);
+        f.verifiedFerns=world.ecology.verifiedFerns;
+        const auto now=std::chrono::steady_clock::now();
+        if(!npcInterpolationReady){
+            for(int i=0;i<taks::World::npcCount;++i){
+                npcPrevious[i*2]=npcTarget[i*2]=static_cast<float>(world.npcs[i].x);
+                npcPrevious[i*2+1]=npcTarget[i*2+1]=static_cast<float>(world.npcs[i].z);
+            }
+            npcSegmentStart=now;npcInterpolationReady=true;
+        }
+        const float npcBlend=std::clamp(
+            std::chrono::duration<float>(now-npcSegmentStart).count()/1.8f,0.f,1.f);
         for(int i=0;i<taks::World::npcCount;++i){
-            f.npcs[i*4+0]=static_cast<float>(world.npcs[i].x);
-            f.npcs[i*4+1]=static_cast<float>(world.npcs[i].z);
-            f.npcs[i*4+2]=static_cast<float>(world.npcs[i].role);
+            f.npcs[i*4+0]=npcPrevious[i*2]+(npcTarget[i*2]-npcPrevious[i*2])*npcBlend;
+            f.npcs[i*4+1]=npcPrevious[i*2+1]+(npcTarget[i*2+1]-npcPrevious[i*2+1])*npcBlend;
+            f.npcs[i*4+2]=static_cast<float>(world.npcs[i].task);
             f.npcs[i*4+3]=static_cast<float>(world.npcs[i].carrying);
+            f.npcHeadings[i]=npcFacing[i];
+            const float dx=npcTarget[i*2]-npcPrevious[i*2];
+            const float dz=npcTarget[i*2+1]-npcPrevious[i*2+1];
+            f.npcMoving[i]=npcBlend<1.f&&(dx*dx+dz*dz)>.00001f?1.f:0.f;
         }
         for(int i=0;i<taks::World::maxBuildSites;++i){
             f.sites[i*4+0]=static_cast<float>(world.sites[i].x);
@@ -172,4 +424,12 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
     GLint vp[4]={0,0,1,1};
     glGetIntegerv(GL_VIEWPORT,vp);
     taks::FastScene::render(vp[2],vp[3],f);
+}
+
+extern "C" JNIEXPORT jfloatArray JNICALL Java_hu_taks_world_MainActivity_nativeAudioScene(JNIEnv* env,jobject) {
+    std::lock_guard<std::mutex> guard(worldLock);
+    const auto s=taks::audioScene(world,playerJump.airborne(monotonicSeconds()));
+    jfloatArray out=env->NewFloatArray(static_cast<jsize>(s.size()));
+    if(out)env->SetFloatArrayRegion(out,0,static_cast<jsize>(s.size()),s.data());
+    return out;
 }
