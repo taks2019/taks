@@ -263,6 +263,22 @@ int main(){
     std::this_thread::sleep_for(std::chrono::milliseconds(320));
     const auto runPose=render("14-skinned-embermodellek-futas.ppm");
     check(walkPose!=runPose,"walk-to-run animation transition must alter actual GLES pixels");
+
+    // Roof comparison: SAME cave, camera direction, saved world, no free fire
+    // or invented shelter. Only zoom/camera framing changes, exposing roof
+    // versus the interior. These images are QA evidence, NOT approved visuals.
+    frame=initialFrame;
+    frame.playerX=0.f;frame.playerZ=5.0f;
+    frame.hearth=0.f;frame.fire=0.f;
+    for(int i=0;i<3;++i)frame.sites[4*i+2]=-1.f;
+    frame.zoom=19.f;
+    const auto fullRoof=render("18-barlang-teljes-teto-nagy-tavolsag.ppm");
+    frame.zoom=11.f;
+    const auto partialRoof=render("19-barlang-reszben-attetszo-teto.ppm");
+    frame.zoom=7.f;
+    const auto hiddenRoof=render("20-barlang-belso-teto-nelkul.ppm");
+    check(fullRoof!=partialRoof && hiddenRoof!=partialRoof && fullRoof!=hiddenRoof,
+          "zoom cutaway must yield three distinct orthographic GPU images");
     taks::FastScene::shutdown();
     eglMakeCurrent(display,EGL_NO_SURFACE,EGL_NO_SURFACE,EGL_NO_CONTEXT);
     eglDestroyContext(display,context);eglDestroySurface(display,surface);

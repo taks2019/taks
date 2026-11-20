@@ -1,5 +1,6 @@
 #include "FastScene.h"
 #include "RealModels.h"
+#include "RoofCutaway.h"
 #include <GLES3/gl3.h>
 #include <algorithm>
 #include <array>
@@ -16,10 +17,10 @@ struct Vec3 { float x,y,z; };
 struct Vertex { float x,y,z,nx,ny,nz,kind; };
 struct Mat4 { float a[16]{}; };
 std::string error;
-GLuint program=0,staticVAO=0,staticVBO=0,dynamicVAO=0,dynamicVBO=0;
-GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uAnimation=-1,uWind=-1,uGround=-1,uCliff=-1;
+GLuint program=0,staticVAO=0,staticVBO=0,roofVAO=0,roofVBO=0,dynamicVAO=0,dynamicVBO=0;
+GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uAnimation=-1,uWind=-1,uGround=-1,uCliff=-1,uRoofOpacity=-1;
 GLuint terrainTexture[2]={0,0};
-std::vector<Vertex> terrainMesh,objectsMesh,weatherMesh;
+std::vector<Vertex> terrainMesh,roofMesh,objectsMesh,weatherMesh;
 Vec3 add(Vec3 a,Vec3 b){return {a.x+b.x,a.y+b.y,a.z+b.z};}
 Vec3 sub(Vec3 a,Vec3 b){return {a.x-b.x,a.y-b.y,a.z-b.z};}
 Vec3 mul(Vec3 v,float s){return {v.x*s,v.y*s,v.z*s};}
@@ -237,6 +238,7 @@ bool cliffOpen(float x,float y) {
 }
 void buildStatic(){
     terrainMesh.clear();
+    roofMesh.clear();
     // Nagyméretű háttértalaj, valódi mélységi teszttel; nincs látható "lebegő táblaszél".
     quad(terrainMesh,{-160.f,-.485f,-160.f},{-160.f,-.485f,160.f},
          {160.f,-.485f,160.f},{160.f,-.485f,-160.f},0.f);
@@ -272,7 +274,9 @@ void buildStatic(){
         };
         for(int j=0;j<depthSegments;++j){
             const float a=float(j)/depthSegments,b=float(j+1)/depthSegments;
-            quad(terrainMesh,crest(x,a),crest(x,b),crest(xx,b),crest(xx,a),1.f);
+            // The rock ceiling is separate from the permanent cave walls / floor.
+            // Zoom only affects the rendered ceiling, never collision or inhabitants.
+            quad(roofMesh,crest(x,a),crest(x,b),crest(xx,b),crest(xx,a),1.f);
         }
     }
     // A barlang sötét belseje az elülső arch mögött található.
@@ -498,6 +502,7 @@ uniform float u_rain;uniform float u_mud;uniform float u_clock;uniform float u_a
 uniform vec2 u_wind;
 uniform sampler2D u_groundTexture;
 uniform sampler2D u_cliffTexture;
+uniform float u_roofOpacity;
 out vec4 fragColor;
 float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
 void main(){
@@ -568,7 +573,7 @@ void main(){
     base*=.94+.10*grain;
     vec3 mapped=base/(base+vec3(.43));
     mapped=pow(max(mapped,vec3(0.)),vec3(.91));
-    fragColor=vec4(mapped,1.);
+    fragColor=vec4(mapped,u_roofOpacity);
 })GLSL";
 }
 const std::string& lastError(){return error;}
@@ -576,11 +581,13 @@ void shutdown(){
     if(terrainTexture[0]||terrainTexture[1])glDeleteTextures(2,terrainTexture);
     terrainTexture[0]=terrainTexture[1]=0;
     if(staticVBO)glDeleteBuffers(1,&staticVBO);
+    if(roofVBO)glDeleteBuffers(1,&roofVBO);
     if(dynamicVBO)glDeleteBuffers(1,&dynamicVBO);
     if(staticVAO)glDeleteVertexArrays(1,&staticVAO);
+    if(roofVAO)glDeleteVertexArrays(1,&roofVAO);
     if(dynamicVAO)glDeleteVertexArrays(1,&dynamicVAO);
     if(program)glDeleteProgram(program);
-    staticVBO=dynamicVBO=staticVAO=dynamicVAO=program=0;
+    staticVBO=dynamicVBO=staticVAO=dynamicVAO=roofVAO=roofVBO=program=0;
     taks::RealModels::shutdown();
 }
 bool init(){
@@ -605,8 +612,10 @@ bool init(){
     uAnimation=glGetUniformLocation(program,"u_animationTime");
     uGround=glGetUniformLocation(program,"u_groundTexture");
     uCliff=glGetUniformLocation(program,"u_cliffTexture");
+    uRoofOpacity=glGetUniformLocation(program,"u_roofOpacity");
     buildStatic();
     setupBuffer(staticVAO,staticVBO,GL_STATIC_DRAW,terrainMesh);
+    setupBuffer(roofVAO,roofVBO,GL_STATIC_DRAW,roofMesh);
     setupBuffer(dynamicVAO,dynamicVBO,GL_STREAM_DRAW,objectsMesh);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
@@ -675,6 +684,7 @@ void render(int width,int height,const FastFrame& f){
     glClearColor(skyR,skyG,skyB,1.f);
     glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
     glUseProgram(program);
+    if(uRoofOpacity>=0)glUniform1f(uRoofOpacity,1.f);
     glUniformMatrix4fv(uVP,1,GL_FALSE,vp.a);
     if(uRain>=0)glUniform1f(uRain,f.rain);
     glUniform2f(uWind,f.windX*f.windStrength,f.windZ*f.windStrength);
@@ -697,6 +707,27 @@ void render(int width,int height,const FastFrame& f){
         f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,
         f.playerMoving,f.playerRunning,f.npcs,f.animationTime,f.windStrength,
         f.windX,f.windZ,f.wetSeason,f.moisture);
+
+    // Draw the rock roof on top of the permanent scene. At close zoom, expose
+    // the SAME cave interior and actors; neither simulation state nor the
+    // original outside geometry is replaced or reset.
+    const float roofOpacity=taks::RoofCutaway::visibility(f.zoom);
+    if(roofOpacity>.001f && !roofMesh.empty()){
+        glUseProgram(program);
+        if(uRoofOpacity>=0)glUniform1f(uRoofOpacity,roofOpacity);
+        glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,terrainTexture[0]);
+        glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,terrainTexture[1]);
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(GL_FALSE);
+        glBindVertexArray(roofVAO);
+        glDrawArrays(GL_TRIANGLES,0,(GLsizei)roofMesh.size());
+        glBindVertexArray(0);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+        if(uRoofOpacity>=0)glUniform1f(uRoofOpacity,1.f);
+    }
     if(!weatherMesh.empty()){
         glUseProgram(program);
         glEnable(GL_BLEND);
