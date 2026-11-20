@@ -1,7 +1,7 @@
 name: TAKS World 0.15 Android
 on:
   push:
-    branches: ['codex/taks-world-wonderwerk-live']
+    branches: ['codex/taks-world-wonderwerk-live', 'codex/taks-world-visual-approval-gate-2026-11-20']
   workflow_dispatch:
 permissions:
   contents: read
@@ -114,8 +114,36 @@ jobs:
           path: build-previews/*.png
           if-no-files-found: error
           retention-days: 14
+  visual-owner-approval:
+    needs: assets
+    runs-on: ubuntu-latest
+    outputs:
+      allowed: ${{ steps.review.outputs.allowed }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: TAKS-World-Real-Geology-Flora-Human-Assets
+          path: app/src/main/assets/models/
+      - name: Require separate owner approval for every visual before APK
+        id: review
+        shell: bash
+        run: |
+          if python3 scripts/check_visual_approvals.py --json-report visual-approval-report.json; then
+            echo "allowed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::APK skipped: each new image/model/texture requires owner acceptance."
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TAKS-World-Individual-Visual-Approval-Report
+          path: visual-approval-report.json
+          if-no-files-found: warn
   android-apk:
-    needs: [assets,engine-tests]
+    needs: [assets,engine-tests,visual-owner-approval]
+    if: needs.visual-owner-approval.outputs.allowed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

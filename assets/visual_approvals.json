@@ -1,0 +1,69 @@
+{
+  "schema": "TAKS_VISUAL_APPROVAL_V1",
+  "default_policy": "deny",
+  "notes": [
+    "Each image, texture, 3D mesh, animation and menu asset is a separate approval item.",
+    "A screenshot or AI-generated proposal is NOT approval. Only the project owner's explicit acceptance of that exact version qualifies.",
+    "Do not replace previously accepted source material. Approved bytes are pinned with SHA-256; any change means renewed approval.",
+    "Pending assets may appear in review artifacts, not in a distributable Android APK.",
+    "The existing reference original art/reference_crops/Wonderwerk_etalon.jpg stays unchanged outside the Android asset gate."
+  ],
+  "entries": [
+    {
+      "path": "logo/TAKS_WORLD_LOGO.webp",
+      "kind": "logo",
+      "status": "pending",
+      "sha256": null,
+      "approval_reference": null,
+      "note": "Existing asset: no new owner approval verified"
+    },
+    {
+      "path": "logo/TAKS_WORLD_RUNTIME.webp",
+      "kind": "logo",
+      "status": "pending",
+      "sha256": null,
+      "approval_reference": null,
+      "note": "Existing runtime derivative: owner approval not independently verified"
+    },
+    {
+      "path": "menu/wonderwerk_main_menu.webp",
+      "kind": "menu",
+      "status": "pending",
+      "sha256": null,
+      "approval_reference": null,
+      "note": "Existing menu art needs individual confirmation"
+    },
+    {
+      "path": "wonderwerk/akac.png",
+      "kind": "texture",
+      "status": "pending",
+      "sha256": null,
+      "approval_reference": null,
+      "note": "Existing acacia texture not accepted in current review"
+    },
+    {
+      "path": "wonderwerk/akac.tkm",
+      "kind": "3d-model",
+      "status": "pending",
+      "sha256": null,
+      "approval_reference": null,
+      "note": "Existing acacia mesh not accepted in current review"
+    },
+    {
+      "path": "wonderwerk/dolomit.png",
+      "kind": "texture",
+      "status": "pending",
+      "sha256": null,
+      "approval_reference": null,
+      "note": "Existing rock texture not accepted in current review"
+    },
+    {
+      "path": "wonderwerk/talaj.png",
+      "kind": "texture",
+      "status": "pending",
+      "sha256": null,
+      "approval_reference": null,
+      "note": "Existing ground texture not accepted in current review"
+    }
+  ]
+}
