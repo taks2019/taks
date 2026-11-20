@@ -154,7 +154,7 @@ void LivingWorld::step(double hours,double precipitation,double moistureTarget,d
                 const double stoppingDistance=std::max(.48,water.radius*.58);
                 if(distance>stoppingDistance){
                     const double move=std::min(distance-stoppingDistance,
-                                               days*5.0*walkSpeedFactor());
+                                               hours*2.2*walkSpeedFactor());
                     if(distance>0){a.x+=dx/distance*move;a.z+=dz/distance*move;}
                     a.energy=bound(a.energy-move*.45,0,100);
                 }else{
@@ -178,7 +178,7 @@ void LivingWorld::step(double hours,double precipitation,double moistureTarget,d
                 Grass& g=grass[target];
                 double d=std::sqrt(best);
                 if(d>.75){
-                    const double move=std::min(d-.65,days*5.0*walkSpeedFactor());
+                    const double move=std::min(d-.65,hours*2.2*walkSpeedFactor());
                     if(d>0){a.x+=(g.x-a.x)/d*move;a.z+=(g.z-a.z)/d*move;}
                     a.energy=bound(a.energy-move*.5,0,100);
                 }else{
@@ -200,7 +200,7 @@ void LivingWorld::step(double hours,double precipitation,double moistureTarget,d
                 auto& target=animals[prey];
                 double d=std::sqrt(best);
                 if(d>.72){
-                    const double move=std::min(d-.6,days*7.0*walkSpeedFactor());
+                    const double move=std::min(d-.6,hours*2.9*walkSpeedFactor());
                     if(d>0){a.x+=(target.x-a.x)/d*move;a.z+=(target.z-a.z)/d*move;}
                     a.energy=bound(a.energy-move*.7,0,100);
                 }else if(a.hunger>32){

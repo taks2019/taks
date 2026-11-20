@@ -15,6 +15,8 @@ struct FastFrame {
     float footprints[128]={}; // [x,z,heading,impression strength] x32
     float waters[8]={}; // [x,z,radius,level] x2; follows LivingWorld's saved water state
     float animals[48]={}; // [x,z,kind,alive,thirst,hunger] x8; species remain unverified
+    float animalHeadings[8]={}; // based on true locomotion, not speculative targets
+    float animalMoving[8]={}; // gait only while traveling
     bool verifiedFerns=false;
     float npcs[16]={};
     float npcHeadings[4]={}; // actual last movement direction; no invented target turn

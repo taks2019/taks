@@ -55,6 +55,19 @@ int main(){
     for(int i=0;i<80;++i)deaths.step(24,0,0,1,38);
     assert(deaths.aliveAnimals()<initialLiving);
     assert(deaths.deadAnimals>0);
+    // Movement is real, leg animation must be keyed to positional changes.
+    taks::LivingWorld active;
+    for(auto& a:active.animals)a.alive=false;
+    active.animals[0].alive=true;
+    active.animals[0].x=-3.8;active.animals[0].z=-2.3;
+    active.animals[0].thirst=60.; // nearest natural pool is still not here
+    const double firstX=active.animals[0].x,firstZ=active.animals[0].z;
+    const double sourceBefore=active.waters[0].level;
+    active.step(.04,0,.13,.7,25);
+    const double moved=std::hypot(active.animals[0].x-firstX,active.animals[0].z-firstZ);
+    assert(moved>.04&&moved<.20);
+    assert(active.waters[0].level<=sourceBefore);
+    assert(active.valid());
     // Saving/restoring the world must preserve every living animal and soil state.
     std::ostringstream out;out.precision(17);e.write(out);
     std::istringstream input(out.str());

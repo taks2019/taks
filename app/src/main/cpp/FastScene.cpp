@@ -194,31 +194,9 @@ void addWildlife(const FastFrame& scene){
         const float* animal=scene.animals+i*6;
         if(animal[3]<.5f)continue;
         const float x=animal[0],z=animal[1],kind=animal[2];
-        const bool thirsty=animal[4]>35.f,moving=thirsty||animal[5]>45.f;
-        float targetX=x,targetZ=z+1.f,best=1.0e12f;
-        if(thirsty){
-            for(int w=0;w<2;++w){
-                const float* water=scene.waters+w*4;
-                if(water[3]<=.015f)continue;
-                const float dx=water[0]-x,dz=water[1]-z,d=dx*dx+dz*dz;
-                if(d<best){best=d;targetX=water[0];targetZ=water[1];}
-            }
-        }else if(kind<.5f){
-            for(int g=0;g<4;++g){
-                const float* grass=scene.grass+g*5;
-                if(grass[2]<=.01f)continue;
-                const float dx=grass[0]-x,dz=grass[1]-z,d=dx*dx+dz*dz;
-                if(d<best){best=d;targetX=grass[0];targetZ=grass[1];}
-            }
-        }else{
-            for(int j=0;j<8;++j){
-                const float* prey=scene.animals+j*6;
-                if(prey[3]<.5f||prey[2]>.5f)continue;
-                const float dx=prey[0]-x,dz=prey[1]-z,d=dx*dx+dz*dz;
-                if(d>1.0e-6f&&d<best){best=d;targetX=prey[0];targetZ=prey[1];}
-            }
-        }
-        const float heading=std::atan2(targetX-x,targetZ-z);
+        const bool moving=scene.animalMoving[i]>.5f;
+        const float heading=std::isfinite(scene.animalHeadings[i])?
+                            scene.animalHeadings[i]:0.f;
         const float ground=surfaceHeight(x,z);
         const float scale=kind>.5f?.88f:1.0f;
         const float coat=kind>.5f?5.f:7.f;

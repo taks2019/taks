@@ -30,6 +30,10 @@ std::chrono::steady_clock::time_point playerRunDeadline{};
 std::array<float,8> npcPrevious{};
 std::array<float,8> npcTarget{};
 std::array<float,4> npcFacing{};
+std::array<float,16> animalPrevious{},animalTarget{};
+std::array<float,8> animalFacing{};
+std::chrono::steady_clock::time_point animalSegmentStart{};
+bool animalInterpolationReady=false;
 std::chrono::steady_clock::time_point npcSegmentStart{};
 bool npcInterpolationReady=false;
 std::string rendererError;
@@ -62,7 +66,7 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeDo(JN
     if(txt)env->ReleaseStringUTFChars(command,txt);
     std::lock_guard<std::mutex> guard(worldLock);
     const std::string result=world.act(act);
-    npcInterpolationReady=false;
+    npcInterpolationReady=false;animalInterpolationReady=false;
     return toJava(env,result);
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeMove(JNIEnv* env,jobject,jfloat dx,jfloat dz){
@@ -115,6 +119,14 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeCampS
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeTick(JNIEnv*,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
+    if(!animalInterpolationReady){
+        for(int i=0;i<taks::LivingWorld::animalCount;++i){
+            const auto& a=world.ecology.animals[i];
+            animalPrevious[i*2]=animalTarget[i*2]=static_cast<float>(a.x);
+            animalPrevious[i*2+1]=animalTarget[i*2+1]=static_cast<float>(a.z);
+        }
+        animalInterpolationReady=true;
+    }else animalPrevious=animalTarget;
     if(!npcInterpolationReady){
         for(int i=0;i<taks::World::npcCount;++i){
             npcPrevious[i*2]=npcTarget[i*2]=static_cast<float>(world.npcs[i].x);
@@ -123,6 +135,15 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeTick(JNI
         npcInterpolationReady=true;
     }else npcPrevious=npcTarget;
     world.step(0.04);
+    for(int i=0;i<taks::LivingWorld::animalCount;++i){
+        const auto& a=world.ecology.animals[i];
+        animalTarget[i*2]=static_cast<float>(a.x);
+        animalTarget[i*2+1]=static_cast<float>(a.z);
+        const float dx=animalTarget[i*2]-animalPrevious[i*2];
+        const float dz=animalTarget[i*2+1]-animalPrevious[i*2+1];
+        if(dx*dx+dz*dz>1.e-7f)animalFacing[i]=std::atan2(dx,dz);
+    }
+    animalSegmentStart=std::chrono::steady_clock::now();
     for(int i=0;i<taks::World::npcCount;++i){
         npcTarget[i*2]=static_cast<float>(world.npcs[i].x);
         npcTarget[i*2+1]=static_cast<float>(world.npcs[i].z);
@@ -142,7 +163,8 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeNearb
     return toJava(env,world.nearby());
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeAdvance(JNIEnv*,jobject){
-    std::lock_guard<std::mutex> guard(worldLock);world.step(1.0);npcInterpolationReady=false;
+    std::lock_guard<std::mutex> guard(worldLock);
+    world.step(1.0);npcInterpolationReady=false;animalInterpolationReady=false;
 }
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeState(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);return toJava(env,world.summary());
@@ -164,7 +186,11 @@ extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeLoad
     if(txt)env->ReleaseStringUTFChars(payload,txt);
     std::lock_guard<std::mutex> guard(worldLock);
     const bool loaded=world.load(raw);
-    if(loaded){npcInterpolationReady=false;playerJump.reset();playerCrouching=false;npcFacing.fill(0.f);}
+    if(loaded){
+        npcInterpolationReady=false;animalInterpolationReady=false;
+        playerJump.reset();playerCrouching=false;
+        npcFacing.fill(0.f);animalFacing.fill(0.f);
+    }
     return loaded?JNI_TRUE:JNI_FALSE;
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeReset(JNIEnv*,jobject){
@@ -172,6 +198,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeReset(JN
     playerMovementDeadline=playerRunDeadline=std::chrono::steady_clock::time_point{};
     playerJump.reset();playerCrouching=false;
     npcInterpolationReady=false;npcFacing.fill(0.f);
+    animalInterpolationReady=false;animalFacing.fill(0.f);
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetView(JNIEnv*,jobject,jfloat yaw,jfloat cameraPitch,jfloat scale){
     std::lock_guard<std::mutex> guard(worldLock);
@@ -337,14 +364,29 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
             f.waters[i*4+2]=static_cast<float>(water.radius);
             f.waters[i*4+3]=static_cast<float>(water.level);
         }
+        const auto animalNow=std::chrono::steady_clock::now();
+        if(!animalInterpolationReady){
+            for(int i=0;i<taks::LivingWorld::animalCount;++i){
+                const auto& a=world.ecology.animals[i];
+                animalPrevious[i*2]=animalTarget[i*2]=static_cast<float>(a.x);
+                animalPrevious[i*2+1]=animalTarget[i*2+1]=static_cast<float>(a.z);
+            }
+            animalSegmentStart=animalNow;animalInterpolationReady=true;
+        }
+        const float animalBlend=std::clamp(
+            std::chrono::duration<float>(animalNow-animalSegmentStart).count()/1.8f,0.f,1.f);
         for(int i=0;i<taks::LivingWorld::animalCount;++i){
-            const auto& animal=world.ecology.animals[i];
-            f.animals[i*6+0]=static_cast<float>(animal.x);
-            f.animals[i*6+1]=static_cast<float>(animal.z);
-            f.animals[i*6+2]=static_cast<float>(animal.kind);
-            f.animals[i*6+3]=animal.alive?1.f:0.f;
-            f.animals[i*6+4]=static_cast<float>(animal.thirst);
-            f.animals[i*6+5]=static_cast<float>(animal.hunger);
+            const auto& a=world.ecology.animals[i];
+            const float dx=animalTarget[i*2]-animalPrevious[i*2];
+            const float dz=animalTarget[i*2+1]-animalPrevious[i*2+1];
+            f.animals[i*6]=animalPrevious[i*2]+dx*animalBlend;
+            f.animals[i*6+1]=animalPrevious[i*2+1]+dz*animalBlend;
+            f.animals[i*6+2]=static_cast<float>(a.kind);
+            f.animals[i*6+3]=a.alive?1.f:0.f;
+            f.animals[i*6+4]=static_cast<float>(a.thirst);
+            f.animals[i*6+5]=static_cast<float>(a.hunger);
+            f.animalHeadings[i]=animalFacing[i];
+            f.animalMoving[i]=animalBlend<1.f&&(dx*dx+dz*dz)>1.e-6f?1.f:0.f;
         }
         f.collectorStage=static_cast<float>(world.waterCollectorStage);
         f.collectorWater=static_cast<float>(world.storedRainwater/60.0);
