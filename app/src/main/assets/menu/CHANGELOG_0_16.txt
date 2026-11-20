@@ -8,6 +8,9 @@ ELKÉSZÜLT A KÓDBAN:
 - Részletezett növénymozgás: lomb, páfrány, fű, lelógó levelek.
 - Folyamatos vízcsillanások; lassú felhőárnyék; távoli madár-sziluettek.
 - A menü a valódi világ időjárását lágy átmenettel követi.
+- A négy gomb magyar betűi legfeljebb 205 képpont szélesek, nem nyúlnak túl a kövön.
+- Vízkő-kivágás: sem a kő, sem a part nem hullámzik a vízzel együtt.
+- Szélfüggő porszemek mozognak a barlangszájnál; nagyobb távoli madarak.
 - A Beállítások között megtekinthető a jelen lista.
 - Mentési rendszer és a natív izometrikus játék változatlanul megmarad.
 

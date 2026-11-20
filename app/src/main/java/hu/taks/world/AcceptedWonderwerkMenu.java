@@ -45,7 +45,10 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
     private static final String[] DEFAULTS={"Új Játék","Beállítások","Készítő","Kilépés"};
     // Real stone coordinates in the approved source. Never change the master.
     private static final float[] CAPTION_Y={387f,479f,573f,668f};
-    private static final float CAPTION_X=930f;
+    private static final float CAPTION_X=928f;
+    // Icon ends at ~805; the natural stone ends at ~1065.
+    // 205 design pixels (+ outline) never protrude beyond either edge.
+    private static final float CAPTION_MAX_WIDTH=205f;
 
     private static final class Hotspot {
         final Button control;
@@ -154,9 +157,15 @@ public final class AcceptedWonderwerkMenu extends FrameLayout {
             type.setTextAlign(Paint.Align.CENTER);
             for(int i=0;i<KEYS.length;++i){
                 String title=titleFor(KEYS[i]).toUpperCase(java.util.Locale.forLanguageTag("hu-HU"));
-                type.setTextSize(36f);
+                type.setTextSize(35f);
                 float width=type.measureText(title);
-                if(width>286f)type.setTextSize(Math.max(23f,36f*286f/width));
+                if(width>CAPTION_MAX_WIDTH)
+                    type.setTextSize(35f*CAPTION_MAX_WIDTH/width);
+                // Truly long user-edited captions are still bounded inside
+                // the stone; never enforce a minimum size that overflows.
+                width=type.measureText(title);
+                if(width>CAPTION_MAX_WIDTH+0.5f)
+                    type.setTextSize(type.getTextSize()*CAPTION_MAX_WIDTH/width);
                 type.clearShadowLayer();
                 type.setStyle(Paint.Style.STROKE);
                 type.setStrokeWidth(6.5f);

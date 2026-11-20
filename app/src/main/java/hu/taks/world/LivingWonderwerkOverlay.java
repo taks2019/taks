@@ -7,6 +7,8 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.RadialGradient;
@@ -65,7 +67,16 @@ public final class LivingWonderwerkOverlay extends View {
             if(protectLogo||protectStones){output[y*w+x]=0;continue;}
             int intensity=coverage[y*w+x]&255; // source mask is grayscale PNG (L)
             if(intensity<12){output[y*w+x]=0;continue;}
-            int a=(int)Math.min(232,intensity*.80);
+            if("water".equals(name)){
+                // The authored mask contains occasional shoreline-rock pixels.
+                // Only WATER-looking pixels may receive moving highlights.
+                final int c=source[y*w+x];
+                final int r=(c>>>16)&255,g=(c>>>8)&255,b=c&255;
+                if(intensity<79||b<r*.80f||g<r*.78f){
+                    output[y*w+x]=0;continue;
+                }
+            }
+            int a=(int)Math.min(238,intensity*.89);
             output[y*w+x]=(source[y*w+x]&0x00FFFFFF)|(a<<24);
         }
         Bitmap layer=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
@@ -205,41 +216,57 @@ public final class LivingWonderwerkOverlay extends View {
         }
     }
     private void drawDust(Canvas canvas,double t,MenuClimate w){
-        float dust=w.dust();
-        if(dust<.08f)return;
-        // Local fine dust is carried by actual wind in front of the cave.
-        // No invented rain or frame-shaking is added.
-        paint.reset();paint.setAntiAlias(true);
-        paint.setColor(0xFFEED6A1);
-        paint.setStyle(Paint.Style.FILL);
-        paint.setAlpha(Math.round(65*dust));
-        for(int i=0;i<19;++i){
-            double phase=i*2.39996323;
-            float x=1172f+(float)((i*29.9+t*(13f+w.wind*27f))%210f);
-            float y=288f+(float)(i*11.7%142.0)-
-                    (float)Math.sin(t*.43+phase)*9f;
-            canvas.drawCircle(x,y,.7f+(i%3)*.35f,paint);
+        final float dust=w.dust();
+        if(dust<.012f)return;
+        // Dust originates at the cave threshold and follows the true wind.
+        // Slow translucent plumes plus individual grains, never static noise.
+        // The protected emblem and stone button region is out of bounds.
+        Paint plume=new Paint(Paint.ANTI_ALIAS_FLAG);
+        plume.setStyle(Paint.Style.FILL);
+        canvas.save();
+        canvas.clipRect(1150,254,1485,585);
+        final int count=66;
+        for(int i=0;i<count;++i){
+            double phase=(t*(.013+.002*(i%4))+i*.61803398875)%1.;
+            float fade=(float)Math.pow(Math.sin(Math.PI*phase),2);
+            float x=1195f+(float)phase*240f;
+            float y=331f+(i*18.73f)%175f+
+                    (float)Math.sin(t*.21+i*.7)*9f;
+            float size=1.1f+(i%7)*.76f;
+            plume.setColor(i%3==0?0xFFFFE6B6:0xFFE2C495);
+            plume.setAlpha(Math.round(165f*dust*fade));
+            canvas.drawCircle(x,y,size,plume);
         }
+        canvas.restore();
     }
     private void drawStream(Canvas canvas,double t,float wave){
-        if(!water.exists())return;
-        // Every rendered pixel in this layer was already selected as WATER by
-        // the authoring mask; moving it NEVER moves rock/shore pixels.
-        strips(canvas,water,t,2.1f+wave*6.0f,1.3f,.82f,false,.73f+.22f*wave);
-        // Sunlit glints follow the stream and fade at both ends of each pass,
-        // so the phase wraps without ever popping into view.
-        Paint glint=new Paint(Paint.ANTI_ALIAS_FLAG);
-        glint.setColor(0xFFF9E8BB);
-        glint.setStrokeCap(Paint.Cap.ROUND);
-        for(int i=0;i<19;++i){
-            double phase=(t*(.012+.001*(i%4))+(i*.61803398875))%1.0;
-            float x=56f+(float)phase*540f;
-            float y=590f+(i*33.1f)%161f+(float)Math.sin(t*.6+i)*4f;
+        if(!water.exists()||wave<=.005f)return;
+        // IMPORTANT: NEVER translate photo pixels of the water or the shore.
+        // Their original rock positions remain completely immutable.
+        // Render evolving specular ripples separately, then intersect the
+        // entire result with the conservatively filtered pixel water mask.
+        RectF area=new RectF(water.bounds);
+        int layer=canvas.saveLayer(area,null);
+        Paint ripple=new Paint(Paint.ANTI_ALIAS_FLAG);
+        ripple.setStyle(Paint.Style.STROKE);
+        ripple.setStrokeCap(Paint.Cap.ROUND);
+        ripple.setColor(0xFFF9E7BC);
+        for(int i=0;i<38;++i){
+            double phase=(t*(.035+.003*(i%5))+i*.61803398875)%1.;
+            float x=10f+(float)phase*654f;
+            float y=565f+(i*31.2f)%198f+(float)Math.sin(t*.53+i*1.3)*3.8f;
             float fade=(float)Math.pow(Math.sin(Math.PI*phase),2);
-            glint.setAlpha((int)(170*fade*(.4+.6*wave)));
-            glint.setStrokeWidth(.9f+(i%3)*.45f);
-            canvas.drawLine(x,y,x+4f+(i%3)*3f,y-1f,glint);
+            ripple.setAlpha((int)(185f*fade*(.38f+.62f*wave)));
+            ripple.setStrokeWidth(.7f+(i%3)*.55f);
+            float length=4f+(i%6)*2.1f;
+            canvas.drawLine(x,y,x+length,y+(float)Math.sin(t*.9+i)*.7f,ripple);
         }
+        // Tight alpha intersection makes stones/grass on the riverbank static.
+        Paint restrict=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG);
+        restrict.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
+        canvas.drawBitmap(water.texture,water.bounds.left,water.bounds.top,restrict);
+        restrict.setXfermode(null);
+        canvas.restoreToCount(layer);
     }
     private void drawFoliage(Canvas canvas,double t,MenuClimate w){
         // Even on a calm day the leaves experience subtle local turbulence,
@@ -288,19 +315,19 @@ public final class LivingWonderwerkOverlay extends View {
         // remain the real native GLES3 skinned models in the gameplay world.
         Paint wings=new Paint(Paint.ANTI_ALIAS_FLAG);
         wings.setStyle(Paint.Style.STROKE);
-        wings.setStrokeWidth(2.0f);
+        wings.setStrokeWidth(2.3f);
         wings.setStrokeCap(Paint.Cap.ROUND);
         wings.setColor(0xFF493826);
         Path flight=new Path();
-        for(int i=0;i<3;++i){
+        for(int i=0;i<4;++i){
             final double phase=(t*(.016+.003*i)+i*.31)%1.0;
             final float x=54f+(float)phase*560f;
-            final float y=248f+i*17f+(float)Math.sin(t*.13+i*2)*11f;
+            final float y=197f+i*21f+(float)Math.sin(t*.13+i*2)*11f;
             final float opacity=(float)Math.pow(Math.sin(Math.PI*phase),2);
-            wings.setAlpha((int)(170f*opacity*weather.daylight()));
+            wings.setAlpha((int)(205f*opacity*weather.daylight()));
             if(wings.getAlpha()<3)continue;
             final float bend=(float)Math.sin(t*(4.2+i*.4)+i*2.1)*4.5f;
-            final float size=7f+i*1.6f;
+            final float size=11f+i*2.4f;
             flight.reset();
             flight.moveTo(x-size,y-1f+bend);
             flight.quadTo(x-size*.45f,y-2f-bend*.55f,x,y);

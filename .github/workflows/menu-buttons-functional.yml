@@ -46,6 +46,10 @@ jobs:
           assert 'actions.run(key)' in menu
           assert 'button.setText(titleFor(key))' in menu
           assert 'c.drawText(title,CAPTION_X,CAPTION_Y[i],type)' in menu, "Labels must be visibly painted on top"
+          assert 'CAPTION_MAX_WIDTH=205f' in menu, "Text cannot protrude beyond stone edges"
+          overlay=Path('app/src/main/java/hu/taks/world/LivingWonderwerkOverlay.java').read_text()
+          assert 'new PorterDuffXfermode(PorterDuff.Mode.DST_IN)' in overlay
+          assert 'strips(canvas,water' not in overlay, "NEVER shift river rocks with water"
           assert 'content.addView(captions,new FrameLayout.LayoutParams(-1,-1))' in menu
           assert 'content.addView(button,new FrameLayout.LayoutParams(1,1))' in menu
           assert 'setContentDescription(button.getText().toString())' in menu, "Accessible native buttons must remain"
