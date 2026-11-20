@@ -44,13 +44,15 @@ jobs:
           for key in ('new_game','settings','creator','exit'):
               assert f'addButton(host,"{key}"' in menu, key
           assert 'actions.run(key)' in menu
-          assert 'button.setText(labels.get("menu",key,key))' in menu
-          assert 'new TextureView(host)' in menu, "SurfaceView VideoView covers Android text overlays"
-          assert 'new VideoView(' not in menu, "VideoView wrongly hides text on some GPUs"
-          assert 'environment.setVisibility(View.GONE)' not in menu, "Animated nature must never be hidden while playing"
-          assert 'environment.resume(); // foliage & water animate even while MP4 plays' in menu
-          assert 'treeCanopy=makeCanopyLayer(master)' in Path(
-              'app/src/main/java/hu/taks/world/LivingWonderwerkOverlay.java').read_text()
+          assert 'button.setText(titleFor(key))' in menu
+          assert 'c.drawText(title,CAPTION_X,CAPTION_Y[i],type)' in menu, "Labels must be visibly painted on top"
+          assert 'content.addView(captions,new FrameLayout.LayoutParams(-1,-1))' in menu
+          assert 'content.addView(button,new FrameLayout.LayoutParams(1,1))' in menu
+          assert 'setContentDescription(button.getText().toString())' in menu, "Accessible native buttons must remain"
+          assert 'new VideoView' not in menu and 'new TextureView' not in menu
+          assert 'MediaPlayer' not in menu, "No 8-second loop or visible transition can run"
+          assert 'environment=new LivingWonderwerkOverlay(host)' in menu
+          assert 'public void play(){if(!released)environment.resume();}' in menu
           for callback in ('this::newWorldFromMenu','this::showSettings',
                            'this::showCredits','this::confirmExit'):
               assert callback in activity, callback
