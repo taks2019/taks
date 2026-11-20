@@ -283,6 +283,18 @@ public final class MainActivity extends Activity {
             }else if("TAKS_SKIN_CARD".equals(role)){
                 setNaturalStone(v,opacity(state.panelTop,208),
                         opacity(state.panelBottom,234),state.border,17);
+            }else if("TAKS_SKIN_HUD_STATUS".equals(role)){
+                // Same physical stone as the settings panel, but translucent
+                // so real GLES3 gameplay stays visible behind brief messages.
+                setNaturalStone(v,opacity(state.panelTop,178),
+                        opacity(state.panelBottom,211),state.border,12);
+                if(v instanceof TextView)((TextView)v).setTextColor(state.text);
+            }else if("TAKS_SKIN_MOVEMENT".equals(role)){
+                // The analogue pad is a real textured Stone Age control,
+                // not the previous mismatched neon/green ellipse.
+                setNaturalStone(v,opacity(state.buttonTop,168),
+                        opacity(state.buttonBottom,192),state.border,48);
+                if(v instanceof TextView)((TextView)v).setTextColor(state.text);
             }else if("TAKS_SKIN_LOGO".equals(role)){
                 int glow=state.animatedLogoGlow(now);
                 setNaturalStone(v,opacity(glow,44),
@@ -685,11 +697,11 @@ public final class MainActivity extends Activity {
         logoFrame.addView(originalLogoOrTitle(),new FrameLayout.LayoutParams(-1,-1));
         logoFrame.addView(new LogoEnvironmentView(this),
                           new FrameLayout.LayoutParams(-1,-1));
-        header.addView(logoFrame,new LinearLayout.LayoutParams(dp(104),dp(56)));
+        header.addView(logoFrame,new LinearLayout.LayoutParams(dp(132),dp(67)));
         TextView label=caption(title,16,0xFFF1E5CF);
         label.setGravity(Gravity.CENTER_VERTICAL);
         label.setPadding(dp(12),0,0,0);
-        header.addView(label,new LinearLayout.LayoutParams(0,dp(48),1));
+        header.addView(label,new LinearLayout.LayoutParams(0,dp(67),1));
         if(!"BEÁLLÍTÁSOK".equals(title)){
             Button settings=button("⚙",this::showSettings,false);
             settings.setContentDescription("Beállítások ebben az almenüben");
@@ -951,6 +963,7 @@ public final class MainActivity extends Activity {
         skin(header,"CARD");
         FrameLayout gameplayLogo=new FrameLayout(this);
         gameplayLogo.setPadding(dp(3),dp(2),dp(3),dp(2));
+        skin(gameplayLogo,"LOGO");
         gameplayLogo.addView(originalLogoOrTitle(),new FrameLayout.LayoutParams(-1,-1));
         gameplayLogo.addView(new LogoEnvironmentView(this),new FrameLayout.LayoutParams(-1,-1));
         header.addView(gameplayLogo,new LinearLayout.LayoutParams(dp(124),dp(77)));
@@ -958,38 +971,46 @@ public final class MainActivity extends Activity {
         FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
         hp.setMargins(dp(12),dp(12),0,0);root.addView(header,hp);gameHud.add(header);
 
-        hint=caption("Bal: analóg mozgás · FUTÁS: nyomva tartva · Jobb: kamera · Két ujjal: zoom",12,0xFFECE9DC);
+        hint=caption("Mozgás: bal · Futás: nyomva · Kamera: jobb · Zoom: két ujjal",11,0xFFECE9DC);
         hint.setPadding(dp(10),dp(7),dp(10),dp(7));
-        skin(hint,"CARD");
+        skin(hint,"HUD_STATUS");
         FrameLayout.LayoutParams hintParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
         hintParams.topMargin=dp(16);root.addView(hint,hintParams);gameHud.add(hint);
         hint.postDelayed(()->hint.setVisibility(View.GONE),6500);
 
         notice=caption(nativeGoal(),12,0xFFF1E3C9);
-        notice.setPadding(dp(12),dp(9),dp(12),dp(9));
-        skin(notice,"CARD");
-        FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(-1,-2,Gravity.BOTTOM);
-        np.setMargins(dp(12),0,dp(12),bottomBarPx()+7);root.addView(notice,np);gameHud.add(notice);
+        notice.setPadding(dp(12),dp(7),dp(12),dp(7));
+        notice.setMaxLines(3);
+        notice.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        skin(notice,"HUD_STATUS");
+        // A centered, bounded status card replaces the old screen-wide
+        // bar that covered the player's legs, tools and action controls.
+        final int safeStatusWidth=Math.min(dp(440),
+                Math.max(dp(210),getResources().getDisplayMetrics().widthPixels-dp(310)));
+        FrameLayout.LayoutParams np=new FrameLayout.LayoutParams(
+                safeStatusWidth,-2,Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL);
+        np.bottomMargin=bottomBarPx()+dp(15);
+        root.addView(notice,np);gameHud.add(notice);
         notice.postDelayed(()->{
             if(notice.getText().toString().startsWith("CÉL:")) notice.setVisibility(View.GONE);
         },9000);
 
         proximity=caption(nativeNearby(),12,0xFFE8E0CC);
         proximity.setPadding(dp(9),dp(6),dp(9),dp(6));
-        skin(proximity,"CARD");
+        skin(proximity,"HUD_STATUS");
         FrameLayout.LayoutParams proxParams=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.RIGHT);
         proxParams.topMargin=dp(49);proxParams.rightMargin=dp(12);root.addView(proximity,proxParams);gameHud.add(proximity);
 
         TextView movePad=caption("MOZGÁS\n  ◉",13,0xFFF4E8D2);
         movePad.setGravity(Gravity.CENTER);
         movePad.setContentDescription("Mozgásvezérlő");
-        movePad.setBackground(panelBackground(0x9713211D,48));
+        skin(movePad,"MOVEMENT");
         movePad.setOnTouchListener((v,e)->touch(e,true));
         FrameLayout.LayoutParams moveParams=new FrameLayout.LayoutParams(dp(96),dp(96),Gravity.LEFT|Gravity.BOTTOM);
         moveParams.setMargins(dp(11),0,0,dp(18));root.addView(movePad,moveParams);gameHud.add(movePad);
         TextView sprint=caption("FUTÁS",12,0xFFF4E8D2);
         sprint.setGravity(Gravity.CENTER);
-        sprint.setBackground(panelBackground(0xC02B3B2D,16));
+        skin(sprint,"BUTTON");
         sprint.setOnTouchListener((v,e)->{
             int action=e.getActionMasked();
             if(action==MotionEvent.ACTION_DOWN)sprinting=true;
