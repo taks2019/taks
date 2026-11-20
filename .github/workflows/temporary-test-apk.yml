@@ -1,0 +1,128 @@
+name: TAKS World 0.15 - TEMPORARY TEST APK (unapproved graphics)
+on:
+  push:
+    branches:
+      - codex/taks-world-temporary-test-apk-2026-11-20
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  native-temporary-android-test-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - name: Check out temporary test branch
+        uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install original source asset converters
+        run: python -m pip install --disable-pip-version-check 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2'
+      - name: Import unapproved EXISTING temporary test scene resources only
+        run: |
+          python scripts/import_cc0_rocks.py
+          python scripts/import_cc0_foliage.py
+          python scripts/import_cc0_rigged_human.py
+      - name: Validate embedded Android rendering dependencies
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('app/src/main/assets/models')
+          for name in ('rock_07.tkm','rock_07.png','namaqualand_boulders_01.tkm',
+                       'namaqualand_boulders_01.png','namaqualand_cliff_01.tkm',
+                       'namaqualand_cliff_01.png','grass_bermuda_01.tkm',
+                       'grass_bermuda_01.png','fern_02.tkm','fern_02.png',
+                       'makehuman_rigged.tks','makehuman_rigged.png',
+                       'ground_sandy_gravel.png','wall_cliff_side.png'):
+              f=p/name
+              assert f.is_file() and f.stat().st_size>1000, name
+          print('Imported source assets for TECHNICAL TEST ONLY. Not approved visuals.')
+          PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Preserve matching developer test signature when cache exists
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: taks-world-windseasons-debug-key-v1
+      - name: Run native engine and zoom roof tests
+        run: |
+          cmake -S engine -B build-native-test -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-native-test --parallel 2
+          ctest --test-dir build-native-test --output-on-failure
+      - name: Build real installable Android APK (not a webpage)
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Verify signature, package, library, and embedded offline resources
+        run: |
+          set -euo pipefail
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          test -s "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | tee app-build-badging.txt
+          grep -F "hu.taks.world.windseasons" app-build-badging.txt
+          grep -F "TAKS World TESZT" app-build-badging.txt
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          p=Path('app/build/outputs/apk/debug/app-debug.apk')
+          assert p.stat().st_size>8_000_000, f'APK unexpectedly small: {p.stat().st_size}'
+          with zipfile.ZipFile(p) as z:
+              names=set(z.namelist())
+              assert 'lib/arm64-v8a/libtaks_engine.so' in names, 'No ARM64 native TAKS engine'
+              for name in ('models/rock_07.tkm','models/rock_07.png',
+                           'models/namaqualand_boulders_01.tkm',
+                           'models/namaqualand_boulders_01.png',
+                           'models/namaqualand_cliff_01.tkm',
+                           'models/namaqualand_cliff_01.png',
+                           'models/grass_bermuda_01.tkm','models/grass_bermuda_01.png',
+                           'models/fern_02.tkm','models/fern_02.png',
+                           'models/makehuman_rigged.tks','models/makehuman_rigged.png',
+                           'models/ground_sandy_gravel.png','models/wall_cliff_side.png',
+                           'wonderwerk/talaj.png','wonderwerk/dolomit.png'):
+                  full='assets/'+name
+                  assert full in names and z.getinfo(full).file_size>100, full
+          print('Native debug APK tested for package/signature/native engine/assets:',p.stat().st_size,'bytes')
+          PY
+          cp "$apk" TAKS_WORLD_ANDROID_0_15_TESZT_NEM_ELFOGADOTT.apk
+          cat > TELEPITES_ELŐTT_OLVASD_EL.txt <<'EOF'
+          TAKS WORLD – IDEIGLENES ANDROID TESZT APK
+          NEM VEGLEGES, NEM ELFOGADOTT GRAFIKA.
+          Az eddig elutasitott 3D kornyezet csak technikai probara szerepel benne.
+          A barlang formaja NEM a hiteles Wonderwerk 3D felmeres.
+          Ez a valtozat nem hagy jova semmilyen kepet vagy torteneti reszletet.
+          Meglevo alkalmazasok alaírás miatt kulon telepitest igenyelhetnek.
+          EOF
+      - name: Upload verified TEST APK for phone installation
+        uses: actions/upload-artifact@v4
+        with:
+          name: TAKS_WORLD_0_15_TESZT_APK_NEM_ELFOGADOTT
+          path: |
+            TAKS_WORLD_ANDROID_0_15_TESZT_NEM_ELFOGADOTT.apk
+            TELEPITES_ELŐTT_OLVASD_EL.txt
+          if-no-files-found: error
+          retention-days: 14
+      - name: Publish clearly labeled PUBLIC PRE-RELEASE for direct mobile download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: taks-world-0.15-roof-teszt-2026-11-20
+        run: |
+          set -euo pipefail
+          apk=TAKS_WORLD_ANDROID_0_15_TESZT_NEM_ELFOGADOTT.apk
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$apk" --clobber
+          else
+            gh release create "$TAG" "$apk" \
+              --target "$GITHUB_SHA" \
+              --title "TAKS World 0.15 TESZT - NEM ELFOGADOTT grafika" \
+              --notes "Csak telepitheto TECHNIKAI PROBA a felhasznalo kifejezett engedelyevel. Az eredeti Wonderwerk 3D barlang es az osszes kepelem KULON jovahagyasra var. Ezt nem szabad vegleges grafikai kiadaskent ertelmezni." \
+              --prerelease \
+              --latest=false
+          fi
