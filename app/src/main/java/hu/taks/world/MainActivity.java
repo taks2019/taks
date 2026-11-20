@@ -778,12 +778,14 @@ public final class MainActivity extends Activity {
                             InputType.TYPE_TEXT_FLAG_MULTI_LINE |
                             InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         editor.setHorizontallyScrolling(false);
-        editor.setMinLines(9);editor.setMaxLines(17);
+        editor.setMinLines(5);editor.setMaxLines(9);
+        // Small landscape screens need an unobscured Save/Cancel footer.
+        editor.setShowSoftInputOnFocus(false);
         editor.setText(menuScript.rawJson());
         android.widget.ScrollView pane=new android.widget.ScrollView(this);
         pane.setPadding(dp(12),dp(6),dp(12),dp(3));
         pane.addView(editor);
-        new AlertDialog.Builder(this)
+        AlertDialog editorDialog=new AlertDialog.Builder(this)
             .setTitle("Feliratok és beállítások – JSON")
             .setView(pane)
             .setPositiveButton("Mentés",(dialog,which)->{
@@ -801,6 +803,10 @@ public final class MainActivity extends Activity {
                 if(acceptedMenu!=null)acceptedMenu.refreshText();
                 showSettings();
             }).show();
+        if(editorDialog.getWindow()!=null)
+            editorDialog.getWindow().setSoftInputMode(
+                android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN |
+                android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
     }
     private void showUpdateNotes(){
         modal("TAKS WORLD – 0.16.0",body->{
@@ -812,8 +818,11 @@ public final class MainActivity extends Activity {
                 "3. A lombok, a páfrány és a lelógó növények külön ütemben mozognak.\n\n"+
                 "4. A vízen folyamatos hullámzás és fénycsillanások láthatók.\n\n"+
                 "5. Lassú felhőárnyék, változó napfény és távoli madarak kerültek a menübe.\n\n"+
-                "6. Az eredeti TAKS WORLD logó, a teljes barlang és a játékmentések "+
-                "változatlanok.\n\n"+
+                "6. A főmenü feliratai a kőgombok szélességére vannak méretezve; "+
+                "a partot és köveket nem mozgatja a víz.\n\n"+
+                "7. A játékon belüli állatok saját helyváltoztatásuk alapján mozognak.\n\n"+
+                "A levágott fa és a történetileg ellenőrizendő barlangbejárat "+
+                "új grafikai alapot igényel.\n\n"+
                 "A játékon belüli 3D világ fejlesztése ettől külön folytatódik. "+
                 "A menü természetes mozgását a telefonon is ellenőrizni kell.",
                 13,0xFFF5E8D2);

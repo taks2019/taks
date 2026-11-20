@@ -14,6 +14,11 @@ ELKÉSZÜLT A KÓDBAN:
 - A Beállítások között megtekinthető a jelen lista.
 - Mentési rendszer és a natív izometrikus játék változatlanul megmarad.
 
+TOVÁBBI JAVÍTÁSOK:
+- A menüfeliratok többé nem érnek túl a kőgomb szélén.
+- A vizes maszk különválasztja a vízi fényeket a kő és part felületétől.
+- A ragadozók és legelők a 3D játékban saját tényleges mozgásukat követik.
+
 KORLÁTOK:
 - Ez az animált menü még nem természetfilm-minőségű 3D környezet.
 - A jóváhagyott állóképben lévő távoli állatok még nem önálló 3D modellek.
