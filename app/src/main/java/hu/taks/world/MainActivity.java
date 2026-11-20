@@ -46,6 +46,7 @@ public final class MainActivity extends Activity {
     private native void nativeReset();
     private native void nativeOnSurfaceCreated(String fragmentSource);
     private native void nativeRender();
+    private native float[] nativePlayerCoordinates();
     private native void nativeSetView(float angle,float pitch,float zoom);
     private native String nativeRendererError();
     private native float[] nativeMenuCues();
@@ -53,6 +54,7 @@ public final class MainActivity extends Activity {
     private native boolean nativeUploadTerrainTexture(int slot,int[] pixels,int width,int height);
 
     private GLSurfaceView surface;
+    private IsometricCaveOverlay caveOverlay;
     private SharedPreferences saves;
     private FrameLayout root;
     private LinearLayout sheet;
@@ -85,6 +87,7 @@ public final class MainActivity extends Activity {
         @Override public void run(){
             if(inMainMenu)return;
             if(surface!=null)surface.requestRender();
+            refreshCaveOverlay();
             renderHandler.postDelayed(this,40);
         }
     };
@@ -353,7 +356,16 @@ public final class MainActivity extends Activity {
         b.setOnClickListener(v->{action.run();refreshScene();refreshLivingSkin();});
         return b;
     }
-    private void refreshScene(){if(surface!=null)surface.requestRender();}
+    private void refreshCaveOverlay(){
+        if(caveOverlay==null || !caveOverlay.hasImages())return;
+        final float[] pos=nativePlayerCoordinates();
+        if(pos!=null && pos.length==2)
+            caveOverlay.setCamera(orbit,cameraPitch,zoom,pos[0],pos[1]);
+    }
+    private void refreshScene(){
+        if(surface!=null)surface.requestRender();
+        refreshCaveOverlay();
+    }
     private void refreshNearby(){
         final String nearby=nativeNearby();
         if(proximity!=null)proximity.setText(nearby);
@@ -733,6 +745,12 @@ public final class MainActivity extends Activity {
     }
     private void showSettings(){
         modal("BEÁLLÍTÁSOK",body->{
+            if(caveOverlay!=null && caveOverlay.hasImages()){
+                addVertical(body,"8 irányú barlang PNG - TESZT előnézet BE/KI",()->{
+                    caveOverlay.setPreviewEnabled(!caveOverlay.isPreviewEnabled());
+                    refreshCaveOverlay();refreshScene();
+                });
+            }
             addVertical(body,"3D felbontás – gyors / kiegyensúlyozott / részletes",
                     this::chooseGraphicsResolution);
             addVertical(body,"Izometrikus kamera",()->{
@@ -956,7 +974,14 @@ public final class MainActivity extends Activity {
         surface.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         surface.setOnTouchListener((v,e)->touch(e,false));
         root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
+        // Android-native image overlay lives IN GAME (above GLES, below HUD);
+        // it is hidden with the game view when returning to the menu.
+        // The actual JPEG/PNG art is supplied only for review builds.
+        caveOverlay=new IsometricCaveOverlay(this);
+        root.addView(caveOverlay,new FrameLayout.LayoutParams(-1,-1));
+        gameHud.add(caveOverlay);
         nativeSetView(orbit,cameraPitch,zoom);
+        refreshCaveOverlay();
 
         LinearLayout header=new LinearLayout(this);header.setOrientation(LinearLayout.VERTICAL);
         header.setPadding(dp(15),dp(10),dp(10),dp(10));

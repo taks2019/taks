@@ -103,6 +103,16 @@ extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeLogo
     std::lock_guard<std::mutex> guard(worldLock);
     return world.logoUnlocked()?JNI_TRUE:JNI_FALSE;
 }
+extern "C" JNIEXPORT jfloatArray JNICALL Java_hu_taks_world_MainActivity_nativePlayerCoordinates(JNIEnv* env,jobject){
+    // Consistent world-space anchor for Android's separate eight-view PNG artwork.
+    // No world state mutation and no approximation from the HUD text.
+    std::lock_guard<std::mutex> guard(worldLock);
+    jfloat coordinates[2]={static_cast<jfloat>(world.playerX),
+                           static_cast<jfloat>(world.playerZ)};
+    jfloatArray result=env->NewFloatArray(2);
+    if(result)env->SetFloatArrayRegion(result,0,2,coordinates);
+    return result;
+}
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeNearby(JNIEnv* env,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
     return toJava(env,world.nearby());
