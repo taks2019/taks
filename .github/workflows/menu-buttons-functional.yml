@@ -49,6 +49,7 @@ jobs:
           assert 'CAPTION_MAX_WIDTH=176f' in menu, "Text cannot protrude beyond stone edges"
           assert 'c.clipRect(CAPTION_X-94f' in menu, "Captions must be clipped inside each stone"
           assert 'CAPTION_TEXT_SIZE=28f' in menu, "Oversized lettering is forbidden"
+          overlay=Path('app/src/main/java/hu/taks/world/LivingWonderwerkOverlay.java').read_text()
           assert 'new RadialGradient(' not in overlay, "A second sun must never be rendered"
           assert 'Rendered moving nature frame' in overlay, "Animation must expose draw evidence"
           overlay=Path('app/src/main/java/hu/taks/world/LivingWonderwerkOverlay.java').read_text()
