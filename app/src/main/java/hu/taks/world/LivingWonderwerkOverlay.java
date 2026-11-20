@@ -216,8 +216,8 @@ public final class LivingWonderwerkOverlay extends View {
         }
     }
     private void drawDust(Canvas canvas,double t,MenuClimate w){
-        final float dust=w.dust();
-        if(dust<.012f)return;
+        final float dust=Math.max(.12f*w.daylight(),w.dust());
+        if(dust<.012f)return; // backlit cave particles + stronger gust-driven dust
         // Dust originates at the cave threshold and follows the true wind.
         // Slow translucent plumes plus individual grains, never static noise.
         // The protected emblem and stone button region is out of bounds.

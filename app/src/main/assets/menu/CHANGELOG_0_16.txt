@@ -1,7 +1,7 @@
-TAKS WORLD 0.16.0 – EGYSÉGES ÉLŐ MENÜ (2026-11-20)
+TAKS WORLD 0.16.1 – EGYSÉGES ÉLŐ MENÜ (2026-11-20)
 
 ELKÉSZÜLT A KÓDBAN:
-- A főmenü többé nem játssza le a 8 másodperces MP4-et: nincs lejátszási ciklus/váltás.
+- A régi 8 másodperces MP4 sem fut, sem kerül be a telepített APK-ba. A menü egyetlen élő felület.
 - A jóváhagyott, teljes 1664x768-es tájkép és kőlogó változatlan.
 - A négy magyar gombfelirat felülre rajzolt, hozzáférhető natív Android gombokkal.
 - A négy funkció: Új játék, Beállítások, Készítő, Kilépés.

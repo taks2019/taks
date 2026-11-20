@@ -809,7 +809,7 @@ public final class MainActivity extends Activity {
                 android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
     }
     private void showUpdateNotes(){
-        modal("TAKS WORLD – 0.16.0",body->{
+        modal("TAKS WORLD – 0.16.1",body->{
             TextView changelog=caption(
                 "EGYSÉGES ÉLŐ MENÜ – VÁLTOZÁSOK\n\n"+
                 "1. Az MP4-videó lejátszása megszűnt. Nincs 8 másodpercenkénti ugrás.\n\n"+
@@ -834,7 +834,7 @@ public final class MainActivity extends Activity {
     private void showSettings(){
         modal(editable("settings","title","BEÁLLÍTÁSOK"),body->{
             addVertical(body,editable("settings","update_notes",
-                "Újdonságok – 0.16 élő menü"),this::showUpdateNotes);
+                "Újdonságok – 0.16.1 élő menü"),this::showUpdateNotes);
             addVertical(body,editable("settings","resolution","3D felbontás – gyors / kiegyensúlyozott / részletes"),
                     this::chooseGraphicsResolution);
             addVertical(body,editable("settings","isometric","Izometrikus kamera"),()->{

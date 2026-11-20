@@ -66,12 +66,11 @@ with ZipFile(PACKAGE) as archive:
     video='approved/menu/accepted_reference_video.mp4'
     if expected.get(video)!='12cac3685ae24638b2ca9db036b454083fdc9eb2dae46ba171eccac1f7aea15c':
         fail("A fájl nem a pontosan elfogadott 8 mp-es, esőmentes MP4!")
-    # 1664x768 H.264 MP4 will be rechecked inside the signed Android package.
-    video_target=DEST/'menu/WONDERWERK_APPROVED_NATURE_NO_RAIN.mp4'
-    video_target.parent.mkdir(parents=True,exist_ok=True)
-    video_target.write_bytes(archive.read(video))
-    print('ORIGINAL VIDEO INSTALLED',video_target.relative_to(ROOT),
-          'SHA256',sha256(video_target.read_bytes()).hexdigest())
+    # The original MP4 stays in the immutable source ZIP, never in the APK.
+    # A saved-world-reactive menu cannot safely loop an eight-second recording.
+    obsolete=DEST/'menu/WONDERWERK_APPROVED_NATURE_NO_RAIN.mp4'
+    if obsolete.exists():obsolete.unlink()
+    print('VERIFIED: no looping video copied into offline Android assets.')
 
     # Copy exactly the approved image inputs. Master is an immutable verification
     # copy; titles remain editable native Android text in menu_texts.json.
@@ -83,5 +82,5 @@ with ZipFile(PACKAGE) as archive:
         path.parent.mkdir(parents=True,exist_ok=True)
         path.write_bytes(archive.read(name))
         print("ORIGINAL BYTES INSTALLED",path.relative_to(ROOT))
-print("PASS: EXACT APPROVED 8s VIDEO + 16 actor PNGs + 5 full-screen layers installed.")
+print("PASS: continuous live scene + 16 actor PNGs + 5 layers installed; NO MP4.")
 print("The sacred logo, the original poster and the human-editable text script are untouched.")
