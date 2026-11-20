@@ -14,10 +14,11 @@ import re
 import sys
 from pathlib import Path, PurePosixPath
 
-VISUAL_DIRS = ("logo", "menu", "wonderwerk", "models")
 VISUAL_EXTENSIONS = {
-    ".png", ".jpg", ".jpeg", ".webp", ".ktx", ".ktx2", ".avif",
+    ".png", ".jpg", ".jpeg", ".webp", ".gif", ".apng", ".svg", ".avif",
+    ".ktx", ".ktx2", ".exr", ".hdr", ".basis",
     ".glb", ".gltf", ".obj", ".fbx", ".tkm", ".tks", ".anim", ".binmesh",
+    ".mp4", ".webm", ".mov",
 }
 STATUS = {"pending", "changes_requested", "rejected", "approved"}
 HASH_FORMAT = re.compile(r"^[0-9a-f]{64}$")
@@ -35,19 +36,18 @@ def valid_relative_path(value: object) -> bool:
     if not isinstance(value, str) or not value or "\\" in value:
         return False
     path = PurePosixPath(value)
-    return not path.is_absolute() and ".." not in path.parts and "." not in path.parts
+    return (not path.is_absolute() and ".." not in path.parts
+            and path.as_posix() == value and path.suffix.lower() in VISUAL_EXTENSIONS)
 
 
 def find_visuals(asset_root: Path) -> set[str]:
-    result: set[str] = set()
-    for directory in VISUAL_DIRS:
-        root = asset_root / directory
-        if not root.exists():
-            continue
-        for file in root.rglob("*"):
-            if file.is_file() and file.suffix.lower() in VISUAL_EXTENSIONS:
-                result.add(file.relative_to(asset_root).as_posix())
-    return result
+    if not asset_root.exists():
+        return set()
+    return {
+        file.relative_to(asset_root).as_posix()
+        for file in asset_root.rglob("*")
+        if file.is_file() and file.suffix.lower() in VISUAL_EXTENSIONS
+    }
 
 
 def audit(manifest_path: Path, asset_root: Path) -> tuple[bool, list[str]]:
@@ -69,7 +69,7 @@ def audit(manifest_path: Path, asset_root: Path) -> tuple[bool, list[str]]:
             errors.append(f"entries[{index}]: expected object")
             continue
         path = entry.get("path")
-        if not valid_relative_path(path) or path.split("/")[0] not in VISUAL_DIRS:
+        if not valid_relative_path(path):
             errors.append(f"entries[{index}]: unsafe or untracked asset path {path!r}")
             continue
         if path in seen:
