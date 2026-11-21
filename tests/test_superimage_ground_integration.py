@@ -70,7 +70,10 @@ class ApprovedSuperImageIntegration(unittest.TestCase):
         self.assertIn('modalOverlay.setBackgroundColor(inMainMenu?0x32101411:0x88101411)',MAIN)
         self.assertIn('opacity(state.panelTop,220)',MAIN)
         self.assertIn('opacity(state.panelBottom,236)',MAIN)
-        self.assertNotIn('installApprovedMotionOnCurrentMenu();',MAIN)
+        # The menu MUST now animate once, but never be added repeatedly by
+        # the 650ms skin refresh timer or a second MenuMotionView.
+        self.assertEqual(MAIN.count('installApprovedMotionOnCurrentMenu();'),1)
+        self.assertIn('menuCover.setOnTouchListener(null)',MAIN)
         self.assertNotIn('menuMotion=new MenuMotionView(this)',MAIN)
 
 if __name__=="__main__": unittest.main()
