@@ -62,9 +62,21 @@ def run():
     adb("shell","am","force-stop",PACKAGE,check=False)
     adb("shell","pm","clear",PACKAGE,check=False) # ONLY isolated emulator test data.
     adb("logcat","-c",check=False)
-    adb("shell","am","start","-W","-n",PACKAGE+"/hu.taks.world.MainActivity")
-    time.sleep(18)
+    launched=adb("shell","am","start","-W","-n",PACKAGE+"/hu.taks.world.MainActivity",check=False).decode(errors="replace")
+    print("ANDROID LAUNCH:",launched,flush=True)
+    time.sleep(12)
+    pid=adb("shell","pidof",PACKAGE,check=False).decode(errors="replace").strip()
+    activity=adb("shell","dumpsys","activity","activities",check=False).decode(errors="replace")
+    (OUT/"activity_state.txt").write_text("PID="+pid+"\n"+launched+"\n"+activity[-15000:],encoding="utf-8")
+    print("ACTUAL APP PID:",pid,flush=True)
+    if not pid:
+        raise AssertionError("TAKS World did not remain running: ANDROID HOME IS NOT A GAME MENU. Read AndroidRuntime and crash logs.")
     initial=screenshot("01_original_approved_main_menu")
+    if initial.height>initial.width:
+        # The approved game is exclusively landscape; a home portrait frame
+        # is not evidence that the menu or native renderer has loaded.
+        raise AssertionError("Android remained in portrait: native TAKS World is not the foreground landscape activity.")
+    
     print("MENU",initial.size,"contrast",contrast(initial),flush=True)
     if contrast(initial)<24:raise AssertionError("Menu blank/dark brown: original art not displayed")
     time.sleep(2)
@@ -125,4 +137,16 @@ def run():
     print("PASS: actual Android menu, Settings, gameplay and cave inspection",flush=True)
 
 if __name__=="__main__":
-    run()
+    try:
+        run()
+    finally:
+        # Always capture diagnostics, even when app crashes or opens Home.
+        (OUT/"full_logcat.txt").write_text(
+            adb("logcat","-d","-v","time",check=False).decode(errors="replace")[-500000:],
+            encoding="utf-8"
+        )
+        (OUT/"window_focus.txt").write_text(
+            adb("shell","dumpsys","window","windows",check=False).decode(errors="replace")[-20000:],
+            encoding="utf-8"
+        )
+
