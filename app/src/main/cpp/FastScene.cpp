@@ -851,7 +851,8 @@ void render(int width,int height,const FastFrame& f){
     // The PNG is optional review only; the 3D cave is the real default.
     const bool pngOnly = pngCover >= .5f;
     const float oldCaveAlpha = pngOnly ? 0.f : 1.f;
-    if(oldCaveAlpha > .001f && !caveMesh.empty()){
+    if(oldCaveAlpha > .001f && !caveMesh.empty() &&
+       !(f.inspectCave && taks::RealModels::hasSurveyCave())){
         if(uRoofOpacity>=0)glUniform1f(uRoofOpacity,oldCaveAlpha);
         if(oldCaveAlpha < .999f){
             glEnable(GL_BLEND);
@@ -876,7 +877,8 @@ void render(int width,int height,const FastFrame& f){
     taks::RealModels::render(vp.a,f.nodes,f.grass,f.trees,f.verifiedFerns,
         f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,
         f.playerMoving,f.playerRunning,f.npcs,f.animationTime,f.windStrength,
-        f.windX,f.windZ,f.wetSeason,f.moisture);
+        f.windX,f.windZ,f.wetSeason,f.moisture,
+        f.inspectCave && taks::RealModels::hasSurveyCave());
 
     // Native depth-tested sprite: belongs to actual world coordinates.
     // Foreground actors/rocks occlude the sprite, unlike screen-space Canvas.
