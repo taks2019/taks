@@ -193,6 +193,19 @@ function Prepare-ApprovedGround {
         $sourceCandidate=Join-Path $Root "approved_source\SuperImage.zip"
     }
     $hasSource=(Test-Path -LiteralPath $sourceCandidate -PathType Leaf)
+    # FILE PICKER: the GUI menu's 8th item can find the user's ZIP
+    # without needing any PowerShell path typing or Git commands.
+    if(-not $hasSource -and $Mode -eq "ground" -and -not $SourceZip){
+        Add-Type -AssemblyName System.Windows.Forms
+        $fileDialog=New-Object System.Windows.Forms.OpenFileDialog
+        $fileDialog.Title="TAKS WORLD - válaszd ki az eredeti SuperImage.zip fájlt"
+        $fileDialog.Filter="SuperImage képcsomag (*.zip)|*.zip"
+        $fileDialog.CheckFileExists=$true
+        if($fileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK){
+            $sourceCandidate=$fileDialog.FileName
+            $hasSource=$true
+        }
+    }
     if($hasSource){
         Say "Hat eredeti SuperImage-talaj automatikus eloallitasa a teszt APK-hoz."
         $python=Need-PythonVenv
