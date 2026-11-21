@@ -1,0 +1,22 @@
+name: TAKS World - 3D review code checks (NO release APK)
+on:
+  push:
+    branches:
+      - codex/taks-world-true3d-default-review-2026-11-21
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  actual-3d-default:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Python guard - flat preview must be explicit, not gameplay default
+        run: python3 -m unittest discover -s tests -p test_real3d_default_review.py -v
+      - name: 3D heightfield/actor ground-contact regression
+        run: python3 -m unittest discover -s tests -p test_update21_true_3d_terrain.py -v
+      - name: Causal world checks
+        run: |
+          cmake -S engine -B build-native -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-native --parallel 2
+          ctest --test-dir build-native --output-on-failure
