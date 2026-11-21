@@ -865,6 +865,16 @@ public final class MainActivity extends Activity {
 
         menuCover=new FrameLayout(this);
         menuCover.setBackgroundColor(Color.rgb(24,19,14));
+        // The original approved menu is the complete illustrated 1664x768
+        // stone-logo scene. It never uses the rejected static-as-MP4 experiment.
+        RestoredStoneMenu approved=RestoredStoneMenu.load(this,
+                this::newWorldFromMenu,this::showSettings,
+                this::showCredits,this::confirmExit);
+        if(approved!=null){
+            menuCover.addView(approved,new FrameLayout.LayoutParams(-1,-1));
+            root.addView(menuCover,new FrameLayout.LayoutParams(-1,-1));
+            return;
+        }
         final PrehistoricMenuTheme.Look natural=PrehistoricMenuTheme.fromCues(nativeMenuCues());
         // The menu remains part of the native Android game. Its photographic
         // Wonderwerk plate is a bundled offline asset; the native world's real
@@ -875,11 +885,6 @@ public final class MainActivity extends Activity {
         backdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
         backdrop.setContentDescription("Wonderwerk-barlang és a kőkori környezet menüháttere");
         menuCover.addView(backdrop,new FrameLayout.LayoutParams(-1,-1));
-        // Moving MP4 belongs UNDER the unchanged menu logo/buttons. Still art is a safe fallback.
-        if(MenuMotionView.hasVideo(this)){
-            menuMotion=new MenuMotionView(this);
-            menuCover.addView(menuMotion,new FrameLayout.LayoutParams(-1,-1));
-        }
         menuScrim=new View(this);
         menuScrim.setClickable(false);
         menuCover.addView(menuScrim,new FrameLayout.LayoutParams(-1,-1));
