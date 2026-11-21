@@ -438,9 +438,13 @@ std::string World::act(const std::string& action) {
             const auto& n=npcs[i];
             const double dx=n.x-playerX,dz=n.z-playerZ;
             if(dx*dx+dz*dz<=2.3*2.3){
+                // An actual face-to-face conversation can share remembered places.
+                // The character cannot learn a place this person has not discovered.
+                const bool shared=memory.exchange(0,i+1);
                 std::ostringstream out;
-                out<<"Társ "<<i+1<<": "<<(n.task==1?"Éppen anyagért indulok.":n.task==2?"Anyagot szállítok a táborba.":n.task==3?"Pihenésre van szükségem.":"Itt dolgozom.")
+                out<<"Társ "<<i+1<<": "<<(n.task==1?"Éppen anyagért indulok.":n.task==2?"Anyagot szállítok a táborba.":n.task==3?"Pihenésre van szükségem.":n.task==5?"Ismeretlen területen keresgélek.":"Itt dolgozom.")
                    <<" Erő: "<<static_cast<int>(n.energy)<<"%, éhség: "<<static_cast<int>(n.hunger)<<"%.";
+                if(shared)out<<" Megosztottuk az eddig személyesen ismert helyeket.";
                 return out.str();
             }
         }
