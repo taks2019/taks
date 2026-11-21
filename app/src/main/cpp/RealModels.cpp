@@ -23,7 +23,7 @@ std::array<Model,8> models;
 HumanRig human;
 GLuint shader=0;
 GLint uVP=-1,uModel=-1,uTexture=-1,uCutoff=-1,uDaylight=-1,uRain=-1,uTint=-1;
-GLint uWindStrength=-1,uWindDirection=-1,uAnimationTime=-1,uFoliage=-1;
+GLint uWindStrength=-1,uWindDirection=-1,uAnimationTime=-1,uFoliage=-1,uTreeBend=-1;
 GLint uWetSeason=-1,uSoilMoisture=-1,uSwayAmount=-1;
 GLint uBones=-1;
 std::string error;
@@ -39,6 +39,7 @@ uniform mat4 uViewProjection;
 uniform mat4 uModel;
 uniform mat4 uBones[53];
 uniform float uFoliage;
+uniform float uTreeBend;
 uniform float uWindStrength;
 uniform vec2 uWindDirection;
 uniform float uSwayAmount;
@@ -59,10 +60,16 @@ void main() {
    // World-space bending keeps rotated clumps aligned with the same gust.
    // The planted base stays fixed. Trampled, shorter blades sway less.
    float height=max(p.y-uModel[3].y,0.0);
+   // A tree is not a rubber pole: keep the lower trunk anchored and bend
+   // only its upper crown/branches. Grass and ferns keep their existing sway.
+   float treeHeight=max(uModel[1].y*2.0,0.01);
+   float crownHeight=max(height-treeHeight*0.30,0.0);
+   float treeFlex=smoothstep(0.0,treeHeight*0.55,crownHeight);
+   float bend=mix(height*0.27,crownHeight*0.15*treeFlex,uTreeBend);
    vec2 direction=uWindDirection/max(length(uWindDirection),0.001);
    float phase=uAnimationTime*(1.35+uWindStrength*1.1)+dot(p.xz,direction)*1.65;
    float gust=0.28+0.72*sin(phase)+0.18*sin(phase*0.53+1.7);
-   p.xz+=direction*(height*0.27*uSwayAmount*uWindStrength*gust);
+   p.xz+=direction*(bend*uSwayAmount*uWindStrength*gust);
  }
  vWorld=p.xyz;
  vNormal=normalize(mat3(uModel)*mat3(skin)*aNormal);
@@ -337,12 +344,13 @@ bool init(){
  uWindDirection=glGetUniformLocation(shader,"uWindDirection");
  uAnimationTime=glGetUniformLocation(shader,"uAnimationTime");
  uFoliage=glGetUniformLocation(shader,"uFoliage");
+ uTreeBend=glGetUniformLocation(shader,"uTreeBend");
  uWetSeason=glGetUniformLocation(shader,"uWetSeason");
  uSoilMoisture=glGetUniformLocation(shader,"uSoilMoisture");
  uBones=glGetUniformLocation(shader,"uBones[0]");
  if(uVP<0||uModel<0||uTexture<0||uCutoff<0||uDaylight<0||uRain<0||uTint<0||
     uSwayAmount<0||uWindStrength<0||uWindDirection<0||uAnimationTime<0||uFoliage<0||
-    uWetSeason<0||uSoilMoisture<0||uBones<0){error="3D modellshader uniform hiány";shutdown();return false;}
+    uWetSeason<0||uSoilMoisture<0||uBones<0||uTreeBend<0){error="3D modellshader uniform hiány";shutdown();return false;}
  return true;
 }
 bool upload(int id,const std::uint8_t* bytes,std::size_t size,
@@ -421,6 +429,7 @@ void render(const float* viewProjection,const float* worldNodes,
  glUniform1f(uWetSeason,std::clamp(wetSeason,0.f,1.f));
  glUniform1f(uSoilMoisture,std::clamp(soilMoisture,0.f,1.f));
  glUniform1f(uFoliage,0.f);
+ glUniform1f(uTreeBend,0.f);
  glUniform1f(uCutoff,0.f);
  glUniform3f(uTint,1.f,1.f,1.f);
  glActiveTexture(GL_TEXTURE0);
@@ -443,30 +452,14 @@ void render(const float* viewProjection,const float* worldNodes,
     if(int(n[2]+.5f)!=1||n[3]<.5f)continue;
     draw(models[0],n[0],n[1],1.4f,float(i)*1.15f);
  }
- // Three non-collectible geological outcrops, not part of inventory.
- // A later geology system must give the static rock formation physical identity.
- // Photo-scanned stones stay grounded and human-scaled. The old free-
- // standing giant cliff props looked suspended above the cave entrance:
- // use two lower side outcrops, then distribute smaller scans around the edge
- // of the explored ground. These remain visual geology; resource nodes are
- // still the only stones with collectible inventory state.
- if(models[2].vao&&models[2].texture){
-    // Layer several scanned rock faces around the explored basin so the
-    // walkable region reads as a cave clearing, not a lone wall prop.
+ // Do not stamp nine copies of two identical geological scans across the
+ // clearing: repeated hard-coded props were reported as duplicate rocks.
+ // Keep at most one sourced example of each DIFFERENT outcrop mesh, away
+ // from the cave entrance; resource stones remain linked to real inventory.
+ if(models[2].vao&&models[2].texture)
     draw(models[2],-8.25f,2.15f,.48f,-.48f);
-    draw(models[2],8.10f,2.45f,.44f,2.45f);
-    draw(models[2],-8.30f,-5.70f,.31f,1.30f);
-    draw(models[2],8.25f,-5.25f,.29f,-1.55f);
-    draw(models[2],-7.90f,.10f,.26f,2.10f);
-    draw(models[2],7.85f,-.45f,.28f,-.85f);
- }
- draw(models[1],-6.8f,1.9f,.88f,.6f);
- draw(models[1],5.9f,2.4f,.82f,2.1f);
- draw(models[1],6.8f,-2.8f,.95f,-.25f);
- // Do not blanket the clearing with 36 copies of the same scanned rock.
- // They caused the rejected repeated 'lumps' despite being genuine meshes.
- // Keep only finite collectible stones and the distinctly larger sourced
- // geological outcrops above; gameplay and inventory remain unchanged.
+ if(models[1].vao&&models[1].texture)
+    draw(models[1],6.8f,-2.8f,.95f,-.25f);
  // Genuine published botanical geometry; no generated tube/ball foliage.
  if(models[3].vao && models[3].texture){
     glUniform1f(uFoliage,1.f);
@@ -507,6 +500,7 @@ void render(const float* viewProjection,const float* worldNodes,
  }
  if(models[5].vao && models[5].texture){
     glUniform1f(uFoliage,1.f);
+    glUniform1f(uTreeBend,1.f);
     glUniform1f(uCutoff,.42f);
     glUniform1f(uSwayAmount,.22f);
     for(int i=0;i<3;++i){
@@ -516,6 +510,8 @@ void render(const float* viewProjection,const float* worldNodes,
         draw(models[5],t[0],t[1],t[2]/2.f,.40f+float(i)*1.9f);
     }
  }
+ // Reset tree-specific crown bending before drawing short ferns or actors.
+ glUniform1f(uTreeBend,0.f);
  if(fernApproved && models[4].vao && models[4].texture){
     glUniform1f(uFoliage,1.f);
     glUniform1f(uCutoff,.42f);
