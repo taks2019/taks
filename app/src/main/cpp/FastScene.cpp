@@ -109,7 +109,10 @@ void sculptedTerrainGrid(std::vector<Vertex>& dst,float x0,float x1,
             };
             for(int k=0;k<segments;++k){
                 const auto p0=boundaryPoint(k),p1=boundaryPoint(k+1);
-                push(farCorner);push(p0);push(p1);
+                // Keep every stitched edge triangle outward facing, including
+                // the west/north borders that were wound backwards.
+                if(west||north){push(farCorner);push(p1);push(p0);}
+                else {push(farCorner);push(p0);push(p1);}
             }
             // The remaining triangle keeps the outer coarse edge whole.
             if(west){push(a);push(d);push(c);}
@@ -274,7 +277,10 @@ Mat4 lookAt(Vec3 eye,Vec3 center){
     std::copy(out,out+16,m.a);return m;
 }
 Mat4 orthographic(float width,float height){
-    Mat4 p;const float znear=.1f,zfar=140.f;
+    // The 240 m terrain extends well beyond the previous 140 m far plane.
+    // A larger orthographic depth interval prevents the horizon and full
+    // surveyed/approved models from being sliced by the camera clip plane.
+    Mat4 p;const float znear=.1f,zfar=380.f;
     p.a[0]=2.f/width;p.a[5]=2.f/height;
     p.a[10]=-2.f/(zfar-znear);p.a[14]=-(zfar+znear)/(zfar-znear);
     p.a[15]=1;return p;
