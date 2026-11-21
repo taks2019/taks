@@ -18,6 +18,8 @@ class GameplayAndOriginalMenu(unittest.TestCase):
         self.assertIn("vec4 texel=mix(first,second",SPRITE)
         self.assertIn("drawTexture(textures[index0],billboard,alpha,tint)",SPRITE)
         self.assertNotIn("drawTexture(textures[index1]",SPRITE)
-        self.assertIn("sourceFootRow=444.f/512.f",SPRITE)\n        self.assertIn("int index1=index0",SPRITE)\n        self.assertIn("CaveBillboard::aligned",SPRITE)
+        self.assertIn("sourceFootRow=444.f/512.f",SPRITE) 
+        self.assertIn("int index1=index0",SPRITE) 
+        self.assertIn("CaveBillboard::aligned",SPRITE)
 
 if __name__=="__main__":unittest.main()
