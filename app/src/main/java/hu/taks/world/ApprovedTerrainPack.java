@@ -102,18 +102,26 @@ final class ApprovedTerrainPack {
                 }
             }
             File output=folder(context);
-            if(!output.exists()&&!output.mkdirs())
-                throw new IOException("Nem hozható létre a talajmappa.");
-            // Each valid copy is written before the UI enables the new pack.
-            for(String f:FILES){
-                File from=new File(stage,f),to=new File(output,f);
-                if(to.exists()&&!to.delete())throw new IOException("Régi textúra nem írható felül.");
-                if(!from.renameTo(to))throw new IOException("A textúra mentése sikertelen: "+f);
+            File backup=new File(root,STORE+"_previous");
+            clear(backup);
+            if(output.exists()&&!output.renameTo(backup))
+                throw new IOException("A korábbi jóváhagyott talaj nem menthető.");
+            if(!stage.renameTo(output)){
+                if(backup.exists())backup.renameTo(output);
+                throw new IOException("Nem telepíthető a teljes új talajkészlet.");
             }
+            clear(backup);
         }finally{
-            for(String f:FILES)new File(stage,f).delete();
-            stage.delete();
+            clear(stage);
         }
+    }
+    private static void clear(File path){
+        if(path.isDirectory()){
+            File[] children=path.listFiles();
+            if(children!=null)for(File f:children)clear(f);
+        }
+        if(path.exists())path.delete();
+    }
     }
     static Bitmap[] load(Context context) throws IOException {
         if(!present(context))throw new IOException("A játékbeli talajkészlet hiányzik.");
