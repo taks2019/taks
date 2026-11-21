@@ -3,6 +3,7 @@
 #include "CaveSprite.h"
 #include "RoofCutaway.h"
 #include "WorldTerrain.h"
+#include "CaveVolumeReview.h"
 #include <GLES3/gl3.h>
 #include <algorithm>
 #include <array>
@@ -266,11 +267,6 @@ void addWildlife(const FastFrame& scene){
     }
 }
 float cliffZ(float x,float y){return 3.63f+.13f*std::sin(x*.74f+y*.28f)+.12f*std::sin(x*2.3f+y*2.1f);}
-bool cliffOpen(float x,float y) {
-    if(y<.08f)return false;
-    float xn=x/1.65f,yn=(y-1.34f)/1.55f;
-    return xn*xn+yn*yn<.96f && y<2.85f;
-}
 void buildStatic(){
     terrainMesh.clear();
     caveMesh.clear();
@@ -283,17 +279,16 @@ void buildStatic(){
                        60,60,true);
     sculptedTerrainGrid(terrainMesh,-28.f,28.f,-28.f,40.f,
                        112,136,false);
-    // Természetes sziklafal, valódi 3D elülső és oldalsó mélységgel.
-    const int mx=95,my=34;
-    for(int j=0;j<my;++j)for(int i=0;i<mx;++i){
-        float x=-9.4f+18.8f*float(i)/mx,xx=-9.4f+18.8f*float(i+1)/mx;
-        const float t=float(j)/my,tt=float(j+1)/my;
-        const float y=top(x)*t,yy=top(x)*tt;
-        const float r=top(xx)*t,rr=top(xx)*tt;
-        if(cliffOpen((x+xx)*.5f,(y+yy+r+rr)*.25f))continue;
-        Vec3 a{x,y,cliffZ(x,y)},b{xx,r,cliffZ(xx,r)},c{xx,rr,cliffZ(xx,rr)},d{x,yy,cliffZ(x,yy)};
-        quad(caveMesh,a,d,c,b,1.f);
-    }
+    // Native XYZ rock mesh: curved entrance, full inner tunnel, true side depth.
+    // Review geometry only; NOT an archaeological Wonderwerk survey mesh.
+    // The 8-angle photographic PNG remains optional and never used by default.
+    taks::CaveVolume::build(
+        [](taks::CaveVolume::P a,taks::CaveVolume::P b,
+           taks::CaveVolume::P c,float material) {
+            triangle(caveMesh,{a.x,a.y,a.z},{b.x,b.y,b.z},
+                     {c.x,c.y,c.z},material);
+        },
+        [](float x,float z){return surfaceHeight(x,z);});
     // Close the full rock formation down to the ground behind the entrance.
     constexpr int depthSegments=30;
     for(int i=0;i<80;++i){
@@ -312,18 +307,6 @@ void buildStatic(){
             quad(roofMesh,crest(x,a),crest(x,b),crest(xx,b),crest(xx,a),1.f);
         }
     }
-    // A barlang sötét belseje az elülső arch mögött található.
-    for(int i=0;i<13;++i){
-        float angle=PI*float(i)/12.f,next=PI*float(i+1)/12.f;
-        Vec3 a{1.5f*std::cos(angle),1.35f+1.5f*std::sin(angle),3.73f};
-        Vec3 b{1.5f*std::cos(next),1.35f+1.5f*std::sin(next),3.73f};
-        Vec3 aa{a.x*.86f,a.y,6.7f},bb{b.x*.86f,b.y,6.7f};
-        quad(caveMesh,a,b,bb,aa,6.f);
-    }
-    quad(caveMesh,{-1.45f,surfaceHeight(-1.45f,3.75f),3.75f},{1.45f,surfaceHeight(1.45f,3.75f),3.75f},
-        {1.45f,surfaceHeight(1.45f,6.7f),6.7f},{-1.45f,surfaceHeight(-1.45f,6.7f),6.7f},6.f);
-    quad(caveMesh,{-1.1f,0.0f,6.7f},{1.1f,0.0f,6.7f},
-        {1.1f,2.7f,6.7f},{-1.1f,2.7f,6.7f},6.f);
     // The previous 8 angular polygon-stones are removed: natural stones are now true photogrammetry meshes.
 }
 Mat4 multiply(const Mat4& l,const Mat4& r){
@@ -617,8 +600,21 @@ void main(){
         // it darkens only when rainfall/moisture exists.
         float gullyMoisture=wetChannel*clamp(u_rain*.65+u_mud*.5,0.,1.);
         base=mix(base,base*vec3(.69,.72,.68),gullyMoisture);
+        // The same physical terrain becomes darker UNDER the cave overhang;
+        // no painted 2D black rectangle on top of world geometry.
+        float caveX=1.0-smoothstep(1.52,2.10,abs(wPos.x));
+        float caveZ=smoothstep(3.45,6.10,wPos.z)*(1.0-smoothstep(11.5,12.5,wPos.z));
+        base*=1.0-.55*caveX*caveZ;
     }else if(matId==1){
         base=photoDolomite(wPos,wNorm)*(.90+.10*lines);
+    }else if(matId==16){
+        // Actual concave 3D tunnel stone, triplanar texture with natural darkness
+        // increasing with distance from the daylight opening.
+        float depth=clamp((wPos.z-3.65)/8.1,0.0,1.0);
+        base=photoDolomite(wPos,wNorm)*mix(.84,.19,depth);
+        base*=.93+.07*grain;
+    }else if(matId==17){
+        base=photoDolomite(wPos,wNorm)*.13;
     }else if(matId==2){
         base=mix(vec3(.32,.30,.27),vec3(.59,.53,.46),grain*.7);
     }else if(matId==3){
