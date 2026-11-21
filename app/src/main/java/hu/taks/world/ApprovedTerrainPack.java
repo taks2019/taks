@@ -122,7 +122,6 @@ final class ApprovedTerrainPack {
         }
         if(path.exists())path.delete();
     }
-    }
     static Bitmap[] load(Context context) throws IOException {
         if(!present(context))throw new IOException("A játékbeli talajkészlet hiányzik.");
         Bitmap[] frames=new Bitmap[FILES.length];
