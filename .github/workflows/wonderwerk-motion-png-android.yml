@@ -1,0 +1,73 @@
+name: TAKS World - Animated Wonderwerk MP4 + grounded PNG Android review
+on:
+  push:
+    branches: [codex/wonderwerk-animated-mp4-png-world-2026-11-21]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  animated-wonderwerk-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install real-world asset toolchain
+        run: |
+          python -m pip install --disable-pip-version-check 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2'
+          ffmpeg -version | head -n 1
+      - name: Produce actual offline looping animated MP4 from existing menu art
+        run: |
+          python scripts/build_wonderwerk_menu_video.py
+          ffprobe -v error -show_entries format=duration:stream=width,height,codec_name -of default=noprint_wrappers=1 app/src/main/assets/menu/wonderwerk_loop.mp4
+      - name: Download existing CC0 assets for TAKS native gameplay
+        run: |
+          python scripts/import_cc0_rocks.py
+          python scripts/import_cc0_foliage.py
+          python scripts/import_cc0_rigged_human.py
+      - name: Verify video is time-varying and verify no duplicate or jumping cave overlay
+        run: |
+          python -m unittest discover -s tests -p 'test_menu_motion.py' -v
+          python -m unittest discover -s tests -p 'test_png_cave_no_duplicate.py' -v
+      - name: Keep cause-effect engine regression tests
+        run: |
+          cmake -S engine -B build-native -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-native --parallel 2
+          ctest --test-dir build-native --output-on-failure
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Assemble distinct Android review APK
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Verify MP4 + native GPU renderer are packaged and signed
+        run: |
+          python - <<'PY'
+          import zipfile
+          from pathlib import Path
+          target=Path('app/build/outputs/apk/debug/app-debug.apk')
+          assert target.is_file() and target.stat().st_size>8_000_000
+          with zipfile.ZipFile(target) as archive:
+              names=set(archive.namelist())
+              assert 'assets/menu/wonderwerk_loop.mp4' in names
+              assert 'assets/menu/wonderwerk_main_menu.webp' in names
+              assert 'lib/arm64-v8a/libtaks_engine.so' in names
+          print('Verified: animated MP4, static fallback, native 3D engine')
+          PY
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS_World_Animated_Wonderwerk_Android_APK_REVIEW
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/src/main/assets/menu/wonderwerk_loop.mp4
+          if-no-files-found: error
+          retention-days: 7
