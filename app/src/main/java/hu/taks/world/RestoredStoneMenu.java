@@ -82,7 +82,10 @@ final class RestoredStoneMenu extends FrameLayout {
             target.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
             target.setBackgroundColor(Color.TRANSPARENT);
             target.setElevation(0f);
-            target.setOnClickListener(v->actions[index].run());
+            target.setOnClickListener(v->{
+                android.util.Log.i("TAKS_MENU_TOUCH",LABELS[index]+" pressed on approved original image");
+                actions[index].run();
+            });
             touch[i]=target;
             addView(target,new FrameLayout.LayoutParams(1,1,Gravity.TOP|Gravity.LEFT));
         }
@@ -105,6 +108,9 @@ final class RestoredStoneMenu extends FrameLayout {
             area.leftMargin=Math.round(offsetX+DESIGN_W*.396f*scale);
             area.topMargin=Math.round(offsetY+DESIGN_H*TOP[i]*scale);
             touch[i].setLayoutParams(area);
+            android.util.Log.i("TAKS_MENU_TOUCH","Hitbox "+LABELS[i]+
+               " x="+area.leftMargin+" y="+area.topMargin+
+               " w="+area.width+" h="+area.height);
         }
         invalidate();
     }
