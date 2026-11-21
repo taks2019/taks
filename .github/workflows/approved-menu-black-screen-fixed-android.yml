@@ -74,10 +74,10 @@ jobs:
           print('Verified: original menu pixels and native GLES3 gameplay, no rejected video')
           PY
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
-          cp app/build/outputs/apk/debug/app-debug.apk TAKS_WORLD_MENÜ_MEGJELENÉS_JAVÍTOTT_TESZT.apk
+          cp app/build/outputs/apk/debug/app-debug.apk TAKS_WORLD_MENU_JAVITOTT_TESZT.apk
       - uses: actions/upload-artifact@v4
         with:
           name: TAKS_World_Approved_Menu_Fullscreen_Android_Repair
-          path: TAKS_World_Eredeti_Menu_Jatekter_TESZT.apk
+          path: TAKS_WORLD_MENU_JAVITOTT_TESZT.apk
           if-no-files-found: error
           retention-days: 7
