@@ -11,7 +11,7 @@ namespace {
 constexpr float pi = 3.14159265358979323846f;
 struct Vertex { float x,y,z,u,v; };
 GLuint program=0,vao=0,vbo=0,textures[8]={},shadowTexture=0;
-GLint mvpUniform=-1,alphaUniform=-1,tintUniform=-1;
+GLint mvpUniform=-1,alphaUniform=-1,tintUniform=-1,blendUniform=-1;
 std::string error;
 bool initialized=false;
 const char* VERT=R"GLSL(#version 300 es
@@ -28,11 +28,17 @@ const char* FRAG=R"GLSL(#version 300 es
 precision mediump float;
 in vec2 v_uv;
 uniform sampler2D u_image;
+uniform sampler2D u_image_next;
+uniform float u_viewBlend;
 uniform float u_opacity;
 uniform vec3 u_tint;
 out vec4 color;
 void main(){
-    vec4 texel=texture(u_image,v_uv);
+    // Blend the two viewpoints in ONE fragment pass. Two separate alpha
+    // draws made the cave briefly transparent and appear to jump on rotation.
+    vec4 first=texture(u_image,v_uv);
+    vec4 second=texture(u_image_next,v_uv);
+    vec4 texel=mix(first,second,clamp(u_viewBlend,0.0,1.0));
     if(texel.a<0.016)discard;
     color=vec4(texel.rgb*u_tint, texel.a*u_opacity);
 }
@@ -95,6 +101,7 @@ bool init(){
     mvpUniform=glGetUniformLocation(program,"u_viewProjection");
     alphaUniform=glGetUniformLocation(program,"u_opacity");
     tintUniform=glGetUniformLocation(program,"u_tint");
+    blendUniform=glGetUniformLocation(program,"u_viewBlend");
     glGenVertexArrays(1,&vao);glGenBuffers(1,&vbo);
     glBindVertexArray(vao);glBindBuffer(GL_ARRAY_BUFFER,vbo);
     glBufferData(GL_ARRAY_BUFFER,6*sizeof(Vertex),nullptr,GL_STREAM_DRAW);
@@ -165,7 +172,10 @@ void render(const float* viewProjection,float yaw,float zoom,
     // At very close zoom, the existing interactive interior is revealed.
     constexpr float footprintX=0.f, footprintZ=2.2f;
     constexpr float widthM=16.0f,heightM=10.7f;
-    float bottomY=caveGroundY-heightM*(1.f-428.f/512.f);
+    // All eight 512px source images have their lowest opaque pixels at
+    // rows 443-445; anchoring at 428 buried their feet and cut the foreground.
+    constexpr float sharedOpaqueFootRow=444.f;
+    float bottomY=caveGroundY-heightM*(1.f-sharedOpaqueFootRow/512.f);
     float topY=bottomY+heightM;
     // Camera right from the same native lookAt() basis, orthographic always.
     float rightX=-std::cos(yaw),rightZ=-std::sin(yaw);
@@ -197,6 +207,8 @@ void render(const float* viewProjection,float yaw,float zoom,
     glActiveTexture(GL_TEXTURE0);
     GLint sampler=glGetUniformLocation(program,"u_image");
     glUniform1i(sampler,0);
+    glUniform1i(glGetUniformLocation(program,"u_image_next"),1);
+    glUniform1f(blendUniform,0.f);
 
     // Small soft shadow makes the cave touch the SAME ground as its characters.
     if(shadowTexture){
@@ -212,11 +224,16 @@ void render(const float* viewProjection,float yaw,float zoom,
         };
         drawTexture(shadowTexture,shadow,alpha,.65f);
     }
-    drawTexture(textures[index0],billboard,alpha*(1.f-fade),tint);
-    if(fade>.002f)drawTexture(textures[index1],billboard,alpha*fade,tint);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D,textures[index1]);
+    glActiveTexture(GL_TEXTURE0);
+    glUniform1f(blendUniform,fade);
+    drawTexture(textures[index0],billboard,alpha,tint);
+    glUniform1f(blendUniform,0.f);
     glDepthMask(GL_TRUE);
     glDisable(GL_BLEND);
-    glBindTexture(GL_TEXTURE_2D,0);
+    glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,0);
+    glActiveTexture(GL_TEXTURE0);glBindTexture(GL_TEXTURE_2D,0);
     glUseProgram(0);
 }
 }

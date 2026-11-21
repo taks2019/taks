@@ -12,7 +12,7 @@ android {
         externalNativeBuild { cmake { cppFlags '-std=c++17'; arguments '-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON' } }
     }
     buildTypes {
-        debug { applicationIdSuffix '.wonderwerkmotion'; versionNameSuffix '-MP4-TEST' }
+        debug { applicationIdSuffix '.originalmenugame'; versionNameSuffix '-GAMEPLAY-TEST' }
         release { minifyEnabled false }
     }
     externalNativeBuild { cmake { path 'src/main/cpp/CMakeLists.txt'; version '3.22.1' } }
