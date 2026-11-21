@@ -41,7 +41,7 @@ class GroundedCave(unittest.TestCase):
         self.assertIn("nativeSetCavePreview(cavePreviewReady && cavePreviewWanted)",MAIN)
         self.assertIn("std::atomic<bool> pngCavePreview{false}",NATIVE)
         self.assertIn("f.pngCavePreview=pngCavePreview.load",NATIVE)
-        self.assertIn("applicationIdSuffix '.wonderwerkmotion'",read("app/build.gradle"))
+        self.assertIn("applicationIdSuffix '.originalmenugame'",read("app/build.gradle"))
         self.assertIn('bool pngCavePreview=false',read("app/src/main/cpp/FastScene.h"))
         self.assertNotIn("pngCavePreview",read("engine/CauseWorld.cpp"))
 if __name__=="__main__":
