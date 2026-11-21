@@ -56,9 +56,31 @@ jobs:
           script: |
             mkdir -p snapshots
             adb install -r '/tmp/menu-repair-apk/TAKS_WORLD_MENU_JAVITOTT_TESZT.apk'
+            # Disable one-time Android system popup that previously covered the
+            # app and caused a false blank-menu failure.
+            adb shell settings put secure immersive_mode_confirmations confirmed || true
             adb shell am force-stop hu.taks.world.menufixedgame || true
             adb shell am start -n hu.taks.world.menufixedgame/hu.taks.world.MainActivity
-            sleep 20
+            sleep 28
+            adb exec-out screencap -p > snapshots/first_frame.png
+            # Defensive fallback if the Android system still displays its blue
+            # immersive-mode tutorial (it is not part of TAKS World).
+            python - <<'PY' > snapshots/immersive_popup
+            from PIL import Image
+            pic=Image.open('snapshots/first_frame.png').convert('RGB')
+            r,g,b=pic.getpixel((pic.width//2,pic.height//3))
+            print('yes' if r<50 and 65<g<170 and 90<b<190 else 'no')
+            PY
+            if grep -q yes snapshots/immersive_popup; then
+              python - <<'PY' > snapshots/dismiss_point
+            from PIL import Image
+            pic=Image.open('snapshots/first_frame.png')
+            print(round(pic.width*.64),round(pic.height*.475))
+            PY
+              read PX PY < snapshots/dismiss_point
+              adb shell input tap "$PX" "$PY"
+              sleep 10
+            fi
             adb exec-out screencap -p > snapshots/menu.png
             adb logcat -d -v time > snapshots/android.log
             python - <<'PY'
