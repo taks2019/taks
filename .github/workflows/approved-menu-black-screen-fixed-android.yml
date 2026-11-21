@@ -1,0 +1,83 @@
+name: TAKS World REPAIR - approved full-screen menu and playable Android game
+on:
+  push:
+    branches: [codex/taks-world-menu-black-screen-fixed-2026-11-21]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  native-gameplay-with-original-menu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore the byte-for-byte APPROVED menu photo from an earlier verified build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/taks-accepted
+          gh run download 44632455358 \
+             --repo "$GITHUB_REPOSITORY" \
+             --name TAKS-World-Android-First-Playable-APK \
+             --dir /tmp/taks-accepted
+          apk=/tmp/taks-accepted/TAKS_World_Android_KIPROBALO.apk
+          test -s "$apk"
+          unzip -p "$apk" assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png \
+            > app/src/main/assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png
+          echo "9369d3668b69424d31132e70accbfdb76282d7d9b3f3adfaa51c7c3ca1ea7bc8  app/src/main/assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png" | sha256sum -c -
+          # The original PNG is an immutable copy, not the new fake MP4.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Import existing real-scanned gameplay models; no menu modification
+        run: |
+          python -m pip install --disable-pip-version-check 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2'
+          python scripts/import_cc0_rocks.py
+          python scripts/import_cc0_foliage.py
+          python scripts/import_cc0_rigged_human.py
+      - name: Test direct full-screen menu drawing and no floating pickup control
+        run: python -m unittest discover -s tests -p 'test_menu_draw_regression.py' -v
+      - name: Test restored approved menu and corrected game camera rotation
+        run: |
+          python -m unittest discover -s tests -p 'test_gameplay_original_menu.py' -v
+          python -m unittest discover -s tests -p 'test_png_cave_no_duplicate.py' -v
+          cmake -S engine -B build-native -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-native --parallel 2
+          ctest --test-dir build-native --output-on-failure
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build real native Android game APK
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Verify APK signature and exact original menu image
+        run: |
+          python - <<'PY'
+          from zipfile import ZipFile
+          from hashlib import sha256
+          from pathlib import Path
+          apk=Path('app/build/outputs/apk/debug/app-debug.apk')
+          assert apk.stat().st_size > 8000000
+          with ZipFile(apk) as z:
+              assert 'lib/arm64-v8a/libtaks_engine.so' in z.namelist()
+              a=z.read('assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png')
+              assert sha256(a).hexdigest()=='9369d3668b69424d31132e70accbfdb76282d7d9b3f3adfaa51c7c3ca1ea7bc8'
+              assert 'assets/menu/wonderwerk_loop.mp4' not in z.namelist()
+          print('Verified: original menu pixels and native GLES3 gameplay, no rejected video')
+          PY
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          cp app/build/outputs/apk/debug/app-debug.apk TAKS_WORLD_MENÜ_MEGJELENÉS_JAVÍTOTT_TESZT.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS_World_Approved_Menu_Fullscreen_Android_Repair
+          path: TAKS_World_Eredeti_Menu_Jatekter_TESZT.apk
+          if-no-files-found: error
+          retention-days: 7
