@@ -22,7 +22,7 @@ class SingleSceneMenu(unittest.TestCase):
         self.assertIn("ApprovedMenuMotion.create(this,",MAIN)
         self.assertIn("menuCover.getChildAt(0),this::newWorldFromMenu",MAIN)
         self.assertIn("applicationIdSuffix '.menufixedgame'",GRADLE)
-        self.assertIn("versionCode 19",GRADLE)
+        self.assertIn("versionCode 20",GRADLE)
 
     def test_single_scene_only_no_crossfade(self):
         self.assertIn("approvedStaticScene.setVisibility(View.INVISIBLE);",MENU)
