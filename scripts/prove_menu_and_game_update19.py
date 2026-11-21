@@ -84,15 +84,30 @@ def main():
             raise AssertionError("Back from "+label+" did not restore original menu")
 
     menu_tap("ÚJ JÁTÉK",first,387)
+    time.sleep(2)
+    choice=snapshot("04_save_choice_not_game")
+    # Android lifecycle may have auto-saved the initial world. In that case,
+    # ÚJ JÁTÉK presents a resume/new-game dialogue. Testing a changed
+    # screenshot is NOT proof of actual gameplay.
+    adb("shell","input","tap",round(w*.50),round(h*.385))
     time.sleep(8)
-    game=snapshot("04_actual_native_game")
+    game=snapshot("05_ACTUAL_native_game_after_resume")
     if delta(first,game)<14:
-        raise AssertionError("ÚJ JÁTÉK did not navigate to actual game")
+        raise AssertionError("Új játék/ Folytatás never entered the native world")
     if float(np.std(game.mean(axis=2)))<16:
         raise AssertionError("Game is still blank / flat colour")
+    def hierarchy():
+        adb("shell","uiautomator","dump","--compressed","/sdcard/taks19.xml",check=False)
+        return adb("exec-out","cat","/sdcard/taks19.xml",check=False).decode(errors="replace")
+    ui=hierarchy()
+    (OUTPUT/"game_controls.xml").write_text(ui,encoding="utf-8")
+    for required in ("ÉPÍTÉS","TÁRSAK","TÁSKA","BARLANG BELSEJE"):
+        if required not in ui:
+            raise AssertionError("This is NOT playable gameplay. Missing native HUD: "+required)
+    print("CONFIRMED 4 GAMEPLAY CONTROLS ON REAL ANDROID UI",flush=True)
     adb("shell","input","tap",round(w*.12),round(h*.085))
     time.sleep(4)
-    inside=snapshot("05_native_cave_inspection")
+    inside=snapshot("06_ACTUAL_native_cave_inspection")
     if delta(game,inside)<3:
         raise AssertionError("BARLANG BELSEJE navigation did not change view")
     logs=adb("logcat","-d","-v","time").decode(errors="replace")
