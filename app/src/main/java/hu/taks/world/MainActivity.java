@@ -715,6 +715,7 @@ public final class MainActivity extends Activity {
         closeModal();
         modalOverlay=new FrameLayout(this);
         modalOverlay.setBackgroundColor(0xD8101411);
+        modalOverlay.setElevation(dp(48)); // Settings and new-game dialogs stay over the original menu.
         modalOverlay.setOnClickListener(v->closeModal());
         LinearLayout card=new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -865,6 +866,9 @@ public final class MainActivity extends Activity {
 
         menuCover=new FrameLayout(this);
         menuCover.setBackgroundColor(Color.rgb(24,19,14));
+        menuCover.setClickable(true);
+        menuCover.setElevation(dp(24)); // Above elevated Android HUD buttons and GLES surface.
+        if(pickupButton!=null)pickupButton.setVisibility(View.GONE);
         // The original approved menu is the complete illustrated 1664x768
         // stone-logo scene. It never uses the rejected static-as-MP4 experiment.
         RestoredStoneMenu approved=RestoredStoneMenu.load(this,
@@ -873,6 +877,8 @@ public final class MainActivity extends Activity {
         if(approved!=null){
             menuCover.addView(approved,new FrameLayout.LayoutParams(-1,-1));
             root.addView(menuCover,new FrameLayout.LayoutParams(-1,-1));
+            menuCover.bringToFront();
+            android.util.Log.i("TAKS_MENU","Approved original 1664x768 image loaded; menu at top");
             return;
         }
         final PrehistoricMenuTheme.Look natural=PrehistoricMenuTheme.fromCues(nativeMenuCues());
@@ -1100,6 +1106,12 @@ public final class MainActivity extends Activity {
     @Override protected void onResume(){
         super.onResume();
         if(surface!=null)surface.onResume();
+        if(inMainMenu && menuCover!=null) {
+            menuCover.bringToFront();
+            menuCover.invalidate();
+            // The menu must not be hidden by a resumed GLSurfaceView.
+            if(pickupButton!=null)pickupButton.setVisibility(View.GONE);
+        }
         if(menuMotion!=null)menuMotion.setPlaying(true);
         worldHandler.removeCallbacks(worldLoop);
         if(!inMainMenu){
