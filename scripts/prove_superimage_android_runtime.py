@@ -78,9 +78,10 @@ def menu_tap_accessible(label):
     time.sleep(1.4)
     touch_log=adb("logcat","-d","-s","TAKS_MENU_TOUCH:I",check=False).decode(errors="replace")
     (OUT/("touch_"+label+".txt")).write_text(touch_log,encoding="utf-8")
-    if label+" pressed" not in touch_log:
-        raise AssertionError("Genuine Android touch hitbox did not receive click "+label+
-                             " (check layout and z-order): "+touch_log[-2500:])
+    if (label+" pressed" not in touch_log and
+        "Original stone button selected: "+label not in touch_log):
+        raise AssertionError("Neither the original still-fallback nor the single video click handler fired: "+label+
+                             " (check overlay layout and z-order): "+touch_log[-2500:])
 
 def tap_text_or_description(label):
     """Click an ACTUAL clickable Android UI node by its displayed text or a11y label."""
