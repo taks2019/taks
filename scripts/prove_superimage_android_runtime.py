@@ -183,6 +183,10 @@ def run():
         raise AssertionError("ÚJ JÁTÉK failed: still displaying menu instead of native world")
     if contrast(game)<15:
         raise AssertionError("3D renderer blank or single-colour; do not mark graphics complete")
+    # Buttons, captions and HUD frames add contrast even while the entire
+    # actual 3D scene is unpainted #303030. Evaluate the WORLD-only window.
+    from visual_surface_gate import require_visible_world
+    require_visible_world(game)
     ui=dump()
     (OUT/"05_gameplay_accessibility.xml").write_text(ui,encoding="utf-8")
     # A chooser or static main menu must NEVER satisfy gameplay proof:
@@ -209,6 +213,9 @@ def run():
         "settings_mean_difference":round(change,3),
         "game_mean_difference_vs_menu":round(difference(initial,game),3),
         "game_contrast":round(contrast(game),3),
+        "rendered_world_region_verified":True,
+        "menu_is_still_static_png":True,
+        "fully_realistic_graphics_approved":False,
         "cave_mean_difference":round(difference(game,cave),3),
         "source_images":"approved original main menu, byte-identical SHA checked in CI",
         "superimage_atlas_in_apk":False,

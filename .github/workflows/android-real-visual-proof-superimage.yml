@@ -34,6 +34,8 @@ jobs:
           python scripts/import_cc0_rocks.py
           python scripts/import_cc0_foliage.py
           python scripts/import_cc0_rigged_human.py
+      - name: Refuse blank grey gameplay even if the Android HUD draws
+        run: python -m unittest discover -s tests -p 'test_visual_surface_gate.py' -v
       - name: Source and native simulation tests
         run: |
           python -m unittest discover -s tests -p 'test_superimage_ground_integration.py' -v
