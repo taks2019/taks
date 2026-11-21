@@ -15,8 +15,11 @@ namespace taks::RealModels {
                 float worldClock, float rain, float playerX, float playerZ,
                 float playerHeading, bool playerMoving, bool playerRunning,
                 const float* npcPositions,float animationTime,float windStrength,
-                float windX,float windZ,float wetSeason,float soilMoisture);
+                float windX,float windZ,float wetSeason,float soilMoisture,
+                bool reviewSurveyCave);
     bool hasRealHuman();
+    // Optional licensed survey mesh, displayed ONLY during cave inspection.
+    bool hasSurveyCave();
     bool complete();
     const char* errorMessage();
 }
