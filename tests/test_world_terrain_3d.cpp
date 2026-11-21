@@ -15,7 +15,7 @@ int main(){
             const float x=float(ix),z=float(iz);
             const float y=height(x,z);
             assert(std::isfinite(y));
-            assert(y>-4.f && y<5.f);
+            assert(y>-4.f && y<26.f);
             lowest=std::min(lowest,y);highest=std::max(highest,y);
             float nx,ny,nz;
             normal(x,z,nx,ny,nz);
@@ -25,9 +25,12 @@ int main(){
             else ++flat;
         }
     }
-    assert(highest-lowest>.60f && "Old flat brown ground is forbidden");
+    assert(highest-lowest>7.f && "The naturally sculpted hillside must not be a flat brown floor");
     assert(sculpted>200 && "3D topography must vary across world polygons");
 
+    // The hillside must rise BEHIND the cave; the entrance remains low.
+    assert(height(-9.f,55.f)>height(0.f,3.63f)+8.f);
+    assert(height(-50.f,45.f)>height(0.f,3.63f)+2.f);
     // Walkable mouth at x=0,z~3.63: not buried by an arbitrary stone hill.
     const float mouth=height(0.f,3.63f);
     assert(mouth>-.30f && mouth<.24f);
