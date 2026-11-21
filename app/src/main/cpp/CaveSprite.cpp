@@ -1,4 +1,5 @@
 #include "CaveSprite.h"
+#include "CaveBillboardGeometry.h"
 #include <GLES3/gl3.h>
 #include <algorithm>
 #include <array>
@@ -174,36 +175,36 @@ bool ready(){
     for(GLuint texture:textures)if(!texture)return false;
     return true;
 }
-void render(const float* viewProjection,float yaw,float zoom,
+void render(const float* viewProjection,float yaw,float pitch,float zoom,
             float caveGroundY,float clock,float rain,float alpha){
     if(!ready()||!viewProjection||!std::isfinite(yaw)||alpha<.002f)return;
     // The whole cave is ONE ground-anchored world object, not a screen-space
     // image. GLES depth testing lets nearer actors and rocks occlude it.
     // At very close zoom, the existing interactive interior is revealed.
     constexpr float footprintX=0.f, footprintZ=2.2f;
-    constexpr float widthM=16.0f,heightM=10.7f;
-    // All eight 512px source images have their lowest opaque pixels at
-    // rows 443-445; anchoring at 428 buried their feet and cut the foreground.
-    constexpr float sharedOpaqueFootRow=444.f;
-    float bottomY=caveGroundY-heightM*(1.f-sharedOpaqueFootRow/512.f);
-    float topY=bottomY+heightM;
-    // Camera right from the same native lookAt() basis, orthographic always.
-    float rightX=-std::cos(yaw),rightZ=-std::sin(yaw);
-    float x0=footprintX-rightX*widthM*.5f;
-    float z0=footprintZ-rightZ*widthM*.5f;
-    float x1=footprintX+rightX*widthM*.5f;
-    float z1=footprintZ+rightZ*widthM*.5f;
-    // Pixel row zero is the TOP of the extracted PNG. Android ARGB -> GL
-    // preserves the row order, so top texcoords must be v=0.
-    Vertex billboard[6]={
-        {x0,topY,z0,0,0},{x0,bottomY,z0,0,1},{x1,bottomY,z1,1,1},
-        {x0,topY,z0,0,0},{x1,bottomY,z1,1,1},{x1,topY,z1,1,0}
-    };
+    constexpr float widthM=16.f;
+    // The actual 512x512 PNG source alpha-foot row is 444. Earlier,
+    // the 16 x 10.7 metre vertical card was ALSO foreshortened by the
+    // isometric camera. Result: a visibly flattened, stretched cave.
+    // This camera-aligned full-size 16 x 16 card respects every pixel's
+    // original 1:1 proportions on all views, while its visible feet remain
+    // grounded at precisely the same world coordinate.
+    constexpr float sourceFootRow=444.f/512.f;
+    const auto aligned=taks::CaveBillboard::aligned(
+        yaw,pitch,footprintX,caveGroundY,footprintZ,widthM,sourceFootRow);
+    Vertex billboard[6]{};
+    for(std::size_t k=0;k<6;++k){
+        const auto& p=aligned.vertices[k];
+        billboard[k]={p.x,p.y,p.z,p.u,p.v};
+    }
+
+    // A crossfade between incompatible 45-degree painted silhouettes
+    // creates TWO cave roofs and doubled rocks. Pick the closest existing
+    // angle instead. Geometry never jumps, and each PNG is drawn once.
     double direction=double(yaw)/(double(pi)/4.);
-    double floorDirection=std::floor(direction);
-    int index0=(int(floorDirection)%8+8)%8;
-    int index1=(index0+1)%8;
-    float fade=static_cast<float>(direction-floorDirection);
+    int index0=(static_cast<int>(std::floor(direction+.5))%8+8)%8;
+    int index1=index0;
+    const float fade=0.f;
     float time=std::fmod(std::fmod(clock,24.f)+24.f,24.f);
     float daylight=std::clamp(1.f-std::abs(time-13.f)/12.f,.24f,1.f);
     float tint=(.46f+.54f*daylight)*(1.f-.25f*std::clamp(rain,0.f,1.f));
