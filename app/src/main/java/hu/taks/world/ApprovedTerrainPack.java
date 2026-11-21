@@ -122,6 +122,44 @@ final class ApprovedTerrainPack {
         }
         if(path.exists())path.delete();
     }
+    // Optional tiny SIX-TILE baked pack, built on Windows from the same
+    // SHA256-verified original atlas. This runs entirely OFFLINE on Android:
+    // user does not need to open file chooser after every APK reinstall.
+    // Persistent user-selected ZIP copies take priority over bundled copies.
+    static boolean bundledPresent(Context context){
+        try{
+            java.util.HashSet<String> files=new java.util.HashSet<>(
+                java.util.Arrays.asList(context.getAssets().list("approved_ground")));
+            if(!files.contains("approved_ground_manifest.json"))return false;
+            for(String name:FILES)if(!files.contains(name))return false;
+            return true;
+        }catch(IOException e){
+            return false;
+        }
+    }
+    static Bitmap[] loadBundled(Context context) throws IOException{
+        if(!bundledPresent(context))
+            throw new IOException("Az APK még nem tartalmazza az elfogadott SuperImage-talajmásolatokat.");
+        Bitmap[] tiles=new Bitmap[FILES.length];
+        try{
+            // The builder verifies the exact original PNG SHA256 BEFORE
+            // writing these tiles, and refuses unrelated existing files.
+            for(int i=0;i<FILES.length;i++){
+                BitmapFactory.Options options=new BitmapFactory.Options();
+                options.inScaled=false;
+                try(InputStream input=context.getAssets().open("approved_ground/"+FILES[i])){
+                    tiles[i]=BitmapFactory.decodeStream(input,null,options);
+                }
+                if(tiles[i]==null||tiles[i].getWidth()!=SIDE||tiles[i].getHeight()!=SIDE)
+                    throw new IOException("Az APK talajmintája sérült: "+FILES[i]);
+            }
+            return tiles;
+        }catch(Exception ex){
+            recycle(tiles);
+            if(ex instanceof IOException)throw (IOException)ex;
+            throw new IOException(ex);
+        }
+    }
     static Bitmap[] load(Context context) throws IOException {
         if(!present(context))throw new IOException("A játékbeli talajkészlet hiányzik.");
         Bitmap[] frames=new Bitmap[FILES.length];
