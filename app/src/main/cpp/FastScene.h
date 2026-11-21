@@ -7,6 +7,7 @@ struct FastFrame {
     float playerX=0,playerZ=-5.2f,walkPhase=0,playerHeading=0;
     bool playerMoving=false,playerRunning=false;
     bool pngCavePreview=false; // Only an optional rendering view; never changes the World state
+    bool inspectCave=false; // Graphics-only inside-cave camera; World state and save unchanged
     float rain=0, moisture=0, mud=0, clock=8,animationTime=0;
     float wetSeason=0,windStrength=0,windX=1,windZ=0,temperatureC=20;
     float hearth=0, fire=0;

@@ -663,13 +663,20 @@ void render(int width,int height,const FastFrame& f){
     width=std::max(width,1);height=std::max(height,1);
     float aspect=float(width)/float(height);
     float yaw=f.yaw,pitch=std::clamp(f.pitch,.349066f,1.396263f);
-    float distance=std::max(18.f,f.zoom*2.f);
-    Vec3 focus{f.playerX,surfaceHeight(f.playerX,f.playerZ)+.90f,f.playerZ+1.65f+std::clamp((f.zoom-10.f)*.29f,0.f,3.f)};
+    // View-only cave inspection; world physics, actor location and saves
+    // remain untouched. The preview can look INSIDE the cave by hiding
+    // exterior PNG and rock roof at the effective orthographic zoom.
+    const float effectiveZoom=f.inspectCave?7.5f:f.zoom;
+    float distance=std::max(18.f,effectiveZoom*2.f);
+    Vec3 focus=f.inspectCave
+        ?Vec3{0.f,surfaceHeight(0.f,4.8f)+.95f,4.8f}
+        :Vec3{f.playerX,surfaceHeight(f.playerX,f.playerZ)+.90f,
+              f.playerZ+1.65f+std::clamp((f.zoom-10.f)*.29f,0.f,3.f)};
     Vec3 delta{std::sin(yaw)*std::cos(pitch)*distance,
                std::sin(pitch)*distance,
                -std::cos(yaw)*std::cos(pitch)*distance};
     Vec3 eye=add(focus,delta);
-    Mat4 vp=multiply(orthographic(f.zoom*.99f*aspect,f.zoom*.99f),lookAt(eye,focus));
+    Mat4 vp=multiply(orthographic(effectiveZoom*.99f*aspect,effectiveZoom*.99f),lookAt(eye,focus));
 
     objectsMesh.clear();
     addWater(f);addWildlife(f);addMudFootprints(f);addResources(f);addBuildings(f);
@@ -708,8 +715,8 @@ void render(int width,int height,const FastFrame& f){
     // The original placeholder cave is not a second cave: it is hidden while
     // the eight-view PNG preview covers the world, then progressively returns
     // when zooming inside. Ground, resources, NPCs and saves are untouched.
-    const float pngCover = f.pngCavePreview
-            ? taks::RoofCutaway::visibility(f.zoom) : 0.f;
+    const float pngCover = f.pngCavePreview && !f.inspectCave
+            ? taks::RoofCutaway::visibility(effectiveZoom) : 0.f;
     const float oldCaveAlpha = 1.f - pngCover;
     if(oldCaveAlpha > .001f && !caveMesh.empty()){
         if(uRoofOpacity>=0)glUniform1f(uRoofOpacity,oldCaveAlpha);
@@ -740,16 +747,17 @@ void render(int width,int height,const FastFrame& f){
 
     // Native depth-tested sprite: belongs to actual world coordinates.
     // Foreground actors/rocks occlude the sprite, unlike screen-space Canvas.
-    const float caveCover = f.pngCavePreview
-            ? taks::RoofCutaway::visibility(f.zoom) : 0.f;
+    const float caveCover = f.pngCavePreview && !f.inspectCave
+            ? taks::RoofCutaway::visibility(effectiveZoom) : 0.f;
     if(caveCover>.001f)
-        taks::CaveSprite::render(vp.a,f.yaw,f.zoom,
+        taks::CaveSprite::render(vp.a,f.yaw,effectiveZoom,
             surfaceHeight(0.f,2.2f),f.clock,f.rain,caveCover);
 
     // Draw the rock roof on top of the permanent scene. At close zoom, expose
     // the SAME cave interior and actors; neither simulation state nor the
     // original outside geometry is replaced or reset.
-    const float roofOpacity=f.pngCavePreview?0.f:taks::RoofCutaway::visibility(f.zoom);
+    const float roofOpacity=f.inspectCave?0.f:
+          (f.pngCavePreview?0.f:taks::RoofCutaway::visibility(effectiveZoom));
     if(roofOpacity>.001f && !roofMesh.empty()){
         glUseProgram(program);
         if(uRoofOpacity>=0)glUniform1f(uRoofOpacity,roofOpacity);

@@ -48,6 +48,7 @@ public final class MainActivity extends Activity {
     private native void nativeRender();
     private native float[] nativePlayerCoordinates();
     private native void nativeSetCavePreview(boolean on);
+    private native void nativeSetCaveInspection(boolean inspecting);
     private native boolean nativeUploadCaveView(int direction,int[] argb,int width,int height);
     private native void nativeSetView(float angle,float pitch,float zoom);
     private native String nativeRendererError();
@@ -67,6 +68,9 @@ public final class MainActivity extends Activity {
     private FrameLayout menuCover,modalOverlay;
     private View menuScrim;
     private MenuMotionView menuMotion;
+    private ApprovedMenuMotion approvedMotion;
+    private boolean caveInspecting=false;
+    private Button inspectButton;
     private Bitmap sharedStonePhoto;
     private Bitmap menuBackgroundBitmap;
     private int menuScrimState=-1;
@@ -345,6 +349,7 @@ public final class MainActivity extends Activity {
     }
     private void refreshLivingSkin(){
         if(root==null)return;
+        installApprovedMotionOnCurrentMenu();
         LivingUiSkin.State state=currentSkin();
         applyMenuScrim(state);
         applySkin(root,state,android.os.SystemClock.uptimeMillis());
@@ -382,6 +387,37 @@ public final class MainActivity extends Activity {
         b.setOnClickListener(v->{action.run();refreshScene();refreshLivingSkin();});
         return b;
     }
+    private void installApprovedMotionOnCurrentMenu(){
+        if(!inMainMenu || menuCover==null){
+            if(approvedMotion!=null){
+                approvedMotion.releaseVideo();
+                approvedMotion=null;
+            }
+            return;
+        }
+        if(approvedMotion!=null && approvedMotion.getParent()==menuCover)return;
+        // A menu opened twice creates a NEW menuCover. The old media layer
+        // belongs to the detached container and must not suppress playback
+        // on the newly opened approved menu.
+        if(approvedMotion!=null){
+            approvedMotion.releaseVideo();
+            approvedMotion=null;
+        }
+        // Keep the accepted RestoredStoneMenu source and the exact bytes of
+        // its 1664x768 background frozen. Only attach a noninteractive MP4
+        // presentation layer above its pixels, below its existing touch input.
+        if(menuCover.getChildCount()==0 ||
+           !(menuCover.getChildAt(0) instanceof RestoredStoneMenu))return;
+        final ApprovedMenuMotion moving=ApprovedMenuMotion.create(this,
+            this::newWorldFromMenu,this::showSettings,this::showCredits,this::confirmExit);
+        if(moving==null)return;
+        approvedMotion=moving;
+        menuCover.addView(moving,new FrameLayout.LayoutParams(-1,-1));
+        // The additional layer never handles touches: the four original
+        // approved 1664x768 stone-button touch targets remain functional.
+        moving.setRunning(true);
+    }
+
     private void refreshScene(){
         if(surface!=null)surface.requestRender();
     }
@@ -639,7 +675,20 @@ public final class MainActivity extends Activity {
         for(View v:gameHud)v.setVisibility(visible?View.VISIBLE:View.GONE);
         if(visible)refreshNearby();
     }
+
+    private void toggleCaveInspection(){
+        caveInspecting=!caveInspecting;
+        nativeSetCaveInspection(caveInspecting);
+        if(inspectButton!=null)inspectButton.setText(
+            caveInspecting?"VISSZA A TÁJHOZ":"BARLANG BELSEJE");
+        if(caveInspecting){
+            say("Belső barlangnézet · valódi játéktér, kamera és ütközések. "
+                +"A karakter nem teleportálódik.");
+        }else say("Visszatérés a játékos követéséhez.");
+        refreshScene();
+    }
     private void startPlaying(){
+        if(approvedMotion!=null){approvedMotion.releaseVideo();approvedMotion=null;}
         closeModal();
         inMainMenu=false;
         if(menuMotion!=null){menuMotion.release();menuMotion=null;}
@@ -1014,6 +1063,14 @@ public final class MainActivity extends Activity {
         surface.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         surface.setOnTouchListener((v,e)->touch(e,false));
         root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
+        inspectButton=button("BARLANG BELSEJE",this::toggleCaveInspection,false);
+        inspectButton.setContentDescription("Játéktér: barlang belső, majd vissza a külső tájba");
+        inspectButton.setTextSize(10);
+        FrameLayout.LayoutParams caveButtonLayout=new FrameLayout.LayoutParams(
+            dp(125),dp(39),Gravity.TOP|Gravity.LEFT);
+        caveButtonLayout.setMargins(dp(12),dp(12),0,0);
+        root.addView(inspectButton,caveButtonLayout);
+        gameHud.add(inspectButton);
         // The cave is now a true world-coordinate, depth-tested GLES sprite;
         // NO overlaid Android Canvas can float in front of the NPCs.
         nativeSetView(orbit,cameraPitch,zoom);
@@ -1113,6 +1170,7 @@ public final class MainActivity extends Activity {
             if(pickupButton!=null)pickupButton.setVisibility(View.GONE);
         }
         if(menuMotion!=null)menuMotion.setPlaying(true);
+        if(approvedMotion!=null)approvedMotion.setRunning(true);
         worldHandler.removeCallbacks(worldLoop);
         if(!inMainMenu){
             worldHandler.postDelayed(worldLoop,1800);
@@ -1129,6 +1187,7 @@ public final class MainActivity extends Activity {
         skinHandler.removeCallbacks(skinLoop);
         saves.edit().putString("state",nativeSave()).apply();
         if(menuMotion!=null)menuMotion.setPlaying(false);
+        if(approvedMotion!=null)approvedMotion.setRunning(false);
         if(surface!=null)surface.onPause();
         super.onPause();
     }
