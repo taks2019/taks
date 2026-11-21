@@ -28,6 +28,7 @@ std::array<float,8> npcTarget{};
 std::chrono::steady_clock::time_point npcSegmentStart{};
 bool npcInterpolationReady=false;
 std::atomic<bool> pngCavePreview{false};
+std::atomic<bool> caveInspection{false};
 std::string rendererError;
 jstring toJava(JNIEnv* env,const std::string& s){return env->NewStringUTF(s.c_str());}
 GLuint compile(GLenum type,const char* source){
@@ -105,6 +106,12 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeTick(JNI
 extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeLogoUnlocked(JNIEnv*,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
     return world.logoUnlocked()?JNI_TRUE:JNI_FALSE;
+}
+extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetCaveInspection(
+    JNIEnv*,jobject,jboolean inspecting){
+    // The already-running simulation never moves, resets or loses progress.
+    // This alters only the camera while the player explores how the cave looks.
+    caveInspection.store(inspecting==JNI_TRUE,std::memory_order_relaxed);
 }
 extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetCavePreview(
     JNIEnv*,jobject,jboolean enabled){
@@ -241,6 +248,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
         std::lock_guard<std::mutex> guard(worldLock);
         f.yaw=orbit;f.pitch=pitch;f.zoom=zoom;
         f.pngCavePreview=pngCavePreview.load(std::memory_order_relaxed);
+        f.inspectCave=caveInspection.load(std::memory_order_relaxed);
         f.clock=static_cast<float>(world.hours);
         f.rain=static_cast<float>(world.rainIntensity);
         f.moisture=static_cast<float>(world.groundMoisture);
