@@ -252,6 +252,16 @@ final class ApprovedMenuMotion extends FrameLayout
         }
     }
 
+    private void showFirstDecodedFrame(){
+        if(renderedFirstFrame || !prepared || paused)return;
+        renderedFirstFrame=true;
+        // Swap WHOLE backgrounds only after a decoded video frame actually
+        // exists, never blend two translated trees, suns or cave silhouettes.
+        approvedStaticScene.setVisibility(View.INVISIBLE);
+        setAlpha(1f);
+        android.util.Log.i("TAKS_MENU_MOTION","SINGLE_SCENE: MP4 visible, static scene hidden");
+    }
+
     @Override public void onSurfaceTextureAvailable(SurfaceTexture texture,int w,int h){
         releaseVideo();
         renderedFirstFrame=false;
@@ -268,19 +278,8 @@ final class ApprovedMenuMotion extends FrameLayout
                 if(!paused)ready.start();
             });
             mp.setOnInfoListener((ready,what,extra)->{
-                if(what==MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START&&!renderedFirstFrame){
-                    renderedFirstFrame=true;
-                    // Display exactly ONE source image at any point. Blending
-                    // a translated live MP4 over the previous static image
-                    // produced double leaves, double sun and ghost clouds.
-                    // Keep the original View for safe instant fallback, but
-                    // stop drawing it while the video owns the background.
-                    // Never blend two differently moving copies: exactly one
-                    // background is visible. Captions are drawn once above it.
-                    approvedStaticScene.setVisibility(View.INVISIBLE);
-                    setAlpha(1f);
-                    android.util.Log.i("TAKS_MENU_MOTION","SINGLE_SCENE: MP4 visible, static scene hidden");
-                }
+                if(what==MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START)
+                    showFirstDecodedFrame();
                 return false;
             });
             mp.setOnErrorListener((ready,what,extra)->{
@@ -303,7 +302,11 @@ final class ApprovedMenuMotion extends FrameLayout
         releaseVideo();
         return true;
     }
-    @Override public void onSurfaceTextureUpdated(SurfaceTexture texture){}
+    @Override public void onSurfaceTextureUpdated(SurfaceTexture texture){
+        // Some Android decoders skip MEDIA_INFO_VIDEO_RENDERING_START.
+        // SurfaceTextureUpdated proves that a real frame was composited.
+        if(!renderedFirstFrame && prepared && !paused)showFirstDecodedFrame();
+    }
 
     void releaseVideo(){
         prepared=false;
