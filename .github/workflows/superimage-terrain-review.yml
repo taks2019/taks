@@ -1,0 +1,76 @@
+name: TAKS World - approved SuperImage terrain code review
+on:
+  push:
+    branches:
+      - codex/taks-world-render-menu-recovery-2026-11-21
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  texture-and-glsl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install GLES headers and GLSL compiler
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libgles-dev glslang-tools
+      - name: Verify imported images never replace original user ZIP
+        run: python3 -m unittest discover -s tests -p 'test_superimage_ground_integration.py' -v
+      - name: Compile the actual game GLES3 C++ scene source
+        run: g++ -std=c++17 -Wall -Wextra -fsyntax-only -Iapp/src/main/cpp app/src/main/cpp/FastScene.cpp
+      - name: Compile both actual embedded GLES 3.0 shaders
+        run: |
+          mkdir -p shader-check
+          python3 - <<'PY'
+          from pathlib import Path
+          source=Path('app/src/main/cpp/FastScene.cpp').read_text()
+          for label,ext in [('VERT','vert'),('FRAG','frag')]:
+              block=source.split('const char* '+label+'=R"GLSL(',1)[1].split(')GLSL";',1)[0]
+              assert block.startswith('#version 300 es')
+              Path('shader-check/surface.'+ext).write_text(block)
+          PY
+          glslangValidator -S vert shader-check/surface.vert
+          glslangValidator -S frag shader-check/surface.frag
+  cause-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile native cause and memory world
+        run: cmake -S engine -B build-native -DCMAKE_BUILD_TYPE=Release
+      - name: Build native unit tests
+        run: cmake --build build-native --parallel 2
+      - name: Test causality, NPC discovery and save compatibility
+        run: ctest --test-dir build-native --output-on-failure
+  android-java:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Compile native Android APK Java sources and JNI bridge
+        run: gradle --no-daemon :app:compileDebugJavaWithJavac --stacktrace
+  visual-approval-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No installable release until every changed visual asset is individually approved
+        shell: bash
+        run: |
+          python3 scripts/check_visual_approvals.py --json-report visual-approval-report.json || true
+          test -s visual-approval-report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-visual-approval-status
+          path: visual-approval-report.json
