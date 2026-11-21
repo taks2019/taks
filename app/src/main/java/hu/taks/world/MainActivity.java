@@ -55,9 +55,12 @@ public final class MainActivity extends Activity {
     private native float[] nativeMenuCues();
     private native boolean nativeUploadRealModel(int slot,byte[] model,int[] argb,int width,int height);
     private native boolean nativeUploadTerrainTexture(int slot,int[] pixels,int width,int height);
+    private native void nativeSetApprovedTerrainActive(boolean enabled);
+    private static final int SELECT_SUPERIMAGE_ZIP=4095;
 
     private GLSurfaceView surface;
     private volatile boolean cavePreviewReady=false;
+    private volatile boolean approvedGroundReady=false;
     // True mesh/heightfield cave is the DEFAULT. The 8-angle PNG is a 2.5D
     // review aid only and must be enabled explicitly in Settings.
     private volatile boolean cavePreviewWanted=false;
@@ -194,6 +197,90 @@ public final class MainActivity extends Activity {
             return false;
         }
     }
+
+    // These six textures are COPIES extracted from the user's already accepted
+    // 4x2 SuperImage sheet, not replacement paintings or invented terrain art.
+    // All GLES calls stay on GLSurfaceView's actual render thread.
+    private boolean uploadApprovedGroundOnGlThread(Bitmap[] copies){
+        if(copies==null||copies.length!=ApprovedTerrainPack.FILES.length)return false;
+        nativeSetApprovedTerrainActive(false);
+        for(int i=0;i<copies.length;i++){
+            Bitmap b=copies[i];
+            if(b==null||b.isRecycled())return false;
+            int width=b.getWidth(),height=b.getHeight();
+            int[] pixels=new int[width*height];
+            b.getPixels(pixels,0,width,0,0,width,height);
+            if(!nativeUploadTerrainTexture(i+2,pixels,width,height))return false;
+        }
+        nativeSetApprovedTerrainActive(true);
+        approvedGroundReady=true;
+        return true;
+    }
+    private void restoreApprovedGroundOnGlThread(){
+        approvedGroundReady=false;
+        nativeSetApprovedTerrainActive(false);
+        if(!ApprovedTerrainPack.present(this))return;
+        Bitmap[] copies=null;
+        try{
+            copies=ApprovedTerrainPack.load(this);
+            if(!uploadApprovedGroundOnGlThread(copies))
+                android.util.Log.e("TAKS_GROUND","A jóváhagyott PNG-k nem kerültek a GPU-ra.");
+        }catch(Exception ex){
+            android.util.Log.e("TAKS_GROUND","Sérült talajmásolatok; az eredeti ZIP változatlan.",ex);
+        }finally{
+            ApprovedTerrainPack.recycle(copies);
+        }
+    }
+    private void selectApprovedTerrainZip(){
+        android.content.Intent choose=new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+        choose.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+        choose.setType("*/*");
+        choose.putExtra(android.content.Intent.EXTRA_MIME_TYPES,
+                new String[]{"application/zip","application/x-zip-compressed","application/octet-stream"});
+        startActivityForResult(choose,SELECT_SUPERIMAGE_ZIP);
+    }
+    @Override protected void onActivityResult(int requestCode,int resultCode,android.content.Intent data){
+        super.onActivityResult(requestCode,resultCode,data);
+        if(requestCode!=SELECT_SUPERIMAGE_ZIP||resultCode!=RESULT_OK||
+           data==null||data.getData()==null)return;
+        final android.net.Uri selected=data.getData();
+        android.widget.Toast.makeText(this,"Az elfogadott SuperImage talajait feldolgozom…",
+                android.widget.Toast.LENGTH_SHORT).show();
+        new Thread(()->{
+            Bitmap[] copies=null;
+            try{
+                try(InputStream input=getContentResolver().openInputStream(selected)){
+                    copies=ApprovedTerrainPack.decode(input);
+                }
+                ApprovedTerrainPack.persist(this,copies);
+                final Bitmap[] ready=copies;
+                copies=null;
+                surface.queueEvent(()->{
+                    boolean uploaded=false;
+                    try{
+                        uploaded=uploadApprovedGroundOnGlThread(ready);
+                    }finally{
+                        ApprovedTerrainPack.recycle(ready);
+                    }
+                    final boolean success=uploaded;
+                    runOnUiThread(()->{
+                        android.widget.Toast.makeText(this,
+                            success?"A jóváhagyott talajképek a 3D terepen használhatók.":
+                                    "A GPU nem fogadta el a talajképeket; nézd meg a hibanaplót.",
+                            android.widget.Toast.LENGTH_LONG).show();
+                        refreshScene();
+                    });
+                });
+            }catch(Exception error){
+                android.util.Log.e("TAKS_GROUND","A SuperImage eredeti fájlja nem módosult.",error);
+                runOnUiThread(()->android.widget.Toast.makeText(this,
+                    "Talajimportálási hiba: "+error.getMessage(),
+                    android.widget.Toast.LENGTH_LONG).show());
+            }finally{
+                ApprovedTerrainPack.recycle(copies);
+            }
+        },"TAKS-Approved-Terrain-Import").start();
+    }
     private boolean loadAuthenticRockAsset(int slot,String name){
         // The compressed PNG and mesh are bundled into the APK by the CI import job.
         try(InputStream meshStream=getAssets().open(name+".tkm");
@@ -323,8 +410,8 @@ public final class MainActivity extends Activity {
             }else if("TAKS_SKIN_CARD".equals(role)){
                 // The source artwork is a real stone sample from the same
                 // approved menu scene, not the rejected brown gameplay cliff.
-                setNaturalStone(v,opacity(state.panelTop,144),
-                        opacity(state.panelBottom,170),state.border,17);
+                setNaturalStone(v,opacity(state.panelTop,220),
+                        opacity(state.panelBottom,236),state.border,17);
             }else if("TAKS_SKIN_HUD_STATUS".equals(role)){
                 // Same physical stone as the settings panel, but translucent
                 // so real GLES3 gameplay stays visible behind brief messages.
@@ -780,7 +867,9 @@ public final class MainActivity extends Activity {
         // A dark opaque cover used to erase most of the approved landscape.
         // Keep it clearly visible through the menu dialogs; the inner panel
         // itself is stone-textured and retains readable light labels.
-        modalOverlay.setBackgroundColor(inMainMenu?0x70101411:0xA0101411);
+        // The SAME approved full-screen Wonderwerk art stays visible behind
+        // Settings. No extra sun/cloud/cave image layer is created here.
+        modalOverlay.setBackgroundColor(inMainMenu?0x32101411:0x88101411);
         modalOverlay.setElevation(dp(48)); // Settings and new-game dialogs stay over the original menu.
         modalOverlay.setOnClickListener(v->closeModal());
         LinearLayout card=new LinearLayout(this);
@@ -832,6 +921,10 @@ public final class MainActivity extends Activity {
     }
     private void showSettings(){
         modal("BEÁLLÍTÁSOK",body->{
+            addVertical(body,approvedGroundReady?
+                "Jóváhagyott SuperImage talajok: AKTÍV – újraválasztás":
+                "SuperImage.zip talajok betöltése (eredeti változatlan)",
+                this::selectApprovedTerrainZip);
             if(cavePreviewReady){
                 addVertical(body,"8 irányú barlang PNG - TESZT előnézet BE/KI",()->{
                     cavePreviewWanted=!cavePreviewWanted;
@@ -1067,6 +1160,7 @@ public final class MainActivity extends Activity {
                 boolean treeOk=loadAuthenticRockAsset(5,"wonderwerk/akac");
                 boolean groundOk=loadRealPbrSurface(0,"models/ground_sandy_gravel");
                 boolean cliffOk=loadRealPbrSurface(1,"models/wall_cliff_side");
+                restoreApprovedGroundOnGlThread();
                 cavePreviewReady=loadReviewCaveImages();
                 nativeSetCavePreview(cavePreviewReady && cavePreviewWanted);
                 runOnUiThread(()->{
