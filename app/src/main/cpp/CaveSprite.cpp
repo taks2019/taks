@@ -182,11 +182,11 @@ void render(const float* viewProjection,float yaw,float pitch,float zoom,
     // image. GLES depth testing lets nearer actors and rocks occlude it.
     // At very close zoom, the existing interactive interior is revealed.
     constexpr float footprintX=0.f, footprintZ=2.2f;
-    constexpr float widthM=16.f;
+    constexpr float widthM=20.f;
     // The actual 512x512 PNG source alpha-foot row is 444. Earlier,
     // the 16 x 10.7 metre vertical card was ALSO foreshortened by the
     // isometric camera. Result: a visibly flattened, stretched cave.
-    // This camera-aligned full-size 16 x 16 card respects every pixel's
+    // This camera-aligned full-size 20 x 20 card respects every pixel's
     // original 1:1 proportions on all views, while its visible feet remain
     // grounded at precisely the same world coordinate.
     constexpr float sourceFootRow=444.f/512.f;
