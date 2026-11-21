@@ -113,6 +113,25 @@ bool World::isNear(double x,double z,double radius) const {
     const double dx=playerX-x,dz=playerZ-z;
     return dx*dx+dz*dz<=radius*radius;
 }
+// Observation is tied to physical proximity; no hidden GPS or global UI map.
+void World::observeLandmarks(int observer,double x,double z){
+    if(observer<0||observer>=SpatialMemory::people)return;
+    const auto near=[x,z](double px,double pz,double radius){
+        return std::hypot(px-x,pz-z)<=radius;
+    };
+    if(near(-.30,-3.40,3.25))memory.learn(observer,0);
+    if(near(0.0,3.45,3.50))memory.learn(observer,1);
+    for(int i=0;i<2;++i) {
+        const auto& water=ecology.waters[i];
+        if(near(water.x,water.z,3.1))memory.learn(observer,2+i);
+    }
+    for(int i=0;i<resourceCount;++i)
+        if(near(nodes[i].x,nodes[i].z,3.15))
+            memory.learn(observer,SpatialMemory::resourcesBegin+i);
+    for(int i=0;i<LivingWorld::treeCount;++i)
+        if(near(ecology.trees[i].x,ecology.trees[i].z,3.50))
+            memory.learn(observer,16+i);
+}
 void World::syncGroundCounts(){
     groundWood=groundStone=groundTinder=groundLeaves=0;
     for(const auto& node:nodes) {
@@ -163,7 +182,7 @@ std::string World::campStatus() const {
 }
 std::string World::npcStatus() const {
     static const char* roleNames[]={"Fa gyűjtése","Kő keresése","Levél gyűjtése","Gyújtós keresése"};
-    static const char* taskNames[]={"Készülődik","Lelőhelyhez tart","Táborba szállít","Pihen","Nincs szabad anyag"};
+    static const char* taskNames[]={"Készülődik","Lelőhelyhez tart","Táborba szállít","Pihen","Nincs szabad anyag","Ismeretlen területet fedez fel"};
     std::ostringstream out;out<<std::fixed<<std::setprecision(1);
     for(int i=0;i<npcCount;++i){
         const auto& npc=npcs[i];
@@ -173,7 +192,9 @@ std::string World::npcStatus() const {
            <<" · erő "<<npc.energy<<"%"
            <<" · éhség "<<npc.hunger<<"%"
            <<" · szállít "<<npc.carrying
-           <<" · leadott "<<npc.delivered;
+           <<" · leadott "<<npc.delivered
+           <<" · ismert helyek "<<memory.count(i+1)
+           <<" · barlang "<<(memory.knows(i+1,1)?"ismert":"ismeretlen");
         if(i+1<npcCount)out<<"\n";
     }
     return out.str();
@@ -191,6 +212,7 @@ void World::updateNpcs(double dt){
         npcSimulatedHours-=tick;
         for(int i=0;i<npcCount;++i){
             Npc& npc=npcs[i];const int type=roles[npc.role];
+            observeLandmarks(i+1,npc.x,npc.z);
             npc.hunger=clamp(npc.hunger+0.11,0,100);
             npc.wetness=clamp(npc.wetness+rainIntensity*.027-.005*(1.0+.55*wind),0,1);
             if(npc.hunger>=96){npc.task=3;continue;} // élelem nélkül nem végtelen munkagépek
@@ -225,12 +247,29 @@ void World::updateNpcs(double dt){
             int chosen=-1;double best=1.e10;
             for(int j=0;j<resourceCount;++j){
                 const ResourceNode& node=nodes[j];
-                if(node.amount<=0||node.type!=type)continue;
+                if(node.amount<=0||node.type!=type||
+                   !memory.knows(i+1,SpatialMemory::resourcesBegin+j))continue;
                 const double dx=node.x-npc.x,dz=node.z-npc.z;
                 const double distSq=dx*dx+dz*dz;
                 if(distSq<best){chosen=j;best=distSq;}
             }
-            if(chosen<0){npc.task=4;continue;}
+            if(chosen<0){
+                // Unknown resource locations cannot be selected. Physically explore.
+                static constexpr double trailX[8]={-5.0,-3.0,0.0,3.0,5.0,3.0,0.0,-3.0};
+                static constexpr double trailZ[8]={-3.0,0.8,1.0,0.8,-3.0,-5.5,-6.0,-5.5};
+                const int target=(npc.searchWaypoint+2*i)%8;
+                const double dx=trailX[target]-npc.x,dz=trailZ[target]-npc.z;
+                const double length=std::hypot(dx,dz);
+                npc.task=5;
+                if(length<.45)npc.searchWaypoint=(npc.searchWaypoint+1)%8;
+                else{
+                    const double distance=std::min(length,.18*ecology.walkSpeedFactor());
+                    npc.x+=dx/length*distance;npc.z+=dz/length*distance;
+                    npc.walkPhase+=distance*5;
+                    npc.energy=clamp(npc.energy-distance*.40,0,100);
+                }
+                continue;
+            }
             npc.task=1;
             ResourceNode& node=nodes[chosen];
             const double dx=node.x-npc.x,dz=node.z-npc.z;
@@ -257,13 +296,14 @@ void World::updateNpcs(double dt){
 std::string World::nearby() const{
     const ResourceNode* best=nullptr;
     double distSq=1e12;
-    for(const auto& node:nodes) {
-        if(node.amount<=0)continue;
+    for(int index=0;index<resourceCount;++index) {
+        const auto& node=nodes[index];
+        if(node.amount<=0||!memory.knows(0,SpatialMemory::resourcesBegin+index))continue;
         const double dx=node.x-playerX,dz=node.z-playerZ;
         const double d=dx*dx+dz*dz;
         if(d<distSq){best=&node;distSq=d;}
     }
-    if(!best)return "A bejárható terület ismert készletei elfogytak.";
+    if(!best)return "Még nem fedeztél fel elérhető nyersanyagot.";
     static const char* labels[]={"Faág","Kő","Gyújtós","Leveles ág"};
     std::ostringstream out;out<<std::fixed<<std::setprecision(1);
     out<<"KÖZELI: "<<labels[best->type]<<" · "<<std::sqrt(distSq)<<" m"
@@ -331,6 +371,7 @@ std::string World::move(double dx,double dz){
     }
     const double oldX=playerX,oldZ=playerZ;
     playerX=mx;playerZ=mz;
+    observeLandmarks(0,playerX,playerZ);
     ecology.trampleTrail(oldX,oldZ,playerX,playerZ,clamp(ecology.mud+groundMoisture*.45,0,1));
     walkPhase+=traveled*5.5;
     ecology.stampFootstep(playerX,playerZ,std::atan2(dx,dz));
