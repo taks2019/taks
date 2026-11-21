@@ -1,5 +1,5 @@
 ﻿param(
-    [ValidateSet("menu","check","build","install","tests","studio","copy-images","logs","ground")]
+    [ValidateSet("menu","check","build","install","tests","studio","copy-images","logs","ground","screenshot")]
     [string]$Mode = "menu",
     [string]$DeviceSerial = "",
     [string]$SourceZip = ""
@@ -211,6 +211,7 @@ function Prepare-ApprovedGround {
     if($manifest.source_sha256 -ne $known){
         Fail "Nem az elfogadott eredeti kepbol szarmazik a helyi talajkeszlet."
     }
+    if(@($manifest.tiles).Count -ne 6){Fail "A talajmanifest hiányos: pontosan hat jóváhagyott minta szükséges."}
     foreach($record in $manifest.tiles){
         if($expected -notcontains $record.file){Fail "Ismeretlen talajnev a manifestben."}
         $file=Join-Path $assetFolder $record.file
@@ -309,6 +310,19 @@ function Open-Studio {
     Start-Process explorer.exe -ArgumentList @($Root)
     Say "Android Studio -> Open -> valaszd ki a TAKS World gyokermappajat: $Root"
 }
+function Capture-Screenshot {
+    $adb=Adb-Executable
+    $serial=Pick-Device $adb
+    $stamp=Get-Date -Format "yyyyMMdd_HHmmss"
+    $remote="/sdcard/Pictures/TAKS_World/TAKS_WORLD_$stamp.png"
+    $local=Join-Path $Out "TAKS_WORLD_Telefon_Kep_$stamp.png"
+    New-Item -ItemType Directory -Force $Out | Out-Null
+    Run $adb @("-s",$serial,"shell","mkdir","-p","/sdcard/Pictures/TAKS_World")
+    Run $adb @("-s",$serial,"shell","screencap","-p",$remote)
+    Run $adb @("-s",$serial,"pull",$remote,$local)
+    Say "Valodi Android-kep mentve: $local"
+    Say "A telefonon is megmaradt: Kepek / TAKS_World."
+}
 function Capture-Logs {
     $adb=Adb-Executable
     $serial=Pick-Device $adb
@@ -341,6 +355,7 @@ function Execute([string]$Action){
             "studio"      { Open-Studio }
             "copy-images" { Copy-Images }
             "ground"      { Prepare-ApprovedGround }
+            "screenshot"  { Capture-Screenshot }
             "logs"        { Capture-Logs }
             default       { Fail "Ismeretlen muvelet: $Action" }
         }
@@ -360,10 +375,11 @@ while($true){
     Write-Host "6 - Forraskod-ellenorzo tesztek"
     Write-Host "7 - Android hibanaplo mentese"
     Write-Host "8 - Eredeti SuperImage talajok elokeszitese az APK-ba"
+    Write-Host "9 - Valodi Android jatek-kepkepernyo foto mentese PC-re"
     Write-Host "0 - Kilepes"
     $choice=Read-Host "Valassz"
     if($choice -eq "0"){exit 0}
-    $actions=@{"1"="check";"2"="build";"3"="install";"4"="copy-images";"5"="studio";"6"="tests";"7"="logs";"8"="ground"}
+    $actions=@{"1"="check";"2"="build";"3"="install";"4"="copy-images";"5"="studio";"6"="tests";"7"="logs";"8"="ground";"9"="screenshot"}
     $action=$actions[$choice]
     if(-not $action){Write-Host "Ismeretlen menupont." -ForegroundColor Yellow;continue}
     try{Execute $action}catch{Write-Host ("HIBA: "+$_.Exception.Message) -ForegroundColor Red}
