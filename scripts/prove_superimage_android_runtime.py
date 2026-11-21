@@ -91,7 +91,7 @@ def tap_text_or_description(label):
                  node.attrib.get("content-desc","")==label)
         if not matches or node.attrib.get("clickable")!="true":
             continue
-        coords=list(map(int,re.findall(r"-?\\d+",node.attrib.get("bounds",""))))
+        coords=list(map(int,re.findall(r"-?\d+",node.attrib.get("bounds",""))))
         if len(coords)!=4 or coords[2]-coords[0]<15 or coords[3]-coords[1]<15:
             continue
         x=(coords[0]+coords[2])//2
