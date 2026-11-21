@@ -66,6 +66,7 @@ public final class MainActivity extends Activity {
     private String shaderSource;
     private FrameLayout menuCover,modalOverlay;
     private View menuScrim;
+    private MenuMotionView menuMotion;
     private Bitmap sharedStonePhoto;
     private Bitmap menuBackgroundBitmap;
     private int menuScrimState=-1;
@@ -641,6 +642,7 @@ public final class MainActivity extends Activity {
     private void startPlaying(){
         closeModal();
         inMainMenu=false;
+        if(menuMotion!=null){menuMotion.release();menuMotion=null;}
         if(menuCover!=null){root.removeView(menuCover);menuCover=null;}
         setHudVisibility(true);
         refreshScene();
@@ -858,6 +860,7 @@ public final class MainActivity extends Activity {
         stopMovement();
         closeModal();closePanel();
         setHudVisibility(false);
+        if(menuMotion!=null){menuMotion.release();menuMotion=null;}
         if(menuCover!=null)root.removeView(menuCover);
 
         menuCover=new FrameLayout(this);
@@ -872,6 +875,11 @@ public final class MainActivity extends Activity {
         backdrop.setScaleType(ImageView.ScaleType.CENTER_CROP);
         backdrop.setContentDescription("Wonderwerk-barlang és a kőkori környezet menüháttere");
         menuCover.addView(backdrop,new FrameLayout.LayoutParams(-1,-1));
+        // Moving MP4 belongs UNDER the unchanged menu logo/buttons. Still art is a safe fallback.
+        if(MenuMotionView.hasVideo(this)){
+            menuMotion=new MenuMotionView(this);
+            menuCover.addView(menuMotion,new FrameLayout.LayoutParams(-1,-1));
+        }
         menuScrim=new View(this);
         menuScrim.setClickable(false);
         menuCover.addView(menuScrim,new FrameLayout.LayoutParams(-1,-1));
@@ -1087,6 +1095,7 @@ public final class MainActivity extends Activity {
     @Override protected void onResume(){
         super.onResume();
         if(surface!=null)surface.onResume();
+        if(menuMotion!=null)menuMotion.setPlaying(true);
         worldHandler.removeCallbacks(worldLoop);
         if(!inMainMenu){
             worldHandler.postDelayed(worldLoop,1800);
@@ -1102,6 +1111,7 @@ public final class MainActivity extends Activity {
         renderHandler.removeCallbacks(renderLoop);
         skinHandler.removeCallbacks(skinLoop);
         saves.edit().putString("state",nativeSave()).apply();
+        if(menuMotion!=null)menuMotion.setPlaying(false);
         if(surface!=null)surface.onPause();
         super.onPause();
     }
