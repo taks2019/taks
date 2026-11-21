@@ -1,0 +1,98 @@
+name: TAKS World menu Android emulator real-screen smoke test
+on:
+  push:
+    branches: [codex/taks-world-menu-black-screen-fixed-2026-11-21]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  screenshot-on-real-android-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install screenshot inspector
+        run: python -m pip install --disable-pip-version-check 'Pillow>=10,<13'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Retrieve already-built signed APK from exact repair commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/menu-repair-apk
+          for attempt in $(seq 1 25); do
+            if gh run download 44883584790 --repo "$GITHUB_REPOSITORY" --name TAKS_World_Approved_Menu_Fullscreen_Android_Repair --dir /tmp/menu-repair-apk; then
+              break
+            fi
+            echo "Awaiting signed APK build artifact, attempt $attempt"
+            sleep 12
+          done
+          test -s '/tmp/menu-repair-apk/TAKS_WORLD_MENÜ_MEGJELENÉS_JAVÍTOTT_TESZT.apk'
+      - name: Activate virtualization for x86 Android emulator
+        run: |
+          if test -e /dev/kvm; then sudo chmod 666 /dev/kvm; fi
+      - name: Open actual menu and inspect rendered screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 3072M
+          heap-size: 512M
+          emulator-options: -no-window -no-audio -no-snapshot -gpu swiftshader_indirect -no-boot-anim
+          disable-animations: true
+          script: |
+            mkdir -p snapshots
+            adb install -r '/tmp/menu-repair-apk/TAKS_WORLD_MENÜ_MEGJELENÉS_JAVÍTOTT_TESZT.apk'
+            adb shell am force-stop hu.taks.world.menufixedgame || true
+            adb shell am start -n hu.taks.world.menufixedgame/hu.taks.world.MainActivity
+            sleep 20
+            adb exec-out screencap -p > snapshots/menu.png
+            adb logcat -d -v time > snapshots/android.log
+            python - <<'PY'
+            from PIL import Image
+            import statistics
+            pic=Image.open('snapshots/menu.png').convert('RGB')
+            xs=pic.resize((96,54))
+            b=[sum(rgb)/3 for rgb in xs.getdata()]
+            contrast=statistics.pstdev(b)
+            brightness=sum(v>170 for v in b)/len(b)
+            print('Real Android MENU',pic.size,'contrast',contrast,'bright pixels',brightness)
+            assert contrast>24, 'Menu remains a flat dark background on Android emulator'
+            assert brightness>.04, 'Approved original sunlight/stone menu is not visible'
+            PY
+            python - <<'PY' > snapshots/tap_point
+            from PIL import Image
+            w,h=Image.open('snapshots/menu.png').size
+            scale=min(w/1664,h/768)
+            print(round((w-1664*scale)/2+928*scale),
+                  round((h-768*scale)/2+385*scale))
+            PY
+            read X Y < snapshots/tap_point
+            adb shell input tap "$X" "$Y"
+            sleep 10
+            adb exec-out screencap -p > snapshots/gameplay.png
+            adb logcat -d -v time > snapshots/android-after-game.log
+            python - <<'PY'
+            from PIL import Image
+            import statistics
+            pic=Image.open('snapshots/gameplay.png').convert('RGB')
+            b=[sum(p)/3 for p in pic.resize((96,54)).getdata()]
+            print('Real Android GAME',pic.size,'contrast',round(statistics.pstdev(b),1))
+            PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TAKS_Android_Real_Rendered_Menu_And_Game_Screenshots
+          path: snapshots/
+          if-no-files-found: warn
+          retention-days: 7
