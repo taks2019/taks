@@ -121,7 +121,30 @@ int main(){
     taks::World old1,old2;
     assert(old1.load("TAKS_NATIVE_1 14 8 5 0 0 0 6 0.4 0 0.13 0.13 100 0 0 0 0"));
     assert(old2.load("TAKS_NATIVE_2 12 7 4 1 1 1 8 0.4 0 0.13 0.13 88 0 0 0 3 15 2 6 1 0 1 0.12 0"));
-    assert(old1.save().find("TAKS_NATIVE_10")==0);
+    assert(old1.save().find("TAKS_NATIVE_11")==0);
+
+    // Character-owned memory: discoveries are NOT globally gifted on spawn.
+    {
+        taks::World memoryWorld;
+        assert(!memoryWorld.memory.knows(0,1)); // player has not seen cave yet
+        memoryWorld.observeLandmarks(0,0.0,3.45);
+        assert(memoryWorld.memory.knows(0,1));
+        assert(!memoryWorld.memory.knows(4,1) || memoryWorld.npcs[3].z>=0.0);
+        const std::string memorySave=memoryWorld.save();
+        taks::World recovered;
+        assert(recovered.load(memorySave));
+        assert(recovered.save()==memorySave);
+        assert(recovered.memory.knows(0,1));
+        // Talk must involve an actual nearby NPC, never remote telepathy.
+        taks::World sharing;
+        sharing.memory.learn(1,1);
+        assert(!sharing.memory.knows(0,1));
+        sharing.playerX=sharing.npcs[0].x;
+        sharing.playerZ=sharing.npcs[0].z;
+        assert(sharing.act("npc_talk").find("Társ 1")!=std::string::npos);
+        assert(sharing.memory.knows(0,1));
+    }
+
     assert(old2.groundWood==12 && old2.groundStone==7 && old2.groundLeaves==15);
     assert(old2.nodes[0].amount<=3);
     const auto stable=old2.save();
@@ -193,7 +216,7 @@ int main(){
     }
     assert(legacy3.load(v3));
     assert(legacy3.npcs[0].role==0);
-    assert(legacy3.save().find("TAKS_NATIVE_10")==0);
+    assert(legacy3.save().find("TAKS_NATIVE_11")==0);
     // A társakkal helyben lehet beszélni, távolról nincs mágikus kommunikáció.
     taks::World talk;
     assert(talk.act("npc_talk").find("Nincs beszélgetési")!=std::string::npos);
@@ -270,7 +293,7 @@ int main(){
     assert(migratedOld.siteCount==1 && migratedOld.sites[0].stage==3);
     assert(std::abs(migratedOld.sites[0].x-3.1)<1e-6);
     assert(std::abs(migratedOld.sites[0].z+1.55)<1e-6);
-    assert(migratedOld.save().find("TAKS_NATIVE_10")==0);
+    assert(migratedOld.save().find("TAKS_NATIVE_11")==0);
     // A saved 0.8 / v5 world loads without creating animals or losing inventory.
     auto oldV5Fields=oldFields;
     {
@@ -292,7 +315,7 @@ int main(){
     }
     taks::World upgraded;
     assert(upgraded.load(oldV5Text.str()));
-    assert(upgraded.save().find("TAKS_NATIVE_10")==0);
+    assert(upgraded.save().find("TAKS_NATIVE_11")==0);
     assert(upgraded.ledgerConsistent());
     assert(upgraded.ecology.aliveAnimals()==4);
     // V6 ECO1 and V7 ECO2 remain readable; V8 adds saved hydrology.
@@ -311,7 +334,7 @@ int main(){
     for(std::size_t i=0;i<v6Fields.size();++i){if(i)oldV6Text<<' ';oldV6Text<<v6Fields[i];}
     taks::World oldV6;
     assert(oldV6.load(oldV6Text.str()));
-    assert(oldV6.save().find("TAKS_NATIVE_10")==0);
+    assert(oldV6.save().find("TAKS_NATIVE_11")==0);
     assert(oldV6.ecology.visibleFootprintCount()==0);
     taks::World muddySteps;
     muddySteps.ecology.soilWater=.8;muddySteps.ecology.mud=.9;muddySteps.groundMoisture=.8;
@@ -369,7 +392,7 @@ int main(){
         assert(loggedStone);
         // Mentés/betöltés megtartja az azonosítókat.
         const std::string saved=w.save();
-        assert(saved.find("TAKS_NATIVE_10")==0 && saved.find(" LEDG1 ")!=std::string::npos);
+        assert(saved.find("TAKS_NATIVE_11")==0 && saved.find(" LEDG1 ")!=std::string::npos);
         taks::World back;assert(back.load(saved));
         assert(back.items.size()==w.items.size() && back.nextItemId==w.nextItemId && back.ledgerConsistent());
         for(size_t i=0;i<w.items.size();++i)assert(back.items[i].id==w.items[i].id && back.items[i].where==w.items[i].where);
