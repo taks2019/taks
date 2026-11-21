@@ -115,9 +115,10 @@ def render_frame(source, geometry, k, total):
             radius=1 if i%4 else 2
             strength=round(42 + (i%5)*17)
             cv2.circle(frame,(px,py),radius,
-                       (min(255,frame[py,px,0]+strength*.72),
-                        min(255,frame[py,px,1]+strength*.90),
-                        min(255,frame[py,px,2]+strength)),
+                       tuple(float(min(255., v)) for v in (
+                           frame[py,px,0]+strength*.72,
+                           frame[py,px,1]+strength*.90,
+                           frame[py,px,2]+strength)),
                        -1,lineType=cv2.LINE_AA)
     return np.clip(frame,0,255).astype(np.uint8)
 
