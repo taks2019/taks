@@ -703,7 +703,7 @@ void main(){
             realSurface=mix(realSurface,transition,.12+.21*soilField(p+vec2(-5.,21.)));
             realSurface=mix(realSurface,rock,stone*.92);
             realSurface=mix(realSurface,wet,mudCoverage*.84);
-            base=mix(base,realSurface,.96);
+            base=realSurface; // Replace rejected brown base completely, not 96%.
         }
         // The same physical terrain becomes darker UNDER the cave overhang;
         // no painted 2D black rectangle on top of world geometry.
@@ -713,14 +713,14 @@ void main(){
     }else if(matId==1){
         base=photoDolomite(wPos,wNorm)*(.90+.10*lines);
         if(u_hasApprovedTerrain>.5)
-            base=mix(base,approvedTriplanarRock(wPos,wNorm),.73);
+            base=approvedTriplanarRock(wPos,wNorm);
     }else if(matId==16){
         // Actual concave 3D tunnel stone, triplanar texture with natural darkness
         // increasing with distance from the daylight opening.
         float depth=clamp((wPos.z-3.65)/8.1,0.0,1.0);
         base=photoDolomite(wPos,wNorm)*mix(.84,.19,depth);
         if(u_hasApprovedTerrain>.5)
-            base=mix(base,approvedTriplanarRock(wPos,wNorm)*mix(.80,.16,depth),.62);
+            base=approvedTriplanarRock(wPos,wNorm)*mix(.80,.16,depth);
         base*=.93+.07*grain;
     }else if(matId==17){
         base=photoDolomite(wPos,wNorm)*.13;
