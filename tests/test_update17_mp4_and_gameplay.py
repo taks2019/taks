@@ -23,6 +23,8 @@ class ActualGameplayAndMenuMotion(unittest.TestCase):
         self.assertIn("menuCover.getChildAt(0) instanceof RestoredStoneMenu",MAIN)
         self.assertIn("menuCover.addView(moving,new FrameLayout.LayoutParams(-1,-1))",MAIN)
         self.assertIn("setClickable(false)",VIDEO)
+        self.assertIn("target.setOnClickListener(v->{",VIDEO)
+        self.assertIn("this::newWorldFromMenu,this::showSettings",MAIN)
         self.assertIn("setFocusable(false)",VIDEO)
         self.assertIn("mp.setLooping(true)",VIDEO)
         self.assertIn("MEDIA_INFO_VIDEO_RENDERING_START",VIDEO)
@@ -45,8 +47,8 @@ class ActualGameplayAndMenuMotion(unittest.TestCase):
 
     def test_inplace_update_package_unchanged(self):
         self.assertIn("applicationIdSuffix '.menufixedgame'",GRADLE)
-        self.assertIn("versionCode 17",GRADLE)
-        self.assertIn("versionName '0.15.2'",GRADLE)
+        self.assertIn("versionCode 18",GRADLE)
+        self.assertIn("versionName '0.15.3'",GRADLE)
 
     @unittest.skipUnless(CLIP.is_file(),"Generated in GitHub Actions before test")
     def test_video_is_actually_moving_not_static_png_reencoded(self):
