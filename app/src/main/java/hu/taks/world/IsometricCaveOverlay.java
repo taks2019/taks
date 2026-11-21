@@ -78,31 +78,58 @@ public final class IsometricCaveOverlay extends View {
         float alpha = Math.max(0f, Math.min(1f, (zoom - 8f) / 6f));
         if (alpha < .005f) return;
 
-        float[] camera = projectWorld(0f, 2.25f, 7.1f);
+        // A fixed point ON THE CAVE is used for all 8 views. Previous
+        // versions changed the apparent sprite centre when switching angle;
+        // the cave jumped across the screen while the camera was rotated.
+        final float anchorX = 0f;
+        final float anchorZ = 7.4f;
+        float[] camera = projectWorld(anchorX, surfaceHeight(anchorX,anchorZ), anchorZ);
         float screenScale = getHeight() / Math.max(zoom * .99f, .01f);
-        // Same image for the eight yaw bins, never mirrored or approximated
-        // with a flipped image. The artwork itself supplies unique views.
-        int viewIndex = Math.floorMod(Math.round((float)Math.toDegrees(yaw)/45f), 8);
-        Bitmap image = views[viewIndex];
-        if (image == null) return;
-
         float renderedWidth = 21.5f * screenScale;
-        float renderedHeight = renderedWidth * image.getHeight()/image.getWidth();
-        paint.setAlpha(Math.round(alpha * 255));
-        // The rectangle uses an orthographic world anchor, no screen-fixed
-        // billboard: pan and camera orbit move the cave relative to the actor.
-        RectF dst = new RectF(camera[0] - renderedWidth*.5f,
-                              camera[1] - renderedHeight*.54f,
-                              camera[0] + renderedWidth*.5f,
-                              camera[1] + renderedHeight*.46f);
-        canvas.drawBitmap(image, null, dst, paint);
+        float renderedHeight = renderedWidth;
+
+        // All eight supplied RGBA images are 512x512. Their image-space
+        // ground anchor is x=256,y=428, regardless of silhouette width.
+        // Keep one identical rectangle for all views, no auto-cropping.
+        final RectF dst = new RectF(camera[0] - renderedWidth*.5f,
+                                   camera[1] - renderedHeight*(428f/512f),
+                                   camera[0] + renderedWidth*.5f,
+                                   camera[1] + renderedHeight*(84f/512f));
+
+        // Two neighbouring 45° frames are blended continuously rather than
+        // snapping to a new static frame at an angle boundary. This does not
+        // claim to be true 3D: it only makes this review sprite turn smoothly.
+        final double direction = (double)yaw / (Math.PI/4.0);
+        final double base = Math.floor(direction);
+        final int first = Math.floorMod((int)base,8);
+        final int second = (first+1)%8;
+        final float blend = (float)(direction-base);
+        paint.setAlpha(Math.round(alpha*(1f-blend)*255));
+        if(paint.getAlpha()>0)canvas.drawBitmap(views[first],null,dst,paint);
+        if(blend>.001f){
+            paint.setAlpha(Math.round(alpha*blend*255));
+            if(paint.getAlpha()>0)canvas.drawBitmap(views[second],null,dst,paint);
+        }
+    }
+
+    private static float saturate(float f){return Math.max(0f,Math.min(1f,f));}
+    private static float surfaceHeight(float x,float z){
+        // Identical height expression to the native FastScene renderer:
+        // mismatched Java/C++ camera origins caused parallax and shifting.
+        float edge = saturate((11f-Math.abs(x))/2.4f) *
+                     saturate((z+11f)/2.4f) * saturate((17f-z)/2.4f);
+        float relief = -.27f+.17f*(float)Math.sin(x*.21f)*(float)Math.cos(z*.22f)
+                +.09f*(float)Math.sin(x*.87f+z*.57f)
+                +.065f*(float)Math.cos(z*.73f-x*.42f);
+        return -.48f+(relief+.48f)*edge;
     }
 
     private float[] projectWorld(float x, float y, float z) {
-        float fy = .52f; // Ground + player head target used by native camera.
+        float fy = surfaceHeight(playerX,playerZ)+.90f;
         float fz = playerZ + 1.65f + Math.max(0f, Math.min(3f, (zoom - 10f)*.29f));
         float dx=x-playerX, dy=y-fy, dz=z-fz;
-        float rightX=(float)Math.cos(yaw), rightZ=(float)Math.sin(yaw);
+        // lookAt() uses cross(forward, UP), not the opposite direction.
+        float rightX=-(float)Math.cos(yaw), rightZ=-(float)Math.sin(yaw);
         float upX=-(float)Math.sin(yaw)*(float)Math.sin(pitch);
         float upY=(float)Math.cos(pitch);
         float upZ=(float)Math.cos(yaw)*(float)Math.sin(pitch);
