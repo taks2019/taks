@@ -750,7 +750,7 @@ void render(int width,int height,const FastFrame& f){
     const float caveCover = f.pngCavePreview && !f.inspectCave
             ? taks::RoofCutaway::visibility(effectiveZoom) : 0.f;
     if(caveCover>.001f)
-        taks::CaveSprite::render(vp.a,f.yaw,effectiveZoom,
+        taks::CaveSprite::render(vp.a,f.yaw,f.pitch,effectiveZoom,
             surfaceHeight(0.f,2.2f),f.clock,f.rain,caveCover);
 
     // Draw the rock roof on top of the permanent scene. At close zoom, expose
