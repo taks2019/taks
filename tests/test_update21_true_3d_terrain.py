@@ -22,7 +22,9 @@ class Generated3DGround(unittest.TestCase):
         self.assertNotIn("quad(terrainMesh,{-160.f,-.485f,-160.f}",ENGINE)
         self.assertIn("photoDolomite",ENGINE)
         self.assertIn("geologicalScree",ENGINE)
-        self.assertIn("gullyMoisture",ENGINE)
+        self.assertIn("wetChannel",ENGINE)
+        self.assertIn("mudCoverage",ENGINE)
+        self.assertIn("soilField(wPos.xz)",ENGINE)
 
     def test_cave_actors_and_mesh_share_one_world_height(self):
         self.assertIn('#include "WorldTerrain.h"',ENGINE)
