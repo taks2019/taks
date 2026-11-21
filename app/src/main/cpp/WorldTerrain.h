@@ -55,12 +55,31 @@ inline float height(float x,float z) {
     const float scree=.19f*(noise(x*.72f+31.f,z*.72f+9.f)-.5f)*
         (gaussian(x,z,-7.f,5.f,5.f,7.f)+gaussian(x,z,7.f,5.f,5.f,7.f));
 
+    // Continuous geological hill flank, not square terrain blocks.
+    // A PROCEDURAL approximation of the slopes around Wonderwerk, not
+    // surveyed or archaeologically verified digital elevation data.
+    // Start the rise behind the cave to keep the original entrance passable.
+    const float farSlope=smooth(9.f,43.f,z);
+    const float kopje=15.8f*gaussian(x,z,-9.f,56.f,29.f,38.f)*farSlope;
+    const float westernRidge=9.2f*gaussian(x,z,-56.f,42.f,31.f,56.f)*
+                             smooth(11.f,48.f,z);
+    const float distantShoulder=5.8f*gaussian(x,z,69.f,75.f,43.f,51.f)*
+                                smooth(21.f,70.f,z);
+
+    // Natural-scale relief and eroded gravel; smooth continuous noise,
+    // without arbitrary hard edges or a flat material-patch polygon.
+    const float moundNoise=noise(x*.14f+51.7f,z*.14f-31.1f)-.5f;
+    const float microHummocks=.44f*moundNoise+
+        .14f*(noise(x*.36f-21.3f,z*.36f+11.7f)-.5f);
+    const float gravelSlope=.21f*(noise(x*.065f+11.f,z*.065f-8.f)-.5f);
+
     // The player can walk from the starting ground along the cave approach.
     // Its approximately 3 m wide opening is not buried by an arbitrary hill.
     const float approach=gaussian(x,z,0.f,.2f,2.0f,7.1f);
     const float corridor=gaussian(x,z,0.f,5.1f,1.9f,4.6f);
     const float approachTarget=-.10f+.04f*noise(x*.66f+2.f,z*.66f);
-    float y=regional+edgeRidge+shoulderLeft+shoulderRight+limestoneFoot+scree;
+    float y=regional+edgeRidge+shoulderLeft+shoulderRight+limestoneFoot+scree
+           +kopje+westernRidge+distantShoulder+microHummocks+gravelSlope;
     y=y*(1.f-.88f*approach)+approachTarget*(.88f*approach);
     y=y*(1.f-.98f*corridor)+(-.045f+.012f*noise(x*.75f,z*.75f))*(.98f*corridor);
 
