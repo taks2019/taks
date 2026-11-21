@@ -3,20 +3,29 @@ package hu.taks.world;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
 import android.graphics.Typeface;
+import android.graphics.RectF;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.FrameLayout;
-import android.widget.ImageView;
-import android.widget.TextView;
 import java.io.InputStream;
 
 /**
- * Restores the actual previously accepted 1664x768 Stone Age menu image.
- * The menu is NOT synthesized from the Wonderwerk cave and never uses MP4.
- * Only four Android touch targets and their captions are drawn above the
- * original unmodified image. All game callbacks remain native.
+ * The EXACT approved, full-screen 1664x768 stone menu.
+ *
+ * Regression fix: the previous release placed the only ImageView inside a
+ * FrameLayout initially sized 1x1 pixel; on some Android compositors the
+ * container stayed 1x1, so only its brown fallback background showed.
+ *
+ * The approved art and all four captions are now drawn directly to the
+ * actual MATCH_PARENT menu view in onDraw(). There are no dependent 1x1
+ * artwork containers and no MediaPlayer or invented fallback image.
+ *
+ * Native Android transparent hit targets preserve touch/accessibility.
+ * The original approved PNG bytes are never altered.
  */
 final class RestoredStoneMenu extends FrameLayout {
     static final String ASSET = "menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png";
@@ -24,79 +33,125 @@ final class RestoredStoneMenu extends FrameLayout {
     private static final float[] TOP = {.443f,.566f,.687f,.809f};
     private static final float[] HEIGHT = {.120f,.120f,.115f,.120f};
     private static final String[] LABELS = {"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐ","KILÉPÉS"};
-
-    private final FrameLayout artwork;
+    private static final float[] CAPTION_Y = {387f,479f,573f,668f};
+    private static final float CAPTION_X = 928f;
+    private static final float CAPTION_MAX_WIDTH = 176f;
+    private final Bitmap accepted;
+    private final Paint imagePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final Paint typePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
     private final View[] touch = new View[4];
-    private final TextView[] caption = new TextView[4];
+    private float scale = 1f, offsetX = 0f, offsetY = 0f;
+    private boolean firstFrameLogged = false;
 
     static RestoredStoneMenu load(Context context, Runnable newGame,
                                   Runnable settings, Runnable creator, Runnable exit) {
-        try (InputStream stream = context.getAssets().open(ASSET)) {
-            Bitmap image = BitmapFactory.decodeStream(stream);
-            if (image == null || image.getWidth() != DESIGN_W ||
-                image.getHeight() != DESIGN_H) return null;
-            return new RestoredStoneMenu(context, image,
-                                         new Runnable[]{newGame,settings,creator,exit});
-        } catch (Exception error) {
-            android.util.Log.e("TAKS_MENU", "Eredeti jóváhagyott menükép hiányzik", error);
+        try(InputStream input = context.getAssets().open(ASSET)) {
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inScaled = false;
+            options.inPreferredConfig = Bitmap.Config.ARGB_8888;
+            Bitmap image = BitmapFactory.decodeStream(input, null, options);
+            if(image == null || image.getWidth() != DESIGN_W ||
+               image.getHeight() != DESIGN_H){
+                android.util.Log.e("TAKS_MENU","Approved original menu dimensions are invalid");
+                if(image != null) image.recycle();
+                return null;
+            }
+            return new RestoredStoneMenu(context,image,
+                      new Runnable[]{newGame,settings,creator,exit});
+        }catch(Exception error){
+            android.util.Log.e("TAKS_MENU","Approved exact menu artwork not accessible",error);
             return null;
         }
     }
 
-    private RestoredStoneMenu(Context context, Bitmap image, Runnable[] actions) {
+    private RestoredStoneMenu(Context context, Bitmap image, Runnable[] actions){
         super(context);
+        accepted=image;
         setBackgroundColor(0xFF21180F);
-        artwork = new FrameLayout(context);
-        ImageView photo = new ImageView(context);
-        photo.setImageBitmap(image);
-        photo.setScaleType(ImageView.ScaleType.FIT_XY);
-        artwork.addView(photo, new FrameLayout.LayoutParams(-1,-1));
-        for (int i=0;i<4;i++) {
-            final int buttonIndex = i;
-            View target = new View(context);
+        setWillNotDraw(false); // Mandatory for direct full-screen image rendering.
+        setClipChildren(false);
+        setContentDescription("TAKS WORLD: az eredeti kőlogós főmenü");
+        typePaint.setTypeface(Typeface.create(Typeface.SERIF,Typeface.BOLD));
+        typePaint.setTextAlign(Paint.Align.CENTER);
+        for(int i=0;i<4;++i){
+            final int index=i;
+            View target=new View(context);
             target.setContentDescription(LABELS[i]);
             target.setClickable(true);
             target.setFocusable(true);
-            target.setOnClickListener(v -> actions[buttonIndex].run());
-            touch[i] = target;
-            artwork.addView(target, new FrameLayout.LayoutParams(1,1));
-
-            TextView text = new TextView(context);
-            text.setText(LABELS[i]);
-            text.setTypeface(Typeface.SERIF,Typeface.BOLD);
-            text.setTextColor(0xFFFFF0CB);
-            text.setShadowLayer(2f,1f,2f,0xFF38240F);
-            text.setGravity(Gravity.CENTER);
-            text.setTextSize(19f);
-            text.setSingleLine(true);
-            text.setClickable(false);
-            text.setFocusable(false);
-            caption[i]=text;
-            artwork.addView(text,new FrameLayout.LayoutParams(1,1));
+            target.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            target.setBackgroundColor(Color.TRANSPARENT);
+            target.setElevation(0f);
+            target.setOnClickListener(v->actions[index].run());
+            touch[i]=target;
+            addView(target,new FrameLayout.LayoutParams(1,1,Gravity.TOP|Gravity.LEFT));
         }
-        addView(artwork,new FrameLayout.LayoutParams(1,1,Gravity.CENTER));
     }
 
-    @Override protected void onSizeChanged(int w,int h,int oldw,int oldh) {
-        super.onSizeChanged(w,h,oldw,oldh);
-        if (w<=0||h<=0) return;
-        float scale=Math.min(w/(float)DESIGN_W,h/(float)DESIGN_H);
-        int cw=Math.max(1,Math.round(DESIGN_W*scale));
-        int ch=Math.max(1,Math.round(DESIGN_H*scale));
-        artwork.setLayoutParams(new FrameLayout.LayoutParams(cw,ch,Gravity.CENTER));
-        for (int i=0;i<4;i++) {
-            FrameLayout.LayoutParams hit=new FrameLayout.LayoutParams(
-                    Math.round(cw*.249f),Math.round(ch*HEIGHT[i]));
-            hit.leftMargin=Math.round(cw*.396f);
-            hit.topMargin=Math.round(ch*TOP[i]);
-            touch[i].setLayoutParams(hit);
-            FrameLayout.LayoutParams title=new FrameLayout.LayoutParams(
-                    Math.round(cw*.145f),Math.round(ch*HEIGHT[i]));
-            title.leftMargin=Math.round(cw*.486f);
-            title.topMargin=Math.round(ch*TOP[i]);
-            caption[i].setLayoutParams(title);
-            caption[i].setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX,
-                                   28f*scale);
+    private void geometry(int width, int height){
+        if(width<=0||height<=0) return;
+        scale=Math.min(width/(float)DESIGN_W,height/(float)DESIGN_H);
+        offsetX=(width-DESIGN_W*scale)*.5f;
+        offsetY=(height-DESIGN_H*scale)*.5f;
+    }
+
+    @Override protected void onSizeChanged(int width,int height,int oldWidth,int oldHeight){
+        super.onSizeChanged(width,height,oldWidth,oldHeight);
+        geometry(width,height);
+        for(int i=0;i<4;++i){
+            FrameLayout.LayoutParams area=new FrameLayout.LayoutParams(
+                   Math.round(414f*scale), Math.round(DESIGN_H*HEIGHT[i]*scale),
+                   Gravity.LEFT|Gravity.TOP);
+            area.leftMargin=Math.round(offsetX+DESIGN_W*.396f*scale);
+            area.topMargin=Math.round(offsetY+DESIGN_H*TOP[i]*scale);
+            touch[i].setLayoutParams(area);
         }
+        invalidate();
+    }
+
+    @Override protected void onDraw(Canvas canvas){
+        super.onDraw(canvas);
+        if(accepted==null||accepted.isRecycled()) return;
+        if(getWidth()<=0||getHeight()<=0) return;
+        geometry(getWidth(),getHeight());
+        // Pixel-identical original art; it is rendered even when any child
+        // touch target is mismeasured or an Android hardware layer is stale.
+        canvas.save();
+        canvas.translate(offsetX,offsetY);
+        canvas.scale(scale,scale);
+        canvas.drawBitmap(accepted,0f,0f,imagePaint);
+
+        for(int i=0;i<LABELS.length;++i){
+            float size=28f;
+            typePaint.setTextSize(size);
+            float measured=typePaint.measureText(LABELS[i]);
+            if(measured>CAPTION_MAX_WIDTH) size*=CAPTION_MAX_WIDTH/measured;
+            typePaint.setTextSize(size);
+            canvas.save();
+            canvas.clipRect(CAPTION_X-95f,CAPTION_Y[i]-34f,
+                            CAPTION_X+95f,CAPTION_Y[i]+12f);
+            typePaint.setStyle(Paint.Style.STROKE);
+            typePaint.setStrokeWidth(3.2f);
+            typePaint.setStrokeJoin(Paint.Join.ROUND);
+            typePaint.clearShadowLayer();
+            typePaint.setColor(0xFF33210F);
+            canvas.drawText(LABELS[i],CAPTION_X,CAPTION_Y[i],typePaint);
+            typePaint.setStyle(Paint.Style.FILL);
+            typePaint.setColor(0xFFFFF1CF);
+            typePaint.setShadowLayer(1.2f,0,1,0xFF34220D);
+            canvas.drawText(LABELS[i],CAPTION_X,CAPTION_Y[i],typePaint);
+            canvas.restore();
+        }
+        canvas.restore();
+        if(!firstFrameLogged){
+            firstFrameLogged=true;
+            android.util.Log.i("TAKS_MENU","Original approved 1664x768 menu actually DRAWN at "
+                +getWidth()+"x"+getHeight()+" scale="+scale);
+        }
+    }
+
+    @Override protected void onDetachedFromWindow(){
+        super.onDetachedFromWindow();
+        if(accepted!=null && !accepted.isRecycled()) accepted.recycle();
     }
 }
