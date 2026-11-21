@@ -1,0 +1,91 @@
+name: TAKS World in-place UPDATE - immutable menu & APK build
+on:
+  push:
+    branches: [codex/taks-world-live-menu-engine-2026-11-21]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  safe-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Recover exact unchanged ORIGINAL approved menu from archived APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/taks-original
+          gh run download 44632455358 \
+            --repo "$GITHUB_REPOSITORY" \
+            --name TAKS-World-Android-First-Playable-APK \
+            --dir /tmp/taks-original
+          mkdir -p app/src/main/assets/menu
+          unzip -p /tmp/taks-original/TAKS_World_Android_KIPROBALO.apk \
+            assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png > \
+            app/src/main/assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png
+          echo "9369d3668b69424d31132e70accbfdb76282d7d9b3f3adfaa51c7c3ca1ea7bc8  app/src/main/assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png" | sha256sum -c -
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: GUARD - prevent menu, logo and existing Android app replacement
+        run: |
+          python scripts/enforce_taks_update_policy.py
+          python -m unittest discover -s tests -p 'test_menu_draw_regression.py' -v
+      - name: Import existing scanned gameplay assets without replacing accepted art
+        run: |
+          python -m pip install --disable-pip-version-check 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2'
+          python scripts/import_cc0_rocks.py
+          python scripts/import_cc0_foliage.py
+          python scripts/import_cc0_rigged_human.py
+      - name: Engine regression and immutable PNG cave logic
+        run: |
+          cmake -S engine -B build-native -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-native --parallel 2
+          ctest --test-dir build-native --output-on-failure
+          # Prior tests covered a versionCode 15 developer-only suffix.
+          # New policy supersedes the old test-only app identity.
+          python -m unittest discover -s tests -p 'test_gameplay_original_menu.py' -v
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build native APK update without modifying the original menu
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Verify byte-exact scene and app identity
+        run: |
+          python scripts/enforce_taks_update_policy.py
+          python - <<'PY'
+          import hashlib,zipfile
+          from pathlib import Path
+          file=Path("app/build/outputs/apk/debug/app-debug.apk")
+          assert file.is_file() and file.stat().st_size>8_000_000
+          with zipfile.ZipFile(file) as z:
+              data=z.read("assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png")
+              assert hashlib.sha256(data).hexdigest()=="9369d3668b69424d31132e70accbfdb76282d7d9b3f3adfaa51c7c3ca1ea7bc8"
+              assert "lib/arm64-v8a/libtaks_engine.so" in z.namelist()
+              assert "classes.dex" in z.namelist()
+          print("Compiled APK update, original menu and actual game native library present")
+          PY
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging app/build/outputs/apk/debug/app-debug.apk | head -n 1
+      - name: Stage for signing with EXACT SAME cert as previous installed APK
+        run: |
+          mkdir -p delivery
+          cp app/build/outputs/apk/debug/app-debug.apk delivery/TAKS_WORLD_UPDATE16_DEBUG_SIGNED_ONLY.apk
+          echo "NOT FOR INSTALLATION: Gradle's freshly generated DEBUG signing key cannot update the previous installed release. Use scripts/package_taks_inplace_update.py with the previous signed APK and its original private signing key. It restores ALL 8 unchanged cave PNGs missing from CI's built APK before signing. Validate same package, certificate, versionCode and original assets. NEVER install or distribute this incomplete CI debug APK directly." > delivery/IMPORTANT_REQUIRES_ORIGINAL_SIGNING_KEY.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS_World_UPDATE16_BUILD_NOT_YET_INSTALLABLE
+          path: delivery/
+          if-no-files-found: error
+          retention-days: 7
