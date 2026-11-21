@@ -102,7 +102,7 @@ void build(Emit emit,Ground ground) {
             const P r=ceilingAt(b,z1),s=ceilingAt(a,z1);
             emit(p,q,r,16.f);emit(p,r,s,16.f);
         }
-        for(int side:{-1,1}) {
+        for(int side=-1;side<=1;side+=2) {
             const float a=side<0?pi:0.f;
             const P q0=ceilingAt(a,z0),q1=ceilingAt(a,z1);
             const P floor0{q0.x,ground(q0.x,z0)-.03f,z0};
