@@ -32,7 +32,7 @@ import java.io.InputStream;
  */
 final class ApprovedMenuMotion extends FrameLayout
         implements TextureView.SurfaceTextureListener {
-    private static final String VIDEO="menu/wonderwerk_loop.mp4";
+    private final String videoAsset;
     private final TextureView video;
     private final View approvedStaticScene;
     private final View captions;
@@ -48,20 +48,23 @@ final class ApprovedMenuMotion extends FrameLayout
     private boolean prepared;
     private boolean renderedFirstFrame;
 
-    static ApprovedMenuMotion create(Context context,View approvedStaticScene,Runnable newGame,
-                                     Runnable settings,Runnable credits,Runnable exit){
-        try(InputStream input=context.getAssets().open(VIDEO)){
+    static ApprovedMenuMotion create(Context context,View approvedStaticScene,float[] realWorldCues,
+                                     Runnable newGame,Runnable settings,Runnable credits,Runnable exit){
+        final String source=MenuVideoSelection.select(context,realWorldCues);
+        try(InputStream input=context.getAssets().open(source)){
             if(input.read()<0)return null;
-            return new ApprovedMenuMotion(context,approvedStaticScene,
+            android.util.Log.i("TAKS_MENU_MOTION","Approved video selected: "+source);
+            return new ApprovedMenuMotion(context,approvedStaticScene,source,
                 new Runnable[]{newGame,settings,credits,exit});
         }catch(Exception noMedia){
-            android.util.Log.w("TAKS_MENU_MOTION","Approved menu animation not bundled; original image remains");
+            android.util.Log.e("TAKS_MENU_MOTION","MP4 is missing; showing approved static fallback");
             return null;
         }
     }
 
-    private ApprovedMenuMotion(Context context,View approvedStaticScene,Runnable[] actions){
+    private ApprovedMenuMotion(Context context,View approvedStaticScene,String videoAsset,Runnable[] actions){
         super(context);
+        this.videoAsset=videoAsset;
         this.approvedStaticScene=approvedStaticScene;
         this.menuActions=actions;
         setClickable(false);
@@ -144,24 +147,35 @@ final class ApprovedMenuMotion extends FrameLayout
         }
     }
 
+    private int lastMeasuredW=-1,lastMeasuredH=-1;
+    @Override protected void onMeasure(int wSpec,int hSpec){
+        int w=View.MeasureSpec.getSize(wSpec),h=View.MeasureSpec.getSize(hSpec);
+        if(w>0&&h>0&&(w!=lastMeasuredW||h!=lastMeasuredH)){
+            float ratio=Math.min(w/1664f,h/768f);
+            LayoutParams v=new LayoutParams(
+                Math.max(2,Math.round(1664f*ratio)),
+                Math.max(2,Math.round(768f*ratio)),Gravity.CENTER);
+            video.setLayoutParams(v);
+            float ox=(w-1664f*ratio)*.5f;
+            float oy=(h-768f*ratio)*.5f;
+            final float[] rows={.443f,.566f,.687f,.809f};
+            final float[] heights={.120f,.120f,.115f,.120f};
+            for(int i=0;i<4;i++){
+                LayoutParams target=new LayoutParams(
+                    Math.max(12,Math.round(414f*ratio)),
+                    Math.max(12,Math.round(768f*heights[i]*ratio)),
+                    Gravity.LEFT|Gravity.TOP);
+                target.leftMargin=Math.round(ox+1664f*.396f*ratio);
+                target.topMargin=Math.round(oy+768f*rows[i]*ratio);
+                touches[i].setLayoutParams(target);
+            }
+            lastMeasuredW=w;
+            lastMeasuredH=h;
+        }
+        super.onMeasure(wSpec,hSpec);
+    }
     @Override protected void onSizeChanged(int w,int h,int ow,int oh){
         super.onSizeChanged(w,h,ow,oh);
-        if(w<=0||h<=0)return;
-        final float ratio=Math.min(w/1664f,h/768f);
-        LayoutParams v=new LayoutParams(Math.max(2,Math.round(1664f*ratio)),
-                Math.max(2,Math.round(768f*ratio)),Gravity.CENTER);
-        video.setLayoutParams(v);
-        final float ox=(w-1664f*ratio)*.5f;
-        final float oy=(h-768f*ratio)*.5f;
-        final float[] rows={.443f,.566f,.687f,.809f};
-        final float[] heights={.120f,.120f,.115f,.120f};
-        for(int i=0;i<4;i++){
-            LayoutParams target=new LayoutParams(Math.max(12,Math.round(414f*ratio)),
-                   Math.max(12,Math.round(768f*heights[i]*ratio)),Gravity.LEFT|Gravity.TOP);
-            target.leftMargin=Math.round(ox+1664f*.396f*ratio);
-            target.topMargin=Math.round(oy+768f*rows[i]*ratio);
-            touches[i].setLayoutParams(target);
-        }
         captions.invalidate();
     }
 
@@ -222,13 +236,13 @@ final class ApprovedMenuMotion extends FrameLayout
     }
 
     private void prepareSource(MediaPlayer mp)throws Exception {
-        try(AssetFileDescriptor descriptor=getContext().getAssets().openFd(VIDEO)){
+        try(AssetFileDescriptor descriptor=getContext().getAssets().openFd(videoAsset)){
             mp.setDataSource(descriptor.getFileDescriptor(),descriptor.getStartOffset(),
                     descriptor.getLength());
         }catch(java.io.IOException compressed){
             File cached=new File(getContext().getCacheDir(),"taks_menu_video_update.mp4");
             if(!cached.exists()||cached.length()<50_000){
-                try(InputStream input=getContext().getAssets().open(VIDEO);
+                try(InputStream input=getContext().getAssets().open(videoAsset);
                     FileOutputStream output=new FileOutputStream(cached)){
                     byte[] bytes=new byte[65536];
                     int n;while((n=input.read(bytes))!=-1)output.write(bytes,0,n);
@@ -261,6 +275,8 @@ final class ApprovedMenuMotion extends FrameLayout
                     // produced double leaves, double sun and ghost clouds.
                     // Keep the original View for safe instant fallback, but
                     // stop drawing it while the video owns the background.
+                    // Never blend two differently moving copies: exactly one
+                    // background is visible. Captions are drawn once above it.
                     approvedStaticScene.setVisibility(View.INVISIBLE);
                     setAlpha(1f);
                     android.util.Log.i("TAKS_MENU_MOTION","SINGLE_SCENE: MP4 visible, static scene hidden");

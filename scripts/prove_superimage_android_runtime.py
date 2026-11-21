@@ -145,12 +145,17 @@ def run():
     if contrast(initial)<24:raise AssertionError("Menu blank/dark brown: original art not displayed")
     time.sleep(2)
     again=screenshot("02_same_menu_second_frame")
-    # The approved background is currently deliberately STATIC until the
-    # owner approves an independently checked animation.
+    # Menus must now actually MOVE, while using precisely one background.
     menuDiff=difference(initial,again)
-    print("STATIC APPROVED MENU DIFFERENCE",menuDiff,flush=True)
-    if menuDiff>3:
-        raise AssertionError("Unexpected second/compositor image over original menu")
+    print("APPROVED MOVING MENU DIFFERENCE",menuDiff,flush=True)
+    motion_log=adb("logcat","-d","-s","TAKS_MENU_MOTION:I","TAKS_MENU_MOTION:E",check=False).decode(errors="replace")
+    (OUT/"02_menu_video_state.log").write_text(motion_log,encoding="utf-8")
+    if "SINGLE_SCENE: MP4 visible, static scene hidden" not in motion_log:
+        raise AssertionError("Moving MP4 never took over the single approved scene")
+    if menuDiff<.20:
+        raise AssertionError("Moving menu frames did not differ: static PNG still on screen")
+    if menuDiff>16:
+        raise AssertionError("Unstable/doubled composition or wrong background in moving menu")
     fail_on_render_errors()
     menu_tap_accessible("BEÁLLÍTÁSOK")
     time.sleep(2)
@@ -227,7 +232,9 @@ def run():
         "game_contrast":round(contrast(game),3),
         "rendered_world_region_verified":True,
         "camera_orbit_world_pixel_change":round(motion,3),
-        "menu_is_still_static_png":True,
+        "menu_loop_decoded_and_playing":True,
+        "menu_one_active_background":True,
+        "menu_is_still_static_png":False,
         "fully_realistic_graphics_approved":False,
         "cave_mean_difference":round(difference(game,cave),3),
         "source_images":"approved original main menu, byte-identical SHA checked in CI",

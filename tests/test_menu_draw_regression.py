@@ -20,7 +20,8 @@ class RestoredApprovedMenu(unittest.TestCase):
     def test_buttons_have_accessible_touches_and_top_z_order(self):
         for text in ('ÚJ JÁTÉK','BEÁLLÍTÁSOK','KÉSZÍTŐ','KILÉPÉS'):
             self.assertIn(text,MENU)
-        self.assertIn('target.setOnClickListener(v->actions[index].run())',MENU)
+        self.assertIn('target.setOnClickListener(v->{',MENU)
+        self.assertIn('actions[index].run();',MENU)
         self.assertIn('menuCover.setElevation(dp(24))',MAIN)
         self.assertIn('menuCover.bringToFront()',MAIN)
         self.assertIn('modalOverlay.setElevation(dp(48))',MAIN)
@@ -32,6 +33,10 @@ class RestoredApprovedMenu(unittest.TestCase):
         self.assertIn('surface.setZOrderOnTop(false)',MAIN)
         self.assertIn('surface.setZOrderMediaOverlay(false)',MAIN)
         self.assertIn("applicationIdSuffix '.menufixedgame'",GRADLE)
+    def test_original_menu_has_only_one_animation_owner(self):
+        self.assertEqual(MAIN.count('installApprovedMotionOnCurrentMenu();'),1)
+        self.assertIn('menuCover.setOnTouchListener(null)',MAIN)
+        self.assertIn('MenuVideoSelection.select',Path("app/src/main/java/hu/taks/world/ApprovedMenuMotion.java").read_text())
     def test_exact_original_asset_required_not_synthetic_mp4(self):
         self.assertIn('menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png',MENU)
         self.assertNotIn('menuMotion=new MenuMotionView(this)',MAIN)

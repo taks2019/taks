@@ -486,9 +486,9 @@ public final class MainActivity extends Activity {
     }
     private void refreshLivingSkin(){
         if(root==null)return;
-        // Do not composite a second independent MP4 over the approved menu.
-        // Its background and button artwork remain pixel-identical. Motion
-        // stays parked until a frame-matched video passes separate review.
+        // The ONE loop is owned by showMainMenu and the MediaPlayer lifecycle.
+        // This timer may tint approved Android controls but must never add
+        // or restart a video, photo, tree, cloud or cave layer.
         LivingUiSkin.State state=currentSkin();
         applyMenuScrim(state);
         applySkin(root,state,android.os.SystemClock.uptimeMillis());
@@ -542,21 +542,23 @@ public final class MainActivity extends Activity {
             approvedMotion.releaseVideo();
             approvedMotion=null;
         }
-        // Keep the accepted RestoredStoneMenu source and the exact bytes of
-        // its 1664x768 background frozen. Only attach a noninteractive MP4
-        // presentation layer above its pixels, below its existing touch input.
+        // Keep ONE accepted static scene only as a fallback. The MP4 is
+        // made from that exact picture at build time, never a second scene.
+        // The one visible owner switches from PNG to video on decoded frame 1.
         if(menuCover.getChildCount()==0 ||
            !(menuCover.getChildAt(0) instanceof RestoredStoneMenu))return;
         final ApprovedMenuMotion moving=ApprovedMenuMotion.create(this,
-            menuCover.getChildAt(0),this::newWorldFromMenu,this::showSettings,this::showCredits,this::confirmExit);
-        if(moving==null)return;
+            menuCover.getChildAt(0),nativeMenuCues(),
+            this::newWorldFromMenu,this::showSettings,this::showCredits,this::confirmExit);
+        if(moving==null){
+            android.util.Log.e("TAKS_MENU_MOTION","No packaged video: approved still-image fallback; animation missing");
+            return;
+        }
         approvedMotion=moving;
         menuCover.addView(moving,new FrameLayout.LayoutParams(-1,-1));
-        // If Android routes a TextureView tap past its child targets,
-        // dispatch it at the parent too. This is an invisible functional
-        // handler only: it draws NO shapes, panels, or replacement UI.
-        // The original menu's four button handlers are kept unchanged.
-        menuCover.setOnTouchListener((view,event)->moving.dispatchTouchEvent(event));
+        // The overlay owns its four transparent Android click targets.
+        // Do NOT forward the same gesture a second time from menuCover.
+        menuCover.setOnTouchListener(null);
         moving.setRunning(true);
     }
 
@@ -1103,7 +1105,10 @@ public final class MainActivity extends Activity {
             menuCover.addView(approved,new FrameLayout.LayoutParams(-1,-1));
             root.addView(menuCover,new FrameLayout.LayoutParams(-1,-1));
             menuCover.bringToFront();
-            android.util.Log.i("TAKS_MENU","Approved original 1664x768 image loaded; menu at top");
+            // Attach ONCE per menu opening. Not from the 650ms skin timer,
+            // which previously caused duplicated video/cave/tree layers.
+            installApprovedMotionOnCurrentMenu();
+            android.util.Log.i("TAKS_MENU","Single approved main menu; animated layer="+(approvedMotion!=null));
             return;
         }
         final PrehistoricMenuTheme.Look natural=PrehistoricMenuTheme.fromCues(nativeMenuCues());
