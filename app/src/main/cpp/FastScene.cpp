@@ -3,6 +3,7 @@
 #include "CaveSprite.h"
 #include "RoofCutaway.h"
 #include "WorldTerrain.h"
+#include "WorldMeshGrid.h"
 #include "CaveVolumeReview.h"
 #include <GLES3/gl3.h>
 #include <algorithm>
@@ -56,74 +57,42 @@ void smoothTerrainVertex(std::vector<Vertex>& vertices,Vec3 p) {
     taks::WorldTerrain::normal(p.x,p.z,nx,ny,nz);
     vertices.push_back({p.x,p.y,p.z,nx,ny,nz,0.f});
 }
-void sculptedTerrainGrid(std::vector<Vertex>& dst,float x0,float x1,
-                         float z0,float z1,int cols,int rows,
-                         bool skipCentralRegion) {
+// One continuous 3D mesh, with a finer vertex spacing near the cave.
+// A single shared XY/XZ lattice eliminates T-junctions, duplicated triangles,
+// stitched-edge fans, cracks and colour/normal mismatches when orbiting.
+void sculptedTerrainGrid(std::vector<Vertex>& dst){
+    const auto axes=taks::WorldMeshGrid::defaultAxes();
+    const auto& xs=axes.xs;
+    const auto& zs=axes.zs;
     struct TerrainPoint {Vec3 p;Vec3 n;};
-    std::vector<TerrainPoint> grid(std::size_t(cols+1)*std::size_t(rows+1));
-    auto index=[cols](int i,int j){return std::size_t(j)*std::size_t(cols+1)+std::size_t(i);};
-    for(int j=0;j<=rows;++j)for(int i=0;i<=cols;++i){
-        const float x=x0+(x1-x0)*float(i)/float(cols);
-        const float z=z0+(z1-z0)*float(j)/float(rows);
-        float nx,ny,nz;
-        taks::WorldTerrain::normal(x,z,nx,ny,nz);
-        grid[index(i,j)]={{x,surfaceHeight(x,z),z},{nx,ny,nz}};
-    }
+    const std::size_t rowStride=xs.size();
+    std::vector<TerrainPoint> grid(rowStride*zs.size());
+    auto index=[rowStride](std::size_t i,std::size_t j){
+        return j*rowStride+i;
+    };
+    for(std::size_t j=0;j<zs.size();++j)
+        for(std::size_t i=0;i<xs.size();++i){
+            const float x=xs[i],z=zs[j];
+            float nx,ny,nz;
+            taks::WorldTerrain::normal(x,z,nx,ny,nz);
+            grid[index(i,j)]={{x,surfaceHeight(x,z),z},{nx,ny,nz}};
+        }
+    dst.clear();
+    dst.reserve((xs.size()-1)*(zs.size()-1)*6);
     auto push=[&dst](const TerrainPoint& p){
         dst.push_back({p.p.x,p.p.y,p.p.z,p.n.x,p.n.y,p.n.z,0.f});
     };
-    for(int j=0;j<rows;++j)for(int i=0;i<cols;++i){
-        const float xa=x0+(x1-x0)*float(i)/float(cols);
-        const float xb=x0+(x1-x0)*float(i+1)/float(cols);
-        const float za=z0+(z1-z0)*float(j)/float(rows);
-        const float zb=z0+(z1-z0)*float(j+1)/float(rows);
-        // Far and near tiles join on exact x=-28/+28,z=-28/+40
-        // boundaries; there is no 160m flat quad showing through.
-        if(skipCentralRegion && xa>=-28.f && xb<=28.f &&
-           za>=-28.f && zb<=40.f)continue;
-        const auto& a=grid[index(i,j)];
-        const auto& b=grid[index(i+1,j)];
-        const auto& c=grid[index(i+1,j+1)];
-        const auto& d=grid[index(i,j+1)];
-        // A 4m outer cell meets eight 0.5m edges. Stitch every edge
-        // vertex to the exact analytic height: no gaps in any camera view.
-        const float eps=.0001f;
-        const bool west=skipCentralRegion && std::abs(xb-(-28.f))<eps &&
-                         za>=-28.f && zb<=40.f;
-        const bool east=skipCentralRegion && std::abs(xa-28.f)<eps &&
-                         za>=-28.f && zb<=40.f;
-        const bool south=skipCentralRegion && std::abs(zb-(-28.f))<eps &&
-                          xa>=-28.f && xb<=28.f;
-        const bool north=skipCentralRegion && std::abs(za-40.f)<eps &&
-                          xa>=-28.f && xb<=28.f;
-        if(west||east||south||north){
-            const int segments=8;
-            const TerrainPoint& farCorner=(west||south)?a:(east?b:d);
-            auto boundaryPoint=[&](int step){
-                const float t=float(step)/float(segments);
-                const float x=(west?xb:(east?xa:xa+(xb-xa)*t));
-                const float z=(south?zb:(north?za:za+(zb-za)*t));
-                float nx,ny,nz;
-                taks::WorldTerrain::normal(x,z,nx,ny,nz);
-                return TerrainPoint{{x,surfaceHeight(x,z),z},{nx,ny,nz}};
-            };
-            for(int k=0;k<segments;++k){
-                const auto p0=boundaryPoint(k),p1=boundaryPoint(k+1);
-                // Keep every stitched edge triangle outward facing, including
-                // the west/north borders that were wound backwards.
-                if(west||north){push(farCorner);push(p1);push(p0);}
-                else {push(farCorner);push(p0);push(p1);}
-            }
-            // The remaining triangle keeps the outer coarse edge whole.
-            if(west){push(a);push(d);push(c);}
-            else if(east){push(b);push(c);push(d);}
-            else if(south){push(a);push(c);push(b);}
-            else {push(d);push(c);push(b);}
-            continue;
+    for(std::size_t j=0;j+1<zs.size();++j)
+        for(std::size_t i=0;i+1<xs.size();++i){
+            const TerrainPoint& a=grid[index(i,j)];
+            const TerrainPoint& b=grid[index(i+1,j)];
+            const TerrainPoint& c=grid[index(i+1,j+1)];
+            const TerrainPoint& d=grid[index(i,j+1)];
+            // Every quad is emitted EXACTLY once, and adjacent quads share
+            // exactly the same vertex positions, normals, UV world frame.
+            push(a);push(d);push(c);
+            push(a);push(c);push(b);
         }
-        push(a);push(d);push(c);
-        push(a);push(c);push(b);
-    }
 }
 void axisBar(std::vector<Vertex>& v,Vec3 a,Vec3 b,float radius,float kind,int sides=7){
     Vec3 axis=norm(sub(b,a));
@@ -223,14 +192,10 @@ void buildStatic(){
     terrainMesh.clear();
     caveMesh.clear();
     roofMesh.clear();
-    // FULLY GEOMETRIC TERRAIN. A fine 0.5m tessellated foreground with
-    // smoothly varying slopes joins a coarser 4m 3D horizon. The original
-    // fake flat 320x320 brown quad is not drawn ANYWHERE in this renderer.
-    // Both grids use exactly the same deterministic CPU height function.
-    sculptedTerrainGrid(terrainMesh,-120.f,120.f,-120.f,120.f,
-                       60,60,true);
-    sculptedTerrainGrid(terrainMesh,-28.f,28.f,-28.f,40.f,
-                       112,136,false);
+    // One continuous 240m, heightmapped 3D landscape with a 0.5m
+    // cave-centred density and coarser 4m far reaches. No overlaid grid,
+    // skirts, duplicate polygon fans or fake brown background plane.
+    sculptedTerrainGrid(terrainMesh);
     // Native XYZ rock mesh: curved entrance, full inner tunnel, true side depth.
     // Review geometry only; NOT an archaeological Wonderwerk survey mesh.
     // The 8-angle photographic PNG remains optional and never used by default.

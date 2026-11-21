@@ -31,6 +31,12 @@ jobs:
           if($errors.Count -gt 0){ $errors | Format-List | Out-String | Write-Host; exit 1 }
           & ./tools/taks-world-pc.ps1 -Mode check
           if($LASTEXITCODE -ne 0){ exit 1 }
+      - name: Verify single connected 3D landscape topology with real C++ compiler
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Werror tests/test_world_mesh_grid.cpp -o /tmp/taks-world-mesh-grid
+          /tmp/taks-world-mesh-grid
+          python3 -m unittest discover -s tests -p 'test_natural_seamless_terrain.py' -v
+          python3 -m unittest discover -s tests -p 'test_update21_true_3d_terrain.py' -v
       - name: Compile the actual game GLES3 C++ scene source
         run: g++ -std=c++17 -Wall -Wextra -fsyntax-only -Iapp/src/main/cpp app/src/main/cpp/FastScene.cpp
       - name: Compile both actual embedded GLES 3.0 shaders

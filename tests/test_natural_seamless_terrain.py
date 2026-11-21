@@ -10,16 +10,18 @@ SCENE=(ROOT/"app/src/main/cpp/FastScene.cpp").read_text(encoding="utf-8")
 MAIN=(ROOT/"app/src/main/java/hu/taks/world/MainActivity.java").read_text(encoding="utf-8")
 
 class SeamlessWonderwerkGround(unittest.TestCase):
-    def test_real_hills_and_stitched_3d_edges(self):
+    def test_real_hills_and_single_conforming_3d_mesh(self):
         self.assertIn("const float kopje=15.8f*gaussian", WORLD)
         self.assertIn("const float westernRidge=", WORLD)
         self.assertIn("const float distantShoulder=", WORLD)
         self.assertIn("const float microHummocks=", WORLD)
-        self.assertIn("const int segments=8;", SCENE)
-        self.assertIn("push(farCorner);push(p0);push(p1);", SCENE)
-        self.assertIn("else if(south){push(a);push(c);push(b);}", SCENE)
-        self.assertIn("sculptedTerrainGrid(terrainMesh,-120.f,120.f,-120.f,120.f", SCENE)
-        self.assertIn("sculptedTerrainGrid(terrainMesh,-28.f,28.f,-28.f,40.f", SCENE)
+        self.assertIn('#include "WorldMeshGrid.h"', SCENE)
+        self.assertIn("WorldMeshGrid::defaultAxes()", SCENE)
+        self.assertIn("dst.reserve((xs.size()-1)*(zs.size()-1)*6);", SCENE)
+        self.assertIn("sculptedTerrainGrid(terrainMesh);", SCENE)
+        self.assertNotIn("skipCentralRegion", SCENE)
+        self.assertNotIn("farCorner", SCENE)
+        self.assertNotIn("push(farCorner);", SCENE)
 
     def test_smooth_material_blends_use_world_position_not_8_cut_tiles(self):
         self.assertIn("float soilField(vec2 p)", SCENE)

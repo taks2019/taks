@@ -14,9 +14,10 @@ GRADLE=(ROOT/"app/build.gradle").read_text(encoding="utf-8")
 MENU=(ROOT/"app/src/main/java/hu/taks/world/MainActivity.java").read_text(encoding="utf-8")
 
 class Generated3DGround(unittest.TestCase):
-    def test_real_height_mesh_and_two_geometric_lods(self):
-        self.assertIn("sculptedTerrainGrid(terrainMesh,-120.f,120.f,-120.f,120.f",ENGINE)
-        self.assertIn("sculptedTerrainGrid(terrainMesh,-28.f,28.f,-28.f,40.f",ENGINE)
+    def test_real_height_mesh_with_single_conforming_lods(self):
+        self.assertIn("WorldMeshGrid::defaultAxes()",ENGINE)
+        self.assertIn("sculptedTerrainGrid(terrainMesh);",ENGINE)
+        self.assertNotIn("skipCentralRegion",ENGINE)
         self.assertIn("glDrawArrays(GL_TRIANGLES,0,(GLsizei)terrainMesh.size());",ENGINE)
         self.assertIn("WorldTerrain::normal",ENGINE)
         self.assertNotIn("quad(terrainMesh,{-160.f,-.485f,-160.f}",ENGINE)
