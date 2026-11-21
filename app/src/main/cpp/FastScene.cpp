@@ -846,7 +846,11 @@ void render(int width,int height,const FastFrame& f){
     // when zooming inside. Ground, resources, NPCs and saves are untouched.
     const float pngCover = f.pngCavePreview && !f.inspectCave
             ? taks::RoofCutaway::visibility(effectiveZoom) : 0.f;
-    const float oldCaveAlpha = 1.f - pngCover;
+    // Never blend the original 3D cave and eight-angle PNG into two visible
+    // entrances: that produced the user's duplicated cave silhouette.
+    // The PNG is optional review only; the 3D cave is the real default.
+    const bool pngOnly = pngCover >= .5f;
+    const float oldCaveAlpha = pngOnly ? 0.f : 1.f;
     if(oldCaveAlpha > .001f && !caveMesh.empty()){
         if(uRoofOpacity>=0)glUniform1f(uRoofOpacity,oldCaveAlpha);
         if(oldCaveAlpha < .999f){
@@ -876,8 +880,7 @@ void render(int width,int height,const FastFrame& f){
 
     // Native depth-tested sprite: belongs to actual world coordinates.
     // Foreground actors/rocks occlude the sprite, unlike screen-space Canvas.
-    const float caveCover = f.pngCavePreview && !f.inspectCave
-            ? taks::RoofCutaway::visibility(effectiveZoom) : 0.f;
+    const float caveCover = pngOnly ? 1.f : 0.f;
     if(caveCover>.001f)
         taks::CaveSprite::render(vp.a,f.yaw,f.pitch,effectiveZoom,
             surfaceHeight(0.f,2.2f),f.clock,f.rain,caveCover);
