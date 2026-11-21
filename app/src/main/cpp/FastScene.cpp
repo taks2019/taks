@@ -22,7 +22,10 @@ struct Mat4 { float a[16]{}; };
 std::string error;
 GLuint program=0,staticVAO=0,staticVBO=0,caveVAO=0,caveVBO=0,roofVAO=0,roofVBO=0,dynamicVAO=0,dynamicVBO=0;
 GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uAnimation=-1,uWind=-1,uGround=-1,uCliff=-1,uRoofOpacity=-1;
-GLuint terrainTexture[2]={0,0};
+GLint uApprovedTerrain=-1;
+GLint uApprovedSampler[6]={-1,-1,-1,-1,-1,-1};
+GLuint terrainTexture[8]={0,0,0,0,0,0,0,0};
+bool approvedTerrainActive=false;
 std::vector<Vertex> terrainMesh,caveMesh,roofMesh,objectsMesh,weatherMesh;
 Vec3 add(Vec3 a,Vec3 b){return {a.x+b.x,a.y+b.y,a.z+b.z};}
 Vec3 sub(Vec3 a,Vec3 b){return {a.x-b.x,a.y-b.y,a.z-b.z};}
@@ -551,6 +554,15 @@ uniform float u_rain;uniform float u_mud;uniform float u_clock;uniform float u_a
 uniform vec2 u_wind;
 uniform sampler2D u_groundTexture;
 uniform sampler2D u_cliffTexture;
+// Six photographically detailed surfaces come from the *approved user's*
+// SuperImage 4x2 PNG, not a generator or unapproved procedural brown slab.
+uniform sampler2D u_approvedDry;
+uniform sampler2D u_approvedRed;
+uniform sampler2D u_approvedRock;
+uniform sampler2D u_approvedSand;
+uniform sampler2D u_approvedMud;
+uniform sampler2D u_approvedTransition;
+uniform float u_hasApprovedTerrain;
 uniform float u_roofOpacity;
 out vec4 fragColor;
 float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
@@ -583,6 +595,16 @@ vec3 photoDolomite(vec3 p,vec3 n){
     vec3 topY=texture(u_cliffTexture,p.xz*scale+vec2(.19,.43)).rgb;
     vec3 sideZ=texture(u_cliffTexture,p.xy*scale+vec2(.34,.31)).rgb;
     return sideX*weights.x+topY*weights.y+sideZ*weights.z;
+}
+// Real spatially aligned rock: same approved sample covers vertical and
+// horizontal cliff faces, with smooth normals (not front-facing billboards).
+vec3 approvedTriplanarRock(vec3 p,vec3 n){
+    vec3 w=pow(abs(normalize(n)),vec3(4.));
+    w/=max(dot(w,vec3(1.)),.0001);
+    const float scale=.22;
+    return texture(u_approvedRock,p.zy*scale+vec2(.21,.67)).rgb*w.x+
+           texture(u_approvedRock,p.xz*scale+vec2(.34,.17)).rgb*w.y+
+           texture(u_approvedRock,p.xy*scale+vec2(.79,.38)).rgb*w.z;
 }
 // Ground material masks follow WORLD coordinates, not isometric tile images.
 // A camera orbit sees the same real XYZ surface from any of its 8 directions.
@@ -661,6 +683,28 @@ void main(){
         vec3 limestone=photoDolomite(wPos,wNorm);
         vec3 weathered=limestone*(.87+.12*grit);
         base=mix(base,weathered,stone*.92);
+        if(u_hasApprovedTerrain>.5){
+            // No tile atlas borders, captions, or labels are GPU resources.
+            // Physical ground and water stay in their existing 3D locations.
+            // Different UV scales and smooth noise fields prevent the eight
+            // approved photographic ground kinds from appearing as squares.
+            vec2 p=wPos.xz;
+            vec3 dry=texture(u_approvedDry,p*.193+vec2(.43,.15)).rgb;
+            vec3 red=texture(u_approvedRed,p*.174+vec2(.09,.67)).rgb;
+            vec3 sand=texture(u_approvedSand,p*.149+vec2(.29,.46)).rgb;
+            vec3 wet=texture(u_approvedMud,p*.178+vec2(.74,.22)).rgb;
+            vec3 transition=texture(u_approvedTransition,p*.186+vec2(.37,.91)).rgb;
+            vec3 rock=approvedTriplanarRock(wPos,wNorm);
+            float dryness=soilField(p+vec2(13.0,-19.0));
+            float redEarth=smoothstep(.44,.78,soilField(p+vec2(32.,8.)));
+            float sandPatch=1.-smoothstep(.31,.67,dryness);
+            vec3 realSurface=mix(dry,sand,sandPatch*.84);
+            realSurface=mix(realSurface,red,redEarth*.59);
+            realSurface=mix(realSurface,transition,.12+.21*soilField(p+vec2(-5.,21.)));
+            realSurface=mix(realSurface,rock,stone*.92);
+            realSurface=mix(realSurface,wet,mudCoverage*.84);
+            base=mix(base,realSurface,.96);
+        }
         // The same physical terrain becomes darker UNDER the cave overhang;
         // no painted 2D black rectangle on top of world geometry.
         float caveX=1.0-smoothstep(1.52,2.10,abs(wPos.x));
@@ -668,11 +712,15 @@ void main(){
         base*=1.0-.55*caveX*caveZ;
     }else if(matId==1){
         base=photoDolomite(wPos,wNorm)*(.90+.10*lines);
+        if(u_hasApprovedTerrain>.5)
+            base=mix(base,approvedTriplanarRock(wPos,wNorm),.73);
     }else if(matId==16){
         // Actual concave 3D tunnel stone, triplanar texture with natural darkness
         // increasing with distance from the daylight opening.
         float depth=clamp((wPos.z-3.65)/8.1,0.0,1.0);
         base=photoDolomite(wPos,wNorm)*mix(.84,.19,depth);
+        if(u_hasApprovedTerrain>.5)
+            base=mix(base,approvedTriplanarRock(wPos,wNorm)*mix(.80,.16,depth),.62);
         base*=.93+.07*grain;
     }else if(matId==17){
         base=photoDolomite(wPos,wNorm)*.13;
@@ -722,8 +770,9 @@ void main(){
 }
 const std::string& lastError(){return error;}
 void shutdown(){
-    if(terrainTexture[0]||terrainTexture[1])glDeleteTextures(2,terrainTexture);
-    terrainTexture[0]=terrainTexture[1]=0;
+    glDeleteTextures(8,terrainTexture);
+    std::fill(std::begin(terrainTexture),std::end(terrainTexture),0);
+    approvedTerrainActive=false;
     if(staticVBO)glDeleteBuffers(1,&staticVBO);
     if(caveVBO)glDeleteBuffers(1,&caveVBO);
     if(roofVBO)glDeleteBuffers(1,&roofVBO);
@@ -759,6 +808,12 @@ bool init(){
     uAnimation=glGetUniformLocation(program,"u_animationTime");
     uGround=glGetUniformLocation(program,"u_groundTexture");
     uCliff=glGetUniformLocation(program,"u_cliffTexture");
+    uApprovedTerrain=glGetUniformLocation(program,"u_hasApprovedTerrain");
+    const char* approvedNames[6]={
+        "u_approvedDry","u_approvedRed","u_approvedRock",
+        "u_approvedSand","u_approvedMud","u_approvedTransition"
+    };
+    for(int i=0;i<6;i++)uApprovedSampler[i]=glGetUniformLocation(program,approvedNames[i]);
     uRoofOpacity=glGetUniformLocation(program,"u_roofOpacity");
     buildStatic();
     setupBuffer(staticVAO,staticVBO,GL_STATIC_DRAW,terrainMesh);
@@ -773,7 +828,7 @@ bool init(){
     return glGetError()==GL_NO_ERROR;
 }
 bool uploadTerrainTexture(int slot,const std::uint32_t* argb,int width,int height){
-    if(slot<0||slot>1||!argb||width<128||height<128||width>2048||height>2048){
+    if(slot<0||slot>7||!argb||width<128||height<128||width>2048||height>2048){
         error="A természetes talaj- vagy sziklafaltextúra hibás.";return false;
     }
     if(terrainTexture[slot])glDeleteTextures(1,&terrainTexture[slot]);
@@ -799,6 +854,18 @@ bool uploadTerrainTexture(int slot,const std::uint32_t* argb,int width,int heigh
         error="A telefon GPU-ja nem tudta feltölteni a valódi PBR alapanyagtextúrát.";return false;
     }
     return true;
+}
+void setApprovedTerrainActive(bool enable){
+    approvedTerrainActive=enable;
+    if(enable){
+        for(int slot=2;slot<=7;++slot){
+            if(!terrainTexture[slot]){
+                approvedTerrainActive=false;
+                error="A jóváhagyott SuperImage készlet hiányos.";
+                return;
+            }
+        }
+    }
 }
 void render(int width,int height,const FastFrame& f){
     if(!program)return;
@@ -851,6 +918,13 @@ void render(int width,int height,const FastFrame& f){
     if(uGround>=0)glUniform1i(uGround,0);
     glActiveTexture(GL_TEXTURE1);glBindTexture(GL_TEXTURE_2D,terrainTexture[1]);
     if(uCliff>=0)glUniform1i(uCliff,1);
+    for(int i=0;i<6;i++){
+        glActiveTexture(GL_TEXTURE0+2+i);
+        glBindTexture(GL_TEXTURE_2D,terrainTexture[i+2]);
+        if(uApprovedSampler[i]>=0)glUniform1i(uApprovedSampler[i],i+2);
+    }
+    if(uApprovedTerrain>=0)
+        glUniform1f(uApprovedTerrain,approvedTerrainActive?1.f:0.f);
     glBindVertexArray(staticVAO);
     glDrawArrays(GL_TRIANGLES,0,(GLsizei)terrainMesh.size());
 
