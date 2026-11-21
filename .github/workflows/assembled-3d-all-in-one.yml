@@ -1,0 +1,74 @@
+name: TAKS World - All-in-one 3D source scene APK review archive
+on:
+  push:
+    branches: [codex/taks-world-assembled-3d-review-2026-11-21]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  pack-source-models-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install offline 3D asset converters
+        run: python -m pip install --disable-pip-version-check 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2'
+      - name: Generate sourced review meshes and textures
+        run: |
+          python scripts/import_cc0_rocks.py
+          python scripts/import_cc0_foliage.py
+          python scripts/import_cc0_rigged_human.py
+      - name: Recover tested Android APK and 20 actual native GPU screenshot files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/review-apk /tmp/review-gpu
+          gh run download 44919737409 --repo "$GITHUB_REPOSITORY" --name TAKS_World_ASSEMBLED_3D_REVIEW_ONLY --dir /tmp/review-apk
+          gh run download 44919737381 --repo "$GITHUB_REPOSITORY" --name TAKS_World_3D_assembled_raster_review --dir /tmp/review-gpu
+          test -s /tmp/review-apk/TAKS_WORLD_ASSEMBLED_CAVE_3D_REVIEW_NOT_UPDATE.apk
+          test "$(find /tmp/review-gpu -maxdepth 1 -name '*.png' | wc -l)" -eq 20
+      - name: Package code + real model files + Android core + all screenshots
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import io,subprocess,zipfile,hashlib
+          output=Path('TAKS_WORLD_EGYBEN_3D_TESZT_FORRAS_APK.zip')
+          root='TAKS_WORLD/'
+          source=subprocess.check_output(['git','archive','--format=zip','--prefix='+root,'HEAD'])
+          apk=Path('/tmp/review-apk/TAKS_WORLD_ASSEMBLED_CAVE_3D_REVIEW_NOT_UPDATE.apk')
+          with zipfile.ZipFile(io.BytesIO(source)) as z, zipfile.ZipFile(output,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=6,allowZip64=True) as archive:
+              for item in z.infolist():
+                  if not item.is_dir():archive.writestr(item.filename,z.read(item.filename))
+              for model in sorted(Path('app/src/main/assets/models').glob('*')):
+                  if model.is_file():archive.write(model,root+str(model))
+              archive.write(apk,root+'APK/'+apk.name)
+              for p in sorted(Path('/tmp/review-gpu').glob('*.png')):
+                  archive.write(p,root+'3D_TESZTKEPEK/'+p.name)
+              for p in sorted(Path('/tmp/review-apk').glob('*.mp4')):
+                  archive.write(p,root+'MENU_ANIMACIO/'+p.name)
+              archive.writestr(root+'ATADAS_OLVASD_EL.txt',
+                  'TAKS WORLD - EGYBEN: natív Androidos 3D FORRÁSKÓD + 3D assetek + 20 képernyőkép + teszt APK.\n'
+                  'KIZÁRÓLAG TESZT. A barlang nem hitelesített Wonderwerk-felmérés, az állatok még prototípusok.\n'
+                  'TILOS kész játékként kiadni; új grafika csak egyenkénti tulajdonosi jóváhagyással.\n'
+                  'Az APK NEM helyben telepíthető UPDATE: eredeti aláírókulcs szükséges. NE TÖRÖLD A RÉGI APPOT!\n'
+                  'A meglévő menükép változatlan. 3D teszt dokumentáció: TAKS_WORLD_3D_OSSZEALLITAS_TESZT.md\n')
+          with zipfile.ZipFile(output) as archive:
+              assert archive.testzip() is None
+              assert len([x for x in archive.namelist() if x.endswith('.png') and '3D_TESZTKEPEK/' in x]) == 20
+              assert root+'app/src/main/cpp/CaveVolumeReview.h' in archive.namelist()
+              assert root+'engine/CauseWorld.cpp' in archive.namelist()
+              assert root+'APK/'+apk.name in archive.namelist()
+              print('Verified ZIP:',output,'size:',output.stat().st_size,'members:',len(archive.namelist()))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS_WORLD_3D_EGYBEN_TESZT_FORRAS_APK
+          path: TAKS_WORLD_EGYBEN_3D_TESZT_FORRAS_APK.zip
+          retention-days: 14
+          if-no-files-found: error
