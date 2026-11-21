@@ -17,10 +17,10 @@ struct Vec3 { float x,y,z; };
 struct Vertex { float x,y,z,nx,ny,nz,kind; };
 struct Mat4 { float a[16]{}; };
 std::string error;
-GLuint program=0,staticVAO=0,staticVBO=0,roofVAO=0,roofVBO=0,dynamicVAO=0,dynamicVBO=0;
+GLuint program=0,staticVAO=0,staticVBO=0,caveVAO=0,caveVBO=0,roofVAO=0,roofVBO=0,dynamicVAO=0,dynamicVBO=0;
 GLint uVP=-1,uRain=-1,uMud=-1,uClock=-1,uAnimation=-1,uWind=-1,uGround=-1,uCliff=-1,uRoofOpacity=-1;
 GLuint terrainTexture[2]={0,0};
-std::vector<Vertex> terrainMesh,roofMesh,objectsMesh,weatherMesh;
+std::vector<Vertex> terrainMesh,caveMesh,roofMesh,objectsMesh,weatherMesh;
 Vec3 add(Vec3 a,Vec3 b){return {a.x+b.x,a.y+b.y,a.z+b.z};}
 Vec3 sub(Vec3 a,Vec3 b){return {a.x-b.x,a.y-b.y,a.z-b.z};}
 Vec3 mul(Vec3 v,float s){return {v.x*s,v.y*s,v.z*s};}
@@ -238,6 +238,7 @@ bool cliffOpen(float x,float y) {
 }
 void buildStatic(){
     terrainMesh.clear();
+    caveMesh.clear();
     roofMesh.clear();
     // Nagyméretű háttértalaj, valódi mélységi teszttel; nincs látható "lebegő táblaszél".
     quad(terrainMesh,{-160.f,-.485f,-160.f},{-160.f,-.485f,160.f},
@@ -259,7 +260,7 @@ void buildStatic(){
         const float r=top(xx)*t,rr=top(xx)*tt;
         if(cliffOpen((x+xx)*.5f,(y+yy+r+rr)*.25f))continue;
         Vec3 a{x,y,cliffZ(x,y)},b{xx,r,cliffZ(xx,r)},c{xx,rr,cliffZ(xx,rr)},d{x,yy,cliffZ(x,yy)};
-        quad(terrainMesh,a,d,c,b,1.f);
+        quad(caveMesh,a,d,c,b,1.f);
     }
     // Close the full rock formation down to the ground behind the entrance.
     constexpr int depthSegments=30;
@@ -285,11 +286,11 @@ void buildStatic(){
         Vec3 a{1.5f*std::cos(angle),1.35f+1.5f*std::sin(angle),3.73f};
         Vec3 b{1.5f*std::cos(next),1.35f+1.5f*std::sin(next),3.73f};
         Vec3 aa{a.x*.86f,a.y,6.7f},bb{b.x*.86f,b.y,6.7f};
-        quad(terrainMesh,a,b,bb,aa,6.f);
+        quad(caveMesh,a,b,bb,aa,6.f);
     }
-    quad(terrainMesh,{-1.45f,surfaceHeight(-1.45f,3.75f),3.75f},{1.45f,surfaceHeight(1.45f,3.75f),3.75f},
+    quad(caveMesh,{-1.45f,surfaceHeight(-1.45f,3.75f),3.75f},{1.45f,surfaceHeight(1.45f,3.75f),3.75f},
         {1.45f,surfaceHeight(1.45f,6.7f),6.7f},{-1.45f,surfaceHeight(-1.45f,6.7f),6.7f},6.f);
-    quad(terrainMesh,{-1.1f,0.0f,6.7f},{1.1f,0.0f,6.7f},
+    quad(caveMesh,{-1.1f,0.0f,6.7f},{1.1f,0.0f,6.7f},
         {1.1f,2.7f,6.7f},{-1.1f,2.7f,6.7f},6.f);
     // The previous 8 angular polygon-stones are removed: natural stones are now true photogrammetry meshes.
 }
@@ -581,13 +582,15 @@ void shutdown(){
     if(terrainTexture[0]||terrainTexture[1])glDeleteTextures(2,terrainTexture);
     terrainTexture[0]=terrainTexture[1]=0;
     if(staticVBO)glDeleteBuffers(1,&staticVBO);
+    if(caveVBO)glDeleteBuffers(1,&caveVBO);
     if(roofVBO)glDeleteBuffers(1,&roofVBO);
     if(dynamicVBO)glDeleteBuffers(1,&dynamicVBO);
     if(staticVAO)glDeleteVertexArrays(1,&staticVAO);
+    if(caveVAO)glDeleteVertexArrays(1,&caveVAO);
     if(roofVAO)glDeleteVertexArrays(1,&roofVAO);
     if(dynamicVAO)glDeleteVertexArrays(1,&dynamicVAO);
     if(program)glDeleteProgram(program);
-    staticVBO=dynamicVBO=staticVAO=dynamicVAO=roofVAO=roofVBO=program=0;
+    staticVBO=dynamicVBO=staticVAO=dynamicVAO=caveVAO=caveVBO=roofVAO=roofVBO=program=0;
     taks::RealModels::shutdown();
 }
 bool init(){
@@ -615,6 +618,7 @@ bool init(){
     uRoofOpacity=glGetUniformLocation(program,"u_roofOpacity");
     buildStatic();
     setupBuffer(staticVAO,staticVBO,GL_STATIC_DRAW,terrainMesh);
+    setupBuffer(caveVAO,caveVBO,GL_STATIC_DRAW,caveMesh);
     setupBuffer(roofVAO,roofVBO,GL_STATIC_DRAW,roofMesh);
     setupBuffer(dynamicVAO,dynamicVBO,GL_STREAM_DRAW,objectsMesh);
     glEnable(GL_DEPTH_TEST);
@@ -697,6 +701,29 @@ void render(int width,int height,const FastFrame& f){
     if(uCliff>=0)glUniform1i(uCliff,1);
     glBindVertexArray(staticVAO);
     glDrawArrays(GL_TRIANGLES,0,(GLsizei)terrainMesh.size());
+
+    // The original placeholder cave is not a second cave: it is hidden while
+    // the eight-view PNG preview covers the world, then progressively returns
+    // when zooming inside. Ground, resources, NPCs and saves are untouched.
+    const float pngCover = f.pngCavePreview
+            ? taks::RoofCutaway::visibility(f.zoom) : 0.f;
+    const float oldCaveAlpha = 1.f - pngCover;
+    if(oldCaveAlpha > .001f && !caveMesh.empty()){
+        if(uRoofOpacity>=0)glUniform1f(uRoofOpacity,oldCaveAlpha);
+        if(oldCaveAlpha < .999f){
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+            glDepthMask(GL_FALSE);
+        }
+        glBindVertexArray(caveVAO);
+        glDrawArrays(GL_TRIANGLES,0,(GLsizei)caveMesh.size());
+        if(oldCaveAlpha < .999f){
+            glDepthMask(GL_TRUE);
+            glDisable(GL_BLEND);
+        }
+        if(uRoofOpacity>=0)glUniform1f(uRoofOpacity,1.f);
+    }
+
     glBindVertexArray(dynamicVAO);
     glBindBuffer(GL_ARRAY_BUFFER,dynamicVBO);
     glBufferData(GL_ARRAY_BUFFER,(GLsizeiptr)(objectsMesh.size()*sizeof(Vertex)),
@@ -711,7 +738,7 @@ void render(int width,int height,const FastFrame& f){
     // Draw the rock roof on top of the permanent scene. At close zoom, expose
     // the SAME cave interior and actors; neither simulation state nor the
     // original outside geometry is replaced or reset.
-    const float roofOpacity=taks::RoofCutaway::visibility(f.zoom);
+    const float roofOpacity=f.pngCavePreview?0.f:taks::RoofCutaway::visibility(f.zoom);
     if(roofOpacity>.001f && !roofMesh.empty()){
         glUseProgram(program);
         if(uRoofOpacity>=0)glUniform1f(uRoofOpacity,roofOpacity);
