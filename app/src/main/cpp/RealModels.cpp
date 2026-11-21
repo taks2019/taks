@@ -19,7 +19,7 @@ struct Model { GLuint vao=0,vbo=0,texture=0; GLsizei count=0;bool skinned=false;
 struct Joint { int parent=-1;float translation[3]={};float rotation[4]={0,0,0,1};float inverseBind[16]={}; };
 struct Clip { std::string name;float fps=30;int frames=0;std::vector<float> rotations,root; };
 struct HumanRig { std::array<Joint,53> joints{};std::vector<Clip> clips;bool valid=false; };
-std::array<Model,7> models;
+std::array<Model,8> models;
 HumanRig human;
 GLuint shader=0;
 GLint uVP=-1,uModel=-1,uTexture=-1,uCutoff=-1,uDaylight=-1,uRain=-1,uTint=-1;
@@ -398,13 +398,15 @@ bool upload(int id,const std::uint8_t* bytes,std::size_t size,
 }
 bool complete(){return models[0].vao&&models[0].texture&&models[1].vao&&models[1].texture;}
 bool hasRealHuman(){return models[6].vao!=0 && models[6].texture!=0 && models[6].count>=15000&&human.valid;}
+bool hasSurveyCave(){return models[7].vao!=0 && models[7].texture!=0 && models[7].count>=3;}
 const char* errorMessage(){return error.c_str();}
 void render(const float* viewProjection,const float* worldNodes,
             const float* grass,const float* trees,bool fernApproved,
             float worldClock,float rain,float playerX,float playerZ,
             float playerHeading,bool playerMoving,bool playerRunning,
             const float* npcPositions,float animationTime,float windStrength,
-            float windX,float windZ,float wetSeason,float soilMoisture){
+            float windX,float windZ,float wetSeason,float soilMoisture,
+            bool reviewSurveyCave){
  if(!shader||!viewProjection||!worldNodes||!grass||!trees||!npcPositions||!complete())return;
  glUseProgram(shader);
  glUniformMatrix4fv(uVP,1,GL_FALSE,viewProjection);
@@ -423,6 +425,18 @@ void render(const float* viewProjection,const float* worldNodes,
  glUniform3f(uTint,1.f,1.f,1.f);
  glActiveTexture(GL_TEXTURE0);
  const double now=animationNow();
+ // Only the cave INSPECTION view may display an explicitly supplied,
+ // licensed and metrically anchored scan. No automatic substitution in
+ // gameplay, collision, saves or previously approved visuals.
+ if(reviewSurveyCave && hasSurveyCave()){
+    glUniform1f(uFoliage,0.f);
+    glUniform1f(uCutoff,0.f);
+    glUniform1f(uSwayAmount,0.f);
+    glUniform3f(uTint,1.f,1.f,1.f);
+    // Exporter coordinates: entrance at local x=0,z=0; +z goes inward,
+    // height is in metres relative to surveyed entrance floor.
+    draw(models[7],0.f,3.65f,1.f,0.f);
+ }
  // Smaller rocks follow real, finite, collectible world inventory.
  for(int i=0;i<12;++i){
     const float* n=worldNodes+i*4;
