@@ -80,8 +80,15 @@ def menu_tap_accessible(label):
     (OUT/("touch_"+label+".txt")).write_text(touch_log,encoding="utf-8")
     if (label+" pressed" not in touch_log and
         "Original stone button selected: "+label not in touch_log):
-        raise AssertionError("Neither the original still-fallback nor the single video click handler fired: "+label+
-                             " (check overlay layout and z-order): "+touch_log[-2500:])
+        # Android emulator can churn the tiny logcat ring buffer before the
+        # test retrieves it. The VISIBLE UI transition is authoritative.
+        ui_after=dump()
+        (OUT/("ui_after_"+label+".xml")).write_text(ui_after,encoding="utf-8")
+        expected=("3D felbontás" if label=="BEÁLLÍTÁSOK" else "BARLANG BELSEJE")
+        if (expected not in ui_after and
+            not (label=="ÚJ JÁTÉK" and "Folytatás a mentett világból" in ui_after)):
+            raise AssertionError("Neither menu click log nor actual Android UI transition: "+label+
+                                 " (check overlay layout and z-order): "+touch_log[-2500:])
 
 def tap_text_or_description(label):
     """Click an ACTUAL clickable Android UI node by its displayed text or a11y label."""
@@ -151,12 +158,25 @@ def run():
     print("APPROVED MOVING MENU DIFFERENCE",menuDiff,flush=True)
     motion_log=adb("logcat","-d","-s","TAKS_MENU_MOTION:I","TAKS_MENU_MOTION:E",check=False).decode(errors="replace")
     (OUT/"02_menu_video_state.log").write_text(motion_log,encoding="utf-8")
-    if "SINGLE_SCENE: MP4 visible, static scene hidden" not in motion_log:
-        raise AssertionError("Moving MP4 never took over the single approved scene")
-    if menuDiff<.20:
-        raise AssertionError("Moving menu frames did not differ: static PNG still on screen")
-    if menuDiff>16:
-        raise AssertionError("Unstable/doubled composition or wrong background in moving menu")
+    # The emulator log buffer is noisy and may evict a first-frame log in
+    # seconds. The PIXELS prove video motion much better than a log string.
+    # Specifically: leaves and water move, central approved logo does NOT.
+    def region_change(box):
+        w,h=initial.size
+        rect=tuple(int(v*dim) for v,dim in zip(box,(w,h,w,h)))
+        a=initial.crop(rect)
+        b=again.crop(rect)
+        return float(sum(ImageStat.Stat(ImageChops.difference(a,b)).mean)/3)
+    leaf_change=region_change((.06,.02,.30,.32))
+    water_change=region_change((.08,.69,.40,.95))
+    logo_change=region_change((.40,.02,.68,.32))
+    print("REAL MENU FRAME PROOF",
+          "leaves",leaf_change,"water",water_change,"logo",logo_change,
+          "log_available",("SINGLE_SCENE" in motion_log),flush=True)
+    if menuDiff<.25 or leaf_change<.6 or water_change<.6:
+        raise AssertionError("Menu is still static or wind/water MP4 did not actually play")
+    if logo_change>1.2 or menuDiff>16:
+        raise AssertionError("Menu duplicates/overlays or shifts the approved logo instead of animating nature")
     fail_on_render_errors()
     menu_tap_accessible("BEÁLLÍTÁSOK")
     time.sleep(2)
@@ -228,6 +248,9 @@ def run():
     (OUT/"evidence.json").write_text(json.dumps({
         "menu_size":initial.size,
         "menu_repeated_frame_mean_difference":round(menuDiff,3),
+        "menu_leaves_motion":round(leaf_change,3),
+        "menu_water_motion":round(water_change,3),
+        "menu_logo_stability":round(logo_change,3),
         "settings_mean_difference":round(change,3),
         "game_mean_difference_vs_menu":round(difference(initial,game),3),
         "game_contrast":round(contrast(game),3),
