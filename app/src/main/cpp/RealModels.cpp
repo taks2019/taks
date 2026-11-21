@@ -449,17 +449,10 @@ void render(const float* viewProjection,const float* worldNodes,
  draw(models[1],-6.8f,1.9f,.88f,.6f);
  draw(models[1],5.9f,2.4f,.82f,2.1f);
  draw(models[1],6.8f,-2.8f,.95f,-.25f);
- for(int i=0;i<36;++i){
-    const float phase=float(i)*2.39996323f;
-    const float radius=3.7f+float((i*7)%11)*.48f;
-    const float x=std::cos(phase)*radius;
-    const float z=std::sin(phase)*(4.2f+float((i*3)%7)*.38f)-.8f;
-    if(std::abs(x)<1.45f&&z>1.2f)continue;
-    const float dx=x-playerX,dz=z-playerZ;
-    if(dx*dx+dz*dz<1.8f)continue;
-    const float scale=.62f+.26f*(.5f+.5f*std::sin(float(i)*1.73f));
-    draw(models[0],x,z,scale,phase*.7f);
- }
+ // Do not blanket the clearing with 36 copies of the same scanned rock.
+ // They caused the rejected repeated 'lumps' despite being genuine meshes.
+ // Keep only finite collectible stones and the distinctly larger sourced
+ // geological outcrops above; gameplay and inventory remain unchanged.
  // Genuine published botanical geometry; no generated tube/ball foliage.
  if(models[3].vao && models[3].texture){
     glUniform1f(uFoliage,1.f);
