@@ -277,6 +277,18 @@ int main(){
     std::string token;
     while(savedParts>>token)oldFields.push_back(token);
     assert(oldFields.size()>15);
+    // V11 persists one exploration waypoint per NPC. Historical V4/V5/V6
+    // files did not have it. Remove exactly these four fields when building
+    // older fixtures from today's canonical save.
+    const auto stripModernNpcFields=[](std::vector<std::string>& fields){
+        constexpr std::size_t npcStart=45; // 27 actor/state + 12 nodes + 4 stock + 1 partial tick + header
+        for(int i=taks::World::npcCount-1;i>=0;--i){
+            const std::size_t index=npcStart+std::size_t(i)*11+10;
+            assert(index<fields.size());
+            fields.erase(fields.begin()+index);
+        }
+    };
+    stripModernNpcFields(oldFields);
     // v6 appends complete animal/plant ecology after the old v5 build sites.
     const auto ecoBegin=std::find(oldFields.begin(),oldFields.end(),"ECO4");
     assert(ecoBegin!=oldFields.end());
@@ -307,6 +319,7 @@ int main(){
         }
     }
     assert(oldV5Fields.size()>13);
+    stripModernNpcFields(oldV5Fields);
     oldV5Fields[0]="TAKS_NATIVE_5";
     std::ostringstream oldV5Text;
     for(std::size_t i=0;i<oldV5Fields.size();++i){
@@ -321,6 +334,7 @@ int main(){
     // V6 ECO1 and V7 ECO2 remain readable; V8 adds saved hydrology.
     std::vector<std::string> v6Fields;
     {std::istringstream in(taks::World().save());while(in>>token)v6Fields.push_back(token);}
+    stripModernNpcFields(v6Fields);
     auto eco3=std::find(v6Fields.begin(),v6Fields.end(),"ECO4");
     assert(eco3!=v6Fields.end());
     const std::size_t ecoIndex=static_cast<std::size_t>(eco3-v6Fields.begin());
