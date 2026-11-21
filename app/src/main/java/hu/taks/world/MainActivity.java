@@ -237,16 +237,39 @@ public final class MainActivity extends Activity {
     private void restoreApprovedGroundOnGlThread(){
         approvedGroundReady=false;
         nativeSetApprovedTerrainActive(false);
-        if(!ApprovedTerrainPack.present(this))return;
+        // The user's manually selected texture copy ALWAYS wins. If none
+        // exists, an APK baked on the PC with verified SuperImage.zip images
+        // boots directly into photographically textured real 3D terrain.
         Bitmap[] copies=null;
-        try{
-            copies=ApprovedTerrainPack.load(this);
-            if(!uploadApprovedGroundOnGlThread(copies))
-                android.util.Log.e("TAKS_GROUND","A jóváhagyott PNG-k nem kerültek a GPU-ra.");
-        }catch(Exception ex){
-            android.util.Log.e("TAKS_GROUND","Sérült talajmásolatok; az eredeti ZIP változatlan.",ex);
-        }finally{
-            ApprovedTerrainPack.recycle(copies);
+        if(ApprovedTerrainPack.present(this)){
+            try{
+                copies=ApprovedTerrainPack.load(this);
+                if(uploadApprovedGroundOnGlThread(copies)){
+                    android.util.Log.i("TAKS_GROUND","APPROVED TERRAIN ACTIVE: user's original ZIP import (6 textures)");
+                    return;
+                }
+            }catch(Exception ex){
+                android.util.Log.e("TAKS_GROUND","Corrupt on-device approved material copies",ex);
+            }finally{
+                ApprovedTerrainPack.recycle(copies);
+                copies=null;
+            }
+        }
+        // Restore an APK-native pack without the Android ZIP picker. A failed
+        // saved copy never blocks a complete, separately checked bundled pack.
+        if(ApprovedTerrainPack.bundledPresent(this)){
+            try{
+                copies=ApprovedTerrainPack.loadBundled(this);
+                if(uploadApprovedGroundOnGlThread(copies))
+                    android.util.Log.i("TAKS_GROUND","APPROVED TERRAIN ACTIVE: bundled PC verified atlas (6 textures)");
+                else android.util.Log.e("TAKS_GROUND","Bundled terrain GPU upload failed");
+            }catch(Exception ex){
+                android.util.Log.e("TAKS_GROUND","The bundled SuperImage atlas is incomplete",ex);
+            }finally{
+                ApprovedTerrainPack.recycle(copies);
+            }
+        }else{
+            android.util.Log.w("TAKS_GROUND","No approved surface atlas in APK; use PC build with SuperImage.zip or Settings manual import");
         }
     }
     private void selectApprovedTerrainZip(){
