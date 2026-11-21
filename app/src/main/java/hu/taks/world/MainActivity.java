@@ -47,6 +47,7 @@ public final class MainActivity extends Activity {
     private native void nativeOnSurfaceCreated(String fragmentSource);
     private native void nativeRender();
     private native float[] nativePlayerCoordinates();
+    private native void nativeSetCavePreview(boolean on);
     private native void nativeSetView(float angle,float pitch,float zoom);
     private native String nativeRendererError();
     private native float[] nativeMenuCues();
@@ -748,6 +749,7 @@ public final class MainActivity extends Activity {
             if(caveOverlay!=null && caveOverlay.hasImages()){
                 addVertical(body,"8 irányú barlang PNG - TESZT előnézet BE/KI",()->{
                     caveOverlay.setPreviewEnabled(!caveOverlay.isPreviewEnabled());
+                    nativeSetCavePreview(caveOverlay.isPreviewEnabled());
                     refreshCaveOverlay();refreshScene();
                 });
             }
@@ -980,21 +982,13 @@ public final class MainActivity extends Activity {
         caveOverlay=new IsometricCaveOverlay(this);
         root.addView(caveOverlay,new FrameLayout.LayoutParams(-1,-1));
         gameHud.add(caveOverlay);
+        nativeSetCavePreview(caveOverlay.isPreviewEnabled());
         nativeSetView(orbit,cameraPitch,zoom);
         refreshCaveOverlay();
 
-        LinearLayout header=new LinearLayout(this);header.setOrientation(LinearLayout.VERTICAL);
-        header.setPadding(dp(15),dp(10),dp(10),dp(10));
-        skin(header,"CARD");
-        FrameLayout gameplayLogo=new FrameLayout(this);
-        gameplayLogo.setPadding(dp(3),dp(2),dp(3),dp(2));
-        skin(gameplayLogo,"LOGO");
-        gameplayLogo.addView(originalLogoOrTitle(),new FrameLayout.LayoutParams(-1,-1));
-        gameplayLogo.addView(new LogoEnvironmentView(this),new FrameLayout.LayoutParams(-1,-1));
-        header.addView(gameplayLogo,new LinearLayout.LayoutParams(dp(124),dp(77)));
-        header.addView(caption("TAKS ENGINE · ÉLŐ VILÁG",10,0xFFC3D1C5));
-        FrameLayout.LayoutParams hp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);
-        hp.setMargins(dp(12),dp(12),0,0);root.addView(header,hp);gameHud.add(header);
+        // Deliberately NO in-game logo or branded header. The main menu,
+        // its original background and logo remain COMPLETELY unchanged.
+        // Only gameplay loses the large upper-left graphic panel.
 
         hint=caption("Mozgás: bal · Futás: nyomva · Kamera: jobb · Zoom: két ujjal",11,0xFFECE9DC);
         hint.setPadding(dp(10),dp(7),dp(10),dp(7));
