@@ -1050,8 +1050,8 @@ public final class MainActivity extends Activity {
                 boolean fernOk=loadAuthenticRockAsset(4,"models/fern_02");
                 boolean humanOk=loadRiggedHumanAsset();
                 boolean treeOk=loadAuthenticRockAsset(5,"wonderwerk/akac");
-                boolean groundOk=loadRealPbrSurface(0,"wonderwerk/talaj");
-                boolean cliffOk=loadRealPbrSurface(1,"wonderwerk/dolomit");
+                boolean groundOk=loadRealPbrSurface(0,"models/ground_sandy_gravel");
+                boolean cliffOk=loadRealPbrSurface(1,"models/wall_cliff_side");
                 cavePreviewReady=loadReviewCaveImages();
                 nativeSetCavePreview(cavePreviewReady && cavePreviewWanted);
                 runOnUiThread(()->{
