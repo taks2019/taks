@@ -211,97 +211,10 @@ void addWater(const FastFrame& scene){
         }
     }
 }
-Vec3 animalPoint(float x,float z,float groundY,float heading,float lx,float ly,float lz){
-    const float c=std::cos(heading),s=std::sin(heading);
-    return {x+lx*c+lz*s,groundY+ly,z-lx*s+lz*c};
-}
-void ellipsoid(std::vector<Vertex>& v,float x,float z,float groundY,float heading,
-               float lx,float ly,float lz,float rx,float ry,float rz,float material){
-    constexpr int rings=8,sides=16;
-    Vec3 points[rings+1][sides]{};
-    for(int r=0;r<=rings;++r){
-        const float latitude=-.5f*PI+PI*float(r)/float(rings);
-        const float radial=std::cos(latitude),vertical=std::sin(latitude);
-        for(int s=0;s<sides;++s){
-            const float longitude=2.f*PI*float(s)/float(sides);
-            points[r][s]=animalPoint(x,z,groundY,heading,
-                lx+rx*radial*std::cos(longitude),
-                ly+ry*vertical,
-                lz+rz*radial*std::sin(longitude));
-        }
-    }
-    for(int r=0;r<rings;++r)for(int s=0;s<sides;++s){
-        const int next=(s+1)%sides;
-        const Vec3 a=points[r][s],b=points[r+1][s];
-        const Vec3 c=points[r+1][next],d=points[r][next];
-        triangle(v,a,b,c,material);triangle(v,a,c,d,material);
-    }
-}
-void addWildlife(const FastFrame& scene){
-    for(int i=0;i<8;++i){
-        const float* animal=scene.animals+i*6;
-        if(animal[3]<.5f)continue;
-        const float x=animal[0],z=animal[1],kind=animal[2];
-        const bool thirsty=animal[4]>35.f,moving=thirsty||animal[5]>45.f;
-        float targetX=x,targetZ=z+1.f,best=1.0e12f;
-        if(thirsty){
-            for(int w=0;w<2;++w){
-                const float* water=scene.waters+w*4;
-                if(water[3]<=.015f)continue;
-                const float dx=water[0]-x,dz=water[1]-z,d=dx*dx+dz*dz;
-                if(d<best){best=d;targetX=water[0];targetZ=water[1];}
-            }
-        }else if(kind<.5f){
-            for(int g=0;g<4;++g){
-                const float* grass=scene.grass+g*5;
-                if(grass[2]<=.01f)continue;
-                const float dx=grass[0]-x,dz=grass[1]-z,d=dx*dx+dz*dz;
-                if(d<best){best=d;targetX=grass[0];targetZ=grass[1];}
-            }
-        }else{
-            for(int j=0;j<8;++j){
-                const float* prey=scene.animals+j*6;
-                if(prey[3]<.5f||prey[2]>.5f)continue;
-                const float dx=prey[0]-x,dz=prey[1]-z,d=dx*dx+dz*dz;
-                if(d>1.0e-6f&&d<best){best=d;targetX=prey[0];targetZ=prey[1];}
-            }
-        }
-        const float heading=std::atan2(targetX-x,targetZ-z);
-        const float ground=surfaceHeight(x,z);
-        const float scale=kind>.5f?.88f:1.0f;
-        const float coat=kind>.5f?5.f:7.f;
-        const float sway=moving?.19f:.025f;
-        const float phase=scene.animationTime*4.1f+float(i)*1.7f;
-        ellipsoid(objectsMesh,x,z,ground,heading,0.f,.70f,0.f,
-                  .38f*scale,.29f*scale,.67f*scale,coat);
-        axisBar(objectsMesh,animalPoint(x,z,ground,heading,0,.72f,.40f*scale),
-                animalPoint(x,z,ground,heading,0,.88f,.63f*scale),.14f*scale,coat,7);
-        ellipsoid(objectsMesh,x,z,ground,heading,0.f,.94f,.75f*scale,
-                  .22f*scale,.20f*scale,.28f*scale,coat);
-        ellipsoid(objectsMesh,x,z,ground,heading,0.f,.84f,1.00f*scale,
-                  .12f*scale,.10f*scale,.12f*scale,2.f);
-        for(int side=-1;side<=1;side+=2){
-            ellipsoid(objectsMesh,x,z,ground,heading,.17f*scale*side,.99f,.86f*scale,
-                      .028f,.028f,.028f,2.f);
-            axisBar(objectsMesh,animalPoint(x,z,ground,heading,.13f*scale*side,1.08f,.65f*scale),
-                    animalPoint(x,z,ground,heading,.18f*scale*side,1.19f,.62f*scale),
-                    .035f*scale,coat,5);
-        }
-        axisBar(objectsMesh,animalPoint(x,z,ground,heading,0,.69f,-.61f*scale),
-                animalPoint(x,z,ground,heading,0,.40f,-.91f*scale),.033f*scale,coat,5);
-        for(int leg=0;leg<4;++leg){
-            const float side=(leg%2==0)?-1.f:1.f;
-            const bool front=leg<2;
-            const float hipZ=(front?.38f:-.40f)*scale;
-            const float stride=std::sin(phase+(front?0.f:PI)+(side>0?PI:0.f))*sway;
-            const Vec3 hip=animalPoint(x,z,ground,heading,side*.23f*scale,.53f,hipZ);
-            const Vec3 knee=animalPoint(x,z,ground,heading,side*.24f*scale,.29f,hipZ+stride*.45f);
-            const Vec3 hoof=animalPoint(x,z,ground,heading,side*.24f*scale,.045f,hipZ+stride);
-            axisBar(objectsMesh,hip,knee,.071f*scale,coat,6);
-            axisBar(objectsMesh,knee,hoof,.046f*scale,coat,6);
-        }
-    }
-}
+// Wildlife follows the unchanged real native ecology and causes. The old
+// ellipsoid/axisBar fake animals were visibly unacceptable: no gomboc models
+// are rendered. Verified species-specific textured geometry must be approved
+// before any wild animals become visible again.
 float cliffZ(float x,float y){return 3.63f+.13f*std::sin(x*.74f+y*.28f)+.12f*std::sin(x*2.3f+y*2.1f);}
 void buildStatic(){
     terrainMesh.clear();
@@ -888,7 +801,7 @@ void render(int width,int height,const FastFrame& f){
     Mat4 vp=multiply(orthographic(effectiveZoom*.99f*aspect,effectiveZoom*.99f),lookAt(eye,focus));
 
     objectsMesh.clear();
-    addWater(f);addWildlife(f);addMudFootprints(f);addResources(f);addBuildings(f);
+    addWater(f);addMudFootprints(f);addResources(f);addBuildings(f);
     const Vec3 right{std::cos(yaw),0,std::sin(yaw)};
     addWeather(f,right);
     addWaterCollector(f);addHearth(f,right);
