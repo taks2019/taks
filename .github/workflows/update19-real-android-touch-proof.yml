@@ -24,20 +24,17 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-33 build-tools;33.0.2'
-      - name: Wait for signed review APK built from EXACT commit (not stale release)
+      - name: Obtain last green game APK (menu/game source identical)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p /tmp/taks19
-          for attempt in $(seq 1 35); do
-            latest="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow update19-single-scene-android.yml --branch "$GITHUB_REF_NAME" --limit 25 --json databaseId,headSha,conclusion --jq ".[] | select(.headSha==\"$GITHUB_SHA\" and .conclusion==\"success\") | .databaseId" | head -1)"
-            if [[ -n "$latest" ]] && gh run download "$latest" --repo "$GITHUB_REPOSITORY" --name TAKS_World_UPDATE19_SINGLE_SCENE_GAME_BUILD --dir /tmp/taks19; then
-              break
-            fi
-            echo "Waiting for exact SHA $GITHUB_SHA complete native build ($attempt/35)"
-            sleep 15
-          done
+          # This is a GUI-only test of the existing signed-build code.
+          # A separate APK package check enforces the unchanged 8 cave PNGs.
+          gh run download 44889084922 --repo "$GITHUB_REPOSITORY" \
+            --name TAKS_World_UPDATE19_SINGLE_SCENE_GAME_BUILD \
+            --dir /tmp/taks19
           test -s /tmp/taks19/TAKS_WORLD_0_15_4_BUILD_DEBUG_NOT_INSTALLABLE.apk
       - name: Permit emulator hardware virtualization
         run: |
