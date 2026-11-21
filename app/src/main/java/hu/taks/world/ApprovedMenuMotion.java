@@ -34,23 +34,26 @@ final class ApprovedMenuMotion extends FrameLayout
     private static final String VIDEO="menu/wonderwerk_loop.mp4";
     private final TextureView video;
     private final View captions;
+    private final View[] touches=new View[4];
     private MediaPlayer player;
     private Surface surface;
     private boolean paused;
     private boolean prepared;
     private boolean renderedFirstFrame;
 
-    static ApprovedMenuMotion create(Context context){
+    static ApprovedMenuMotion create(Context context,Runnable newGame,
+                                     Runnable settings,Runnable credits,Runnable exit){
         try(InputStream input=context.getAssets().open(VIDEO)){
             if(input.read()<0)return null;
-            return new ApprovedMenuMotion(context);
+            return new ApprovedMenuMotion(context,
+                new Runnable[]{newGame,settings,credits,exit});
         }catch(Exception noMedia){
             android.util.Log.w("TAKS_MENU_MOTION","Approved menu animation not bundled; original image remains");
             return null;
         }
     }
 
-    private ApprovedMenuMotion(Context context){
+    private ApprovedMenuMotion(Context context,Runnable[] actions){
         super(context);
         setClickable(false);
         setFocusable(false);
@@ -110,6 +113,26 @@ final class ApprovedMenuMotion extends FrameLayout
             }
         };
         addView(captions,new LayoutParams(-1,-1,Gravity.CENTER));
+        // Media/TextureView can sit in a separate compositor surface on some
+        // Android versions and steal hits from its lower sibling. Four clear
+        // hit targets above the video forward to the SAME original handlers,
+        // at the SAME approved pixel coordinates; no menu source is changed.
+        final String[] accessible={"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐ","KILÉPÉS"};
+        for(int i=0;i<4;++i){
+            final int n=i;
+            View target=new View(context);
+            target.setContentDescription(accessible[i]);
+            target.setClickable(true);
+            target.setFocusable(true);
+            target.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+            target.setBackgroundColor(Color.TRANSPARENT);
+            target.setOnClickListener(v->{
+                android.util.Log.i("TAKS_MENU_TOUCH","Original stone button selected: "+accessible[n]);
+                actions[n].run();
+            });
+            touches[i]=target;
+            addView(target,new LayoutParams(1,1,Gravity.LEFT|Gravity.TOP));
+        }
     }
 
     @Override protected void onSizeChanged(int w,int h,int ow,int oh){
@@ -119,6 +142,17 @@ final class ApprovedMenuMotion extends FrameLayout
         LayoutParams v=new LayoutParams(Math.max(2,Math.round(1664f*ratio)),
                 Math.max(2,Math.round(768f*ratio)),Gravity.CENTER);
         video.setLayoutParams(v);
+        final float ox=(w-1664f*ratio)*.5f;
+        final float oy=(h-768f*ratio)*.5f;
+        final float[] rows={.443f,.566f,.687f,.809f};
+        final float[] heights={.120f,.120f,.115f,.120f};
+        for(int i=0;i<4;i++){
+            LayoutParams target=new LayoutParams(Math.max(12,Math.round(414f*ratio)),
+                   Math.max(12,Math.round(768f*heights[i]*ratio)),Gravity.LEFT|Gravity.TOP);
+            target.leftMargin=Math.round(ox+1664f*.396f*ratio);
+            target.topMargin=Math.round(oy+768f*rows[i]*ratio);
+            touches[i].setLayoutParams(target);
+        }
         captions.invalidate();
     }
 
