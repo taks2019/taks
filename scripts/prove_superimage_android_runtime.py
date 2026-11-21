@@ -82,6 +82,25 @@ def menu_tap_accessible(label):
         raise AssertionError("Genuine Android touch hitbox did not receive click "+label+
                              " (check layout and z-order): "+touch_log[-2500:])
 
+def tap_text_or_description(label):
+    """Click an ACTUAL clickable Android UI node by its displayed text or a11y label."""
+    xml=dump()
+    root=ET.fromstring(xml[xml.index("<hierarchy"):])
+    for node in root.iter("node"):
+        matches=(node.attrib.get("text","")==label or
+                 node.attrib.get("content-desc","")==label)
+        if not matches or node.attrib.get("clickable")!="true":
+            continue
+        coords=list(map(int,re.findall(r"-?\\d+",node.attrib.get("bounds",""))))
+        if len(coords)!=4 or coords[2]-coords[0]<15 or coords[3]-coords[1]<15:
+            continue
+        x=(coords[0]+coords[2])//2
+        y=(coords[1]+coords[3])//2
+        print("CLICK REAL ANDROID CONTROL",label,coords,flush=True)
+        adb("shell","input","tap",str(x),str(y))
+        return
+    raise AssertionError("Real Android clickable control NOT FOUND: "+label)
+
 def fail_on_render_errors():
     logs=log_line()
     if "Fast GLES3 init:" in logs or "FATAL EXCEPTION" in logs:
@@ -147,7 +166,16 @@ def run():
     if difference(initial,home)>8:
         raise AssertionError("Returning from Settings does not restore the same original menu")
     menu_tap_accessible("ÚJ JÁTÉK")
-    time.sleep(9)
+    time.sleep(2)
+    # A persisted test world is expected after a previous run or snapshot.
+    # The modal is NOT the game. Click Continue so the GLES world starts.
+    chooser=dump()
+    (OUT/"05_new_game_selector.xml").write_text(chooser,encoding="utf-8")
+    if "Folytatás a mentett világból" in chooser:
+        tap_text_or_description("Folytatás a mentett világból")
+    elif "Új világ – előbb biztonsági mentés" in chooser:
+        raise AssertionError("New-world modal found without the safe Continue action")
+    time.sleep(10)
     game=screenshot("05_native_isometric_gameplay")
     print("PLAYABLE GAME",game.size,"contrast",contrast(game),
           "diff from menu",difference(initial,game),flush=True)
@@ -157,17 +185,20 @@ def run():
         raise AssertionError("3D renderer blank or single-colour; do not mark graphics complete")
     ui=dump()
     (OUT/"05_gameplay_accessibility.xml").write_text(ui,encoding="utf-8")
-    # The GLES game is behind Android View HUD. UIAutomator on API33 may
-    # omit elevated clickable TextViews (screen captures show the controls).
-    # Keep this warning, and require the cave view button to actually change
-    # pixels before declaring a native gameplay pass.
-    if "BARLANG BELSEJE" not in ui and "barlang belső" not in ui:
-        print("WARNING: gameplay HUD absent in UIAutomator dump; verifying real cave toggle",flush=True)
+    # A chooser or static main menu must NEVER satisfy gameplay proof:
+    # require the native world HUD and the cave inspection click target.
+    if "Folytatás a mentett világból" in ui or "ÚJ JÁTÉK MEGERŐSÍTÉSE" in ui:
+        raise AssertionError("Saved-game modal still visible, not native 3D gameplay")
+    if "BARLANG BELSEJE" not in ui or "ÉPÍTÉS" not in ui:
+        raise AssertionError("Native 3D gameplay HUD is missing; do NOT accept the screenshot as gameplay")
     # Cave inspection changes the camera in place without rewriting world.
-    w,h=game.size
-    adb("shell","input","tap",str(round(w*.09)),str(round(h*.08)))
+    tap_text_or_description("BARLANG BELSEJE")
     time.sleep(4)
     cave=screenshot("06_real_cave_inspection")
+    cave_xml=dump()
+    (OUT/"06_cave_inspection_accessibility.xml").write_text(cave_xml,encoding="utf-8")
+    if "VISSZA A TÁJHOZ" not in cave_xml:
+        raise AssertionError("Cave button did not switch to inspection mode; screenshot change is insufficient")
     if difference(game,cave)<3:
         raise AssertionError("Cave interior button did not alter native 3D view")
     fail_on_render_errors()
