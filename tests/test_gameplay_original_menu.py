@@ -14,10 +14,12 @@ class GameplayAndOriginalMenu(unittest.TestCase):
         self.assertIn('{"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐ","KILÉPÉS"}', RESTORED)
         self.assertIn("this::newWorldFromMenu,this::showSettings", MAIN)
         self.assertIn("this::showCredits,this::confirmExit", MAIN)
-    def test_perspective_change_blends_in_one_pass(self):
+    def test_one_grounded_png_at_a_time_without_double_silhouettes(self):
         self.assertIn("vec4 texel=mix(first,second",SPRITE)
         self.assertIn("drawTexture(textures[index0],billboard,alpha,tint)",SPRITE)
         self.assertNotIn("drawTexture(textures[index1]",SPRITE)
-        self.assertIn("sharedOpaqueFootRow=444.f",SPRITE)
+        self.assertIn("sourceFootRow=444.f/512.f",SPRITE) 
+        self.assertIn("int index1=index0",SPRITE) 
+        self.assertIn("CaveBillboard::aligned",SPRITE)
 
 if __name__=="__main__":unittest.main()

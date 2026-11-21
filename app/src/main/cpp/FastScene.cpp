@@ -507,6 +507,24 @@ uniform sampler2D u_cliffTexture;
 uniform float u_roofOpacity;
 out vec4 fragColor;
 float hash(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
+// The 512px gravel picture previously tiled every 0.7 metres, resulting in
+// a giant repeated brown wallpaper. Blend four DIFFERENT continuous
+// sample offsets over large world cells, and retain fine soil detail.
+vec2 gravelOffset(vec2 i){
+    return vec2(hash(vec3(i,1.17)),hash(vec3(i,7.31)))*11.23;
+}
+vec3 gravelNoTile(vec2 world){
+    vec2 cell=world*.145;
+    vec2 tile=floor(cell);
+    vec2 f=fract(cell);
+    vec2 w=f*f*(3.0-2.0*f);
+    vec2 uv=world*.39;
+    vec3 a=texture(u_groundTexture,uv+gravelOffset(tile)).rgb;
+    vec3 b=texture(u_groundTexture,uv+gravelOffset(tile+vec2(1.,0.))).rgb;
+    vec3 c=texture(u_groundTexture,uv+gravelOffset(tile+vec2(0.,1.))).rgb;
+    vec3 d=texture(u_groundTexture,uv+gravelOffset(tile+vec2(1.,1.))).rgb;
+    return mix(mix(a,b,w.x),mix(c,d,w.x),w.y);
+}
 void main(){
     float grain=hash(floor(wPos*12.));
     float lines=.5+.5*sin(wPos.y*8.5+sin(wPos.x*.69+wPos.z*.21)*1.8);
@@ -515,13 +533,13 @@ void main(){
     if(matId==14){fragColor=vec4(.63,.49,.28,.15);return;}
     if(matId==15){fragColor=vec4(.61,.59,.54,(materialValue-15.)*.39);return;}
     if(matId==0){
-        // Two scales of the SAME authentic gravel photograph break up the
-        // old coarse diagonal tile pattern. Fine grit stays visible near feet.
-        vec3 micro=texture(u_groundTexture,wPos.xz*1.41).rgb;
-        vec3 macro=texture(u_groundTexture,vec2(wPos.z*.19,wPos.x*.23)).rgb;
-        float blendWeight=clamp(.45+.25*sin(wPos.x*.38+wPos.z*.27)*
-                                        sin(wPos.z*.51-wPos.x*.16),0.,1.);
-        base=mix(macro,micro,blendWeight)*(.90+.10*grain);
+        // Real photographed gravel: world-space stochastic anti-tiling,
+        // no invented textures and no repeating diagonal wallpaper.
+        vec3 micro=texture(u_groundTexture,
+                          mat2(.809,.588,-.588,.809)*wPos.xz*1.05).rgb;
+        vec3 macro=gravelNoTile(wPos.xz);
+        float blendWeight=.18+.13*grain;
+        base=mix(macro,micro,blendWeight)*(.94+.06*grain);
         // Soil dampness/mud follows saved ecological simulation and darkens
         // the photographic surface instead of painting a new brown slab.
         float drainage=.30*sin(wPos.x*1.54+wPos.z*.81)+.17*sin(wPos.z*3.8-wPos.x*2.9);
@@ -750,7 +768,7 @@ void render(int width,int height,const FastFrame& f){
     const float caveCover = f.pngCavePreview && !f.inspectCave
             ? taks::RoofCutaway::visibility(effectiveZoom) : 0.f;
     if(caveCover>.001f)
-        taks::CaveSprite::render(vp.a,f.yaw,effectiveZoom,
+        taks::CaveSprite::render(vp.a,f.yaw,f.pitch,effectiveZoom,
             surfaceHeight(0.f,2.2f),f.clock,f.rain,caveCover);
 
     // Draw the rock roof on top of the permanent scene. At close zoom, expose

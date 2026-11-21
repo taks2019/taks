@@ -47,8 +47,8 @@ class ActualGameplayAndMenuMotion(unittest.TestCase):
 
     def test_inplace_update_package_unchanged(self):
         self.assertIn("applicationIdSuffix '.menufixedgame'",GRADLE)
-        self.assertIn("versionCode 19",GRADLE)
-        self.assertIn("versionName '0.15.4'",GRADLE)
+        self.assertIn("versionCode 20",GRADLE)
+        self.assertIn("versionName '0.15.5'",GRADLE)
 
     @unittest.skipUnless(CLIP.is_file(),"Generated in GitHub Actions before test")
     def test_video_is_actually_moving_not_static_png_reencoded(self):
