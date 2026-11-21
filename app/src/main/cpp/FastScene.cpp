@@ -82,6 +82,39 @@ void sculptedTerrainGrid(std::vector<Vertex>& dst,float x0,float x1,
         const auto& b=grid[index(i+1,j)];
         const auto& c=grid[index(i+1,j+1)];
         const auto& d=grid[index(i,j+1)];
+        // A 4m outer cell meets eight 0.5m edges. Stitch every edge
+        // vertex to the exact analytic height: no gaps in any camera view.
+        const float eps=.0001f;
+        const bool west=skipCentralRegion && std::abs(xb-(-28.f))<eps &&
+                         za>=-28.f && zb<=40.f;
+        const bool east=skipCentralRegion && std::abs(xa-28.f)<eps &&
+                         za>=-28.f && zb<=40.f;
+        const bool south=skipCentralRegion && std::abs(zb-(-28.f))<eps &&
+                          xa>=-28.f && xb<=28.f;
+        const bool north=skipCentralRegion && std::abs(za-40.f)<eps &&
+                          xa>=-28.f && xb<=28.f;
+        if(west||east||south||north){
+            const int segments=8;
+            const TerrainPoint& farCorner=(west||south)?a:(east?b:d);
+            auto boundaryPoint=[&](int step){
+                const float t=float(step)/float(segments);
+                const float x=(west?xb:(east?xa:xa+(xb-xa)*t));
+                const float z=(south?zb:(north?za:za+(zb-za)*t));
+                float nx,ny,nz;
+                taks::WorldTerrain::normal(x,z,nx,ny,nz);
+                return TerrainPoint{{x,surfaceHeight(x,z),z},{nx,ny,nz}};
+            };
+            for(int k=0;k<segments;++k){
+                const auto p0=boundaryPoint(k),p1=boundaryPoint(k+1);
+                push(farCorner);push(p0);push(p1);
+            }
+            // The remaining triangle keeps the outer coarse edge whole.
+            if(west){push(a);push(d);push(c);}
+            else if(east){push(b);push(c);push(d);}
+            else if(south){push(a);push(c);push(b);}
+            else {push(d);push(c);push(b);}
+            continue;
+        }
         push(a);push(d);push(c);
         push(a);push(c);push(b);
     }
@@ -551,6 +584,21 @@ vec3 photoDolomite(vec3 p,vec3 n){
     vec3 sideZ=texture(u_cliffTexture,p.xy*scale+vec2(.34,.31)).rgb;
     return sideX*weights.x+topY*weights.y+sideZ*weights.z;
 }
+// Ground material masks follow WORLD coordinates, not isometric tile images.
+// A camera orbit sees the same real XYZ surface from any of its 8 directions.
+float soilNoise(vec2 p){
+    vec2 i=floor(p),f=fract(p);
+    vec2 t=f*f*(3.0-2.0*f);
+    float a=hash(vec3(i,2.93));
+    float b=hash(vec3(i+vec2(1.,0.),2.93));
+    float c=hash(vec3(i+vec2(0.,1.),2.93));
+    float d=hash(vec3(i+vec2(1.,1.),2.93));
+    return mix(mix(a,b,t.x),mix(c,d,t.x),t.y);
+}
+float soilField(vec2 p){
+    return .53*soilNoise(p*.115)+.30*soilNoise(p*.34+vec2(17.,-9.))
+          +.17*soilNoise(p*.91+vec2(-22.,8.));
+}
 float geologicalScree(vec3 p,vec3 n){
     // Same footprint as WorldTerrain::height: stone shoulder mounds
     // around both sides of the 3 metre cave opening.
@@ -579,27 +627,40 @@ void main(){
         vec3 macro=gravelNoTile(wPos.xz);
         float blendWeight=.18+.13*grain;
         base=mix(macro,micro,blendWeight)*(.94+.06*grain);
-        // Soil dampness/mud follows saved ecological simulation and darkens
-        // the photographic surface instead of painting a new brown slab.
-        float drainage=.30*sin(wPos.x*1.54+wPos.z*.81)+.17*sin(wPos.z*3.8-wPos.x*2.9);
-        float mudCoverage=smoothstep(.12,.77,u_mud+drainage*.43)*smoothstep(.02,.20,u_mud);
-        base=mix(base,base*vec3(.48,.44,.38),mudCoverage);
-        base+=vec3(.065,.058,.049)*mudCoverage*mudCoverage*pow(.5+.5*sin(lines*6.+wPos.x*3.),4.);
-        // Dolomite outcrop and sediment are parts of ONE actual height mesh.
-        // Preserve the photographed limestone palette around the entrance
-        // and warm Kalahari sand in the traversable clearing.
-        float stone=geologicalScree(wPos,wNorm);
+        // Dry sand and walked compact soil blend in large, irregular
+        // physically world-aligned patches, without square tile cut lines.
+        float broad=soilField(wPos.xz);
+        float fine=soilNoise(wPos.xz*2.30+vec2(3.7,8.1));
+        float soilMix=smoothstep(.28,.73,broad+.12*(fine-.5));
+        vec3 paleDry=base*vec3(1.14,1.10,1.01);
+        vec3 compactEarth=base*vec3(.88,.83,.76);
+        base=mix(paleDry,compactEarth,soilMix);
+        base*=.96+.08*fine;
+
+        // Water from real weather accumulates in low basins and the actual
+        // winding drainage line, not in cut-out rectangular mud squares.
+        float channelX=-9.2+.087*(wPos.z+10.)+.7*sin(wPos.z*.12+2.);
+        float wetChannel=exp(-.5*pow((wPos.x-channelX)/1.45,2.))*
+                         exp(-.5*pow((wPos.z+9.5)/24.,2.));
+        float basin=1.0-smoothstep(.14,.43,broad);
+        float waterPotential=clamp(.55*u_rain+.66*u_mud,0.,1.);
+        float mudCoverage=smoothstep(.25,.79,waterPotential)*
+                          (.22+.55*basin+.38*wetChannel);
+        mudCoverage=clamp(mudCoverage,0.,1.);
+        base=mix(base,base*vec3(.55,.52,.47),mudCoverage);
+        base+=vec3(.026,.025,.021)*mudCoverage*pow(fine,6.);
+
+        // Exposed rock responds continuously to geological position,
+        // 3D slope and mineral erosion. Same dolomite texture as the cave.
+        float exposed=geologicalScree(wPos,wNorm);
+        float slope=clamp(1.-normalize(wNorm).y,0.,1.);
+        float weathering=soilField(wPos.xz+vec2(26.2,17.4));
+        float stone=smoothstep(.17,.81,exposed+.42*slope+
+                               .22*(weathering-.5));
         float grit=hash(floor(wPos*19.7));
         vec3 limestone=photoDolomite(wPos,wNorm);
-        vec3 weathered=limestone*(.86+.12*grit);
-        base=mix(base,weathered,stone*.83);
-        float channelX=-9.2+.087*(wPos.z+10.)+.7*sin(wPos.z*.12+2.);
-        float wetChannel=exp(-.5*pow((wPos.x-channelX)/1.2,2.))*
-                         exp(-.5*pow((wPos.z+9.5)/22.,2.));
-        // Physically lower runoff gully uses the actual WorldTerrain shape;
-        // it darkens only when rainfall/moisture exists.
-        float gullyMoisture=wetChannel*clamp(u_rain*.65+u_mud*.5,0.,1.);
-        base=mix(base,base*vec3(.69,.72,.68),gullyMoisture);
+        vec3 weathered=limestone*(.87+.12*grit);
+        base=mix(base,weathered,stone*.92);
         // The same physical terrain becomes darker UNDER the cave overhang;
         // no painted 2D black rectangle on top of world geometry.
         float caveX=1.0-smoothstep(1.52,2.10,abs(wPos.x));
