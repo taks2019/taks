@@ -1,0 +1,99 @@
+name: TAKS World real Android visual screenshots (review only)
+on:
+  push:
+    branches: [codex/taks-world-render-menu-recovery-2026-11-21]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  android-gles3-screen-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore byte-identical previously approved menu PNG
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/menu-source app/src/main/assets/menu
+          gh release download taks-world-0.16.5-native-49 --repo "$GITHUB_REPOSITORY" --pattern TAKS_World_Android_KIPROBALO.apk --dir /tmp/menu-source
+          unzip -p /tmp/menu-source/TAKS_World_Android_KIPROBALO.apk assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png > app/src/main/assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png
+          echo '9369d3668b69424d31132e70accbfdb76282d7d9b3f3adfaa51c7c3ca1ea7bc8  app/src/main/assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png' | sha256sum -c -
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install original model import dependencies and image checker
+        run: python -m pip install --disable-pip-version-check 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'trimesh>=4.10,<5' 'scipy>=1.11,<2'
+      - name: Import existing experimental 3D model resources, review only
+        run: |
+          python scripts/import_cc0_rocks.py
+          python scripts/import_cc0_foliage.py
+          python scripts/import_cc0_rigged_human.py
+      - name: Source and native simulation tests
+        run: |
+          python -m unittest discover -s tests -p 'test_superimage_ground_integration.py' -v
+          cmake -S engine -B build-native -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-native --parallel 2
+          ctest --test-dir build-native --output-on-failure
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Assemble genuine native APK for Android runtime testing
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Confirm exact original menu and native arm64 plus emulator renderers
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import zipfile,hashlib
+          apk=Path('app/build/outputs/apk/debug/app-debug.apk')
+          assert apk.is_file() and apk.stat().st_size>8000000
+          with zipfile.ZipFile(apk) as z:
+              assert hashlib.sha256(z.read('assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png')).hexdigest()=='9369d3668b69424d31132e70accbfdb76282d7d9b3f3adfaa51c7c3ca1ea7bc8'
+              assert 'lib/x86_64/libtaks_engine.so' in z.namelist()
+              assert 'lib/arm64-v8a/libtaks_engine.so' in z.namelist()
+          PY
+      - name: Enable KVM on runner when possible
+        run: |
+          if test -e /dev/kvm; then sudo chmod 666 /dev/kvm; fi
+      - name: Capture physical Android emulator menu, gameplay, camera and cave
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 3072M
+          heap-size: 512M
+          emulator-options: -no-window -no-audio -no-snapshot -gpu swiftshader_indirect -no-boot-anim
+          disable-animations: true
+          script: |
+            mkdir -p snapshots
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            python scripts/prove_superimage_android_runtime.py
+            adb logcat -d -v time > snapshots/complete_android_log.txt
+      - name: Save Android screenshots including any failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-Android-Real-Visual-Review
+          path: snapshots/
+          retention-days: 14
+          if-no-files-found: warn
+      - name: Save clearly labelled test APK only, never approved release
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-GLES3-TEST-APK-NOT-APPROVED
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
+          if-no-files-found: error
