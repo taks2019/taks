@@ -1,5 +1,6 @@
 #include "FastScene.h"
 #include "RealModels.h"
+#include "CaveSprite.h"
 #include "RoofCutaway.h"
 #include <GLES3/gl3.h>
 #include <algorithm>
@@ -591,6 +592,7 @@ void shutdown(){
     if(dynamicVAO)glDeleteVertexArrays(1,&dynamicVAO);
     if(program)glDeleteProgram(program);
     staticVBO=dynamicVBO=staticVAO=dynamicVAO=caveVAO=caveVBO=roofVAO=roofVBO=program=0;
+    taks::CaveSprite::shutdown();
     taks::RealModels::shutdown();
 }
 bool init(){
@@ -625,6 +627,7 @@ bool init(){
     glDepthFunc(GL_LEQUAL);
     glDisable(GL_CULL_FACE);
     if(!taks::RealModels::init()){error=taks::RealModels::errorMessage();return false;}
+    if(!taks::CaveSprite::init()){error=taks::CaveSprite::lastError();return false;}
     return glGetError()==GL_NO_ERROR;
 }
 bool uploadTerrainTexture(int slot,const std::uint32_t* argb,int width,int height){
@@ -734,6 +737,14 @@ void render(int width,int height,const FastFrame& f){
         f.clock,f.rain,f.playerX,f.playerZ,f.playerHeading,
         f.playerMoving,f.playerRunning,f.npcs,f.animationTime,f.windStrength,
         f.windX,f.windZ,f.wetSeason,f.moisture);
+
+    // Native depth-tested sprite: belongs to actual world coordinates.
+    // Foreground actors/rocks occlude the sprite, unlike screen-space Canvas.
+    const float caveCover = f.pngCavePreview
+            ? taks::RoofCutaway::visibility(f.zoom) : 0.f;
+    if(caveCover>.001f)
+        taks::CaveSprite::render(vp.a,f.yaw,f.zoom,
+            surfaceHeight(0.f,2.2f),f.clock,f.rain,caveCover);
 
     // Draw the rock roof on top of the permanent scene. At close zoom, expose
     // the SAME cave interior and actors; neither simulation state nor the
