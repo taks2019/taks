@@ -1,7 +1,7 @@
-name: TAKS World 0.15.6 - TRUE 3D sculpted Wonderwerk terrain update
+name: TAKS World 0.15.6 - TRUE 3D Android review build
 on:
   push:
-    branches: [codex/taks-world-update21-true-3d-wonderwerk-terrain-2026-11-21]
+    branches: [codex/taks-world-true3d-default-review-2026-11-21]
   workflow_dispatch:
 permissions:
   contents: read
@@ -46,6 +46,7 @@ jobs:
           python -m unittest discover -s tests -p 'test_png_cave_no_duplicate.py' -v
           python -m unittest discover -s tests -p 'test_update20_world_png_render.py' -v
           python -m unittest discover -s tests -p 'test_update21_true_3d_terrain.py' -v
+          python -m unittest discover -s tests -p 'test_real3d_default_review.py' -v
       - name: Import CC0 native terrain rock foliage and rigged actors
         run: |
           python scripts/import_cc0_rocks.py
@@ -92,12 +93,12 @@ jobs:
       - name: Stage 3D Android core requiring original eight cave PNGs and original signing
         run: |
           mkdir -p delivery
-          cp app/build/outputs/apk/debug/app-debug.apk delivery/TAKS_WORLD_0_15_6_TRUE_3D_TERRAIN_CORE_FOR_SIGNING.apk
+          cp app/build/outputs/apk/debug/app-debug.apk delivery/TAKS_WORLD_TRUE3D_REVIEW_CORE_NOT_INSTALLED_UPDATE.apk
           cp app/src/main/assets/menu/wonderwerk_loop.mp4 delivery/wonderwerk_loop_24fps.mp4
-          echo "Core APK is NOT A VALID IN-PLACE UPDATE. Copy in the unchanged original 8 cave PNGs, then sign with the PREVIOUS installed APK's exact private signing key. Keep the original signing key private. Do not uninstall or erase game saves." > delivery/SIGN_WITH_ORIGINAL_KEY.txt
+          echo "CORE REVIEW APK ONLY. It is NOT a valid in-place UPDATE until signed with the PREVIOUS installed APK's exact private signing key. It does not automatically install. Missing 8 cave PNGs affect only optional 2.5D preview; true 3D remains the default. Keep original signing key private. Do not uninstall or erase game saves." > delivery/SIGN_WITH_ORIGINAL_KEY.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: TAKS_World_UPDATE21_TRUE_3D_TERRAIN_CORE
+          name: TAKS_World_TRUE3D_REVIEW_CORE
           path: delivery/
-          retention-days: 7
+          retention-days: 14
           if-no-files-found: error
