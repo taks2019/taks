@@ -1192,6 +1192,17 @@ public final class MainActivity extends Activity {
                 boolean rockOk=loadAuthenticRockAsset(0,"models/rock_07");
                 boolean bouldersOk=loadAuthenticRockAsset(1,"models/namaqualand_boulders_01");
                 boolean cliffModelOk=loadAuthenticRockAsset(2,"models/namaqualand_cliff_01");
+                // Optional, LICENSED real Wonderwerk scan. Preview only inside
+                // the existing cave inspection camera; never overrides the
+                // approved game scene or the world/collision simulation.
+                // A provenance file is required before the scan can load.
+                try(InputStream provenance=getAssets().open("models/wonderwerk_survey_provenance.json");
+                    InputStream geometry=getAssets().open("models/wonderwerk_survey.tkm")){
+                    boolean surveyOk=loadAuthenticRockAsset(7,"models/wonderwerk_survey");
+                    android.util.Log.i("TAKS_SURVEY","Licensed cave scan preview loaded="+surveyOk);
+                }catch(java.io.IOException notBundled){
+                    android.util.Log.i("TAKS_SURVEY","No licensed survey included; existing cave remains unchanged");
+                }
                 // Real Poly Haven authored botanical meshes and RGBA atlases.
                 // None is replaced with placeholder tubes, boxes or billboard graphics.
                 boolean grassOk=loadAuthenticRockAsset(3,"models/grass_bermuda_01");
