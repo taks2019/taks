@@ -408,7 +408,8 @@ public final class MainActivity extends Activity {
         // presentation layer above its pixels, below its existing touch input.
         if(menuCover.getChildCount()==0 ||
            !(menuCover.getChildAt(0) instanceof RestoredStoneMenu))return;
-        final ApprovedMenuMotion moving=ApprovedMenuMotion.create(this);
+        final ApprovedMenuMotion moving=ApprovedMenuMotion.create(this,
+            this::newWorldFromMenu,this::showSettings,this::showCredits,this::confirmExit);
         if(moving==null)return;
         approvedMotion=moving;
         menuCover.addView(moving,new FrameLayout.LayoutParams(-1,-1));
