@@ -556,6 +556,31 @@ vec3 gravelNoTile(vec2 world){
     vec3 d=texture(u_groundTexture,uv+gravelOffset(tile+vec2(1.,1.))).rgb;
     return mix(mix(a,b,w.x),mix(c,d,w.x),w.y);
 }
+// Existing photographic dolomite is sampled in three physical dimensions;
+// the same stone material transitions from the real cave wall into its
+// 3D scree apron, without adding a new invented ground colour slab.
+vec3 photoDolomite(vec3 p,vec3 n){
+    vec3 weights=pow(abs(normalize(n)),vec3(4.0));
+    weights/=max(dot(weights,vec3(1.0)),.0001);
+    const float scale=.44;
+    vec3 sideX=texture(u_cliffTexture,p.zy*scale+vec2(.13,.27)).rgb;
+    vec3 topY=texture(u_cliffTexture,p.xz*scale+vec2(.19,.43)).rgb;
+    vec3 sideZ=texture(u_cliffTexture,p.xy*scale+vec2(.34,.31)).rgb;
+    return sideX*weights.x+topY*weights.y+sideZ*weights.z;
+}
+float geologicalScree(vec3 p,vec3 n){
+    // Same footprint as WorldTerrain::height: stone shoulder mounds
+    // around both sides of the 3 metre cave opening.
+    vec2 l=(p.xz-vec2(-6.8,6.2))/vec2(5.0,8.0);
+    vec2 r=(p.xz-vec2(6.5,6.8))/vec2(5.5,8.5);
+    vec2 c=(p.xz-vec2(0.0,9.1))/vec2(9.0,12.0);
+    float exposed=exp(-.5*dot(l,l))+exp(-.5*dot(r,r))
+                  +.43*exp(-.5*dot(c,c));
+    float steepness=1.0-clamp(normalize(n).y,0.0,1.0);
+    vec2 opening=(p.xz-vec2(0.0,3.5))/vec2(2.6,6.8);
+    float door=exp(-.5*dot(opening,opening));
+    return clamp((exposed*.72+steepness*1.35)*(1.0-.82*door),0.,1.);
+}
 void main(){
     float grain=hash(floor(wPos*12.));
     float lines=.5+.5*sin(wPos.y*8.5+sin(wPos.x*.69+wPos.z*.21)*1.8);
@@ -577,12 +602,23 @@ void main(){
         float mudCoverage=smoothstep(.12,.77,u_mud+drainage*.43)*smoothstep(.02,.20,u_mud);
         base=mix(base,base*vec3(.48,.44,.38),mudCoverage);
         base+=vec3(.065,.058,.049)*mudCoverage*mudCoverage*pow(.5+.5*sin(lines*6.+wPos.x*3.),4.);
+        // Dolomite outcrop and sediment are parts of ONE actual height mesh.
+        // Preserve the photographed limestone palette around the entrance
+        // and warm Kalahari sand in the traversable clearing.
+        float stone=geologicalScree(wPos,wNorm);
+        float grit=hash(floor(wPos*19.7));
+        vec3 limestone=photoDolomite(wPos,wNorm);
+        vec3 weathered=limestone*(.86+.12*grit);
+        base=mix(base,weathered,stone*.83);
+        float channelX=-9.2+.087*(wPos.z+10.)+.7*sin(wPos.z*.12+2.);
+        float wetChannel=exp(-.5*pow((wPos.x-channelX)/1.2,2.))*
+                         exp(-.5*pow((wPos.z+9.5)/22.,2.));
+        // Physically lower runoff gully uses the actual WorldTerrain shape;
+        // it darkens only when rainfall/moisture exists.
+        float gullyMoisture=wetChannel*clamp(u_rain*.65+u_mud*.5,0.,1.);
+        base=mix(base,base*vec3(.69,.72,.68),gullyMoisture);
     }else if(matId==1){
-        vec3 weights=pow(abs(normalize(wNorm)),vec3(4.));
-        weights/=max(dot(weights,vec3(1.)),.001);
-        base=(texture(u_cliffTexture,wPos.zy*.64).rgb*weights.x+
-              texture(u_cliffTexture,wPos.xz*.64).rgb*weights.y+
-              texture(u_cliffTexture,wPos.xy*.64).rgb*weights.z)*(.88+.12*lines);
+        base=photoDolomite(wPos,wNorm)*(.90+.10*lines);
     }else if(matId==2){
         base=mix(vec3(.32,.30,.27),vec3(.59,.53,.46),grain*.7);
     }else if(matId==3){
