@@ -89,8 +89,8 @@ jobs:
           path: snapshots/
           retention-days: 14
           if-no-files-found: warn
-      - name: Save clearly labelled test APK only, never approved release
-        if: success()
+      - name: Save clearly labelled diagnostic APK for failure analysis; NOT approved for phone installation
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: TAKS-World-GLES3-TEST-APK-NOT-APPROVED
