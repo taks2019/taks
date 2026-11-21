@@ -5,3 +5,10 @@
 *.iml
 /local.properties
 .idea/
+/.tools/
+/.venv/
+/output/
+__pycache__/
+*.pyc
+/app/src/main/assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png
+/app/src/main/assets/models/
