@@ -48,6 +48,7 @@ public final class MainActivity extends Activity {
     private native void nativeRender();
     private native float[] nativePlayerCoordinates();
     private native void nativeSetCavePreview(boolean on);
+    private native boolean nativeUploadCaveView(int direction,int[] argb,int width,int height);
     private native void nativeSetView(float angle,float pitch,float zoom);
     private native String nativeRendererError();
     private native float[] nativeMenuCues();
@@ -55,7 +56,8 @@ public final class MainActivity extends Activity {
     private native boolean nativeUploadTerrainTexture(int slot,int[] pixels,int width,int height);
 
     private GLSurfaceView surface;
-    private IsometricCaveOverlay caveOverlay;
+    private volatile boolean cavePreviewReady=false;
+    private volatile boolean cavePreviewWanted=true;
     private SharedPreferences saves;
     private FrameLayout root;
     private LinearLayout sheet;
@@ -88,7 +90,6 @@ public final class MainActivity extends Activity {
         @Override public void run(){
             if(inMainMenu)return;
             if(surface!=null)surface.requestRender();
-            refreshCaveOverlay();
             renderHandler.postDelayed(this,40);
         }
     };
@@ -146,6 +147,29 @@ public final class MainActivity extends Activity {
         movementHandler.removeCallbacks(movementLoop);
     }
 
+
+    private boolean loadReviewCaveImages(){
+        final String[] directions={"000","045","090","135","180","225","270","315"};
+        boolean complete=true;
+        for(int i=0;i<directions.length;++i){
+            try(InputStream input=getAssets().open("wonderwerk_png/"+directions[i]+".png")){
+                BitmapFactory.Options options=new BitmapFactory.Options();
+                options.inScaled=false;
+                Bitmap bitmap=BitmapFactory.decodeStream(input,null,options);
+                if(bitmap==null)throw new java.io.IOException("A PNG nem dekódolható: "+directions[i]);
+                int width=bitmap.getWidth(),height=bitmap.getHeight();
+                int[] argb=new int[width*height];
+                bitmap.getPixels(argb,0,width,0,0,width,height);
+                bitmap.recycle();
+                if(!nativeUploadCaveView(i,argb,width,height))
+                    throw new java.io.IOException("A GLES textúra feltöltése sikertelen: "+directions[i]);
+            }catch(Exception error){
+                complete=false;
+                android.util.Log.w("TAKS_CAVE_PREVIEW","Az ellenőrizendő barlangkép hiányzik: "+directions[i],error);
+            }
+        }
+        return complete;
+    }
 
     private boolean loadRealPbrSurface(int slot,String name){
         try(InputStream data=getAssets().open(name+".png")){
@@ -357,15 +381,8 @@ public final class MainActivity extends Activity {
         b.setOnClickListener(v->{action.run();refreshScene();refreshLivingSkin();});
         return b;
     }
-    private void refreshCaveOverlay(){
-        if(caveOverlay==null || !caveOverlay.hasImages())return;
-        final float[] pos=nativePlayerCoordinates();
-        if(pos!=null && pos.length==2)
-            caveOverlay.setCamera(orbit,cameraPitch,zoom,pos[0],pos[1]);
-    }
     private void refreshScene(){
         if(surface!=null)surface.requestRender();
-        refreshCaveOverlay();
     }
     private void refreshNearby(){
         final String nearby=nativeNearby();
@@ -746,11 +763,11 @@ public final class MainActivity extends Activity {
     }
     private void showSettings(){
         modal("BEÁLLÍTÁSOK",body->{
-            if(caveOverlay!=null && caveOverlay.hasImages()){
+            if(cavePreviewReady){
                 addVertical(body,"8 irányú barlang PNG - TESZT előnézet BE/KI",()->{
-                    caveOverlay.setPreviewEnabled(!caveOverlay.isPreviewEnabled());
-                    nativeSetCavePreview(caveOverlay.isPreviewEnabled());
-                    refreshCaveOverlay();refreshScene();
+                    cavePreviewWanted=!cavePreviewWanted;
+                    nativeSetCavePreview(cavePreviewWanted && cavePreviewReady);
+                    refreshScene();
                 });
             }
             addVertical(body,"3D felbontás – gyors / kiegyensúlyozott / részletes",
@@ -962,6 +979,8 @@ public final class MainActivity extends Activity {
                 boolean treeOk=loadAuthenticRockAsset(5,"wonderwerk/akac");
                 boolean groundOk=loadRealPbrSurface(0,"wonderwerk/talaj");
                 boolean cliffOk=loadRealPbrSurface(1,"wonderwerk/dolomit");
+                cavePreviewReady=loadReviewCaveImages();
+                nativeSetCavePreview(cavePreviewReady && cavePreviewWanted);
                 runOnUiThread(()->{
                     String err=nativeRendererError();
                     if(!rockOk||!bouldersOk||!cliffModelOk||!grassOk||!fernOk||!treeOk||!humanOk||!groundOk||!cliffOk||err!=null&&!err.isEmpty()){
@@ -976,15 +995,9 @@ public final class MainActivity extends Activity {
         surface.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
         surface.setOnTouchListener((v,e)->touch(e,false));
         root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
-        // Android-native image overlay lives IN GAME (above GLES, below HUD);
-        // it is hidden with the game view when returning to the menu.
-        // The actual JPEG/PNG art is supplied only for review builds.
-        caveOverlay=new IsometricCaveOverlay(this);
-        root.addView(caveOverlay,new FrameLayout.LayoutParams(-1,-1));
-        gameHud.add(caveOverlay);
-        nativeSetCavePreview(caveOverlay.isPreviewEnabled());
+        // The cave is now a true world-coordinate, depth-tested GLES sprite;
+        // NO overlaid Android Canvas can float in front of the NPCs.
         nativeSetView(orbit,cameraPitch,zoom);
-        refreshCaveOverlay();
 
         // Deliberately NO in-game logo or branded header. The main menu,
         // its original background and logo remain COMPLETELY unchanged.

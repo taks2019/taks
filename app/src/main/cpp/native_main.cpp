@@ -5,6 +5,7 @@
 #include "CauseWorld.h"
 #include "AfricanClimate.h"
 #include "FastScene.h"
+#include "CaveSprite.h"
 #include "RealModels.h"
 #include <vector>
 #include <string>
@@ -164,6 +165,16 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetView(
 }
 // Upload a genuine triangulated CC0 photogrammetry model and its decoded photographic
 // albedo texture from Android assets. All data remains offline in the APK.
+extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUploadCaveView(
+    JNIEnv* env,jobject,jint direction,jintArray pixels,jint width,jint height){
+    // Called only on GLSurfaceView's active GL thread, not the UI thread.
+    if(!pixels||direction<0||direction>=8||width<128||height<128||
+       width>2048||height>2048||env->GetArrayLength(pixels)!=width*height)return JNI_FALSE;
+    std::vector<std::uint32_t> argb(std::size_t(width)*height);
+    env->GetIntArrayRegion(pixels,0,width*height,reinterpret_cast<jint*>(argb.data()));
+    if(env->ExceptionCheck())return JNI_FALSE;
+    return taks::CaveSprite::upload(direction,argb.data(),width,height)?JNI_TRUE:JNI_FALSE;
+}
 extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUploadTerrainTexture(
     JNIEnv* env,jobject,jint id,jintArray pixels,jint width,jint height){
     if(!pixels||width<1||height<1||width>2048||height>2048)return JNI_FALSE;
