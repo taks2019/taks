@@ -33,6 +33,7 @@ final class ApprovedMenuMotion extends FrameLayout
         implements TextureView.SurfaceTextureListener {
     private static final String VIDEO="menu/wonderwerk_loop.mp4";
     private final TextureView video;
+    private final View approvedStaticScene;
     private final View captions;
     private final View[] touches=new View[4];
     private MediaPlayer player;
@@ -41,11 +42,11 @@ final class ApprovedMenuMotion extends FrameLayout
     private boolean prepared;
     private boolean renderedFirstFrame;
 
-    static ApprovedMenuMotion create(Context context,Runnable newGame,
+    static ApprovedMenuMotion create(Context context,View approvedStaticScene,Runnable newGame,
                                      Runnable settings,Runnable credits,Runnable exit){
         try(InputStream input=context.getAssets().open(VIDEO)){
             if(input.read()<0)return null;
-            return new ApprovedMenuMotion(context,
+            return new ApprovedMenuMotion(context,approvedStaticScene,
                 new Runnable[]{newGame,settings,credits,exit});
         }catch(Exception noMedia){
             android.util.Log.w("TAKS_MENU_MOTION","Approved menu animation not bundled; original image remains");
@@ -53,8 +54,9 @@ final class ApprovedMenuMotion extends FrameLayout
         }
     }
 
-    private ApprovedMenuMotion(Context context,Runnable[] actions){
+    private ApprovedMenuMotion(Context context,View approvedStaticScene,Runnable[] actions){
         super(context);
+        this.approvedStaticScene=approvedStaticScene;
         setClickable(false);
         setFocusable(false);
         setWillNotDraw(true);
@@ -187,6 +189,7 @@ final class ApprovedMenuMotion extends FrameLayout
 
     @Override public void onSurfaceTextureAvailable(SurfaceTexture texture,int w,int h){
         releaseVideo();
+        renderedFirstFrame=false;
         surface=new Surface(texture);
         try{
             final MediaPlayer mp=new MediaPlayer();
@@ -202,20 +205,30 @@ final class ApprovedMenuMotion extends FrameLayout
             mp.setOnInfoListener((ready,what,extra)->{
                 if(what==MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START&&!renderedFirstFrame){
                     renderedFirstFrame=true;
-                    // Fade from original static image to same pixels now moving.
-                    animate().alpha(1f).setDuration(220).start();
+                    // Display exactly ONE source image at any point. Blending
+                    // a translated live MP4 over the previous static image
+                    // produced double leaves, double sun and ghost clouds.
+                    // Keep the original View for safe instant fallback, but
+                    // stop drawing it while the video owns the background.
+                    approvedStaticScene.setVisibility(View.INVISIBLE);
+                    setAlpha(1f);
+                    android.util.Log.i("TAKS_MENU_MOTION","SINGLE_SCENE: MP4 visible, static scene hidden");
                 }
                 return false;
             });
             mp.setOnErrorListener((ready,what,extra)->{
                 android.util.Log.e("TAKS_MENU_MOTION","MP4 decoding failed "+what+"/"+extra);
-                setAlpha(0f);releaseVideo();
+                setAlpha(0f);
+                approvedStaticScene.setVisibility(View.VISIBLE);
+                releaseVideo();
                 return true;
             });
             mp.prepareAsync();
         }catch(Exception error){
             android.util.Log.e("TAKS_MENU_MOTION","Unable to load moving menu",error);
-            setAlpha(0f);releaseVideo();
+            setAlpha(0f);
+            approvedStaticScene.setVisibility(View.VISIBLE);
+            releaseVideo();
         }
     }
     @Override public void onSurfaceTextureSizeChanged(SurfaceTexture texture,int w,int h){}
@@ -227,6 +240,8 @@ final class ApprovedMenuMotion extends FrameLayout
 
     void releaseVideo(){
         prepared=false;
+        setAlpha(0f);
+        approvedStaticScene.setVisibility(View.VISIBLE);
         if(player!=null){
             try{player.reset();}catch(IllegalStateException ignored){}
             player.release();
