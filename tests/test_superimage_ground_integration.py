@@ -28,6 +28,14 @@ class ApprovedSuperImageIntegration(unittest.TestCase):
         self.assertIn('static final int[] COL={0,1,3,0,1,3}',PACK)
         self.assertIn('static final int[] ROW={0,0,0,1,1,1}',PACK)
 
+    def test_bundled_pc_ground_pack_activates_without_manual_android_zip_picker(self):
+        self.assertIn('static boolean bundledPresent(Context context)',PACK)
+        self.assertIn('static Bitmap[] loadBundled(Context context)',PACK)
+        self.assertIn('ApprovedTerrainPack.bundledPresent(this)',MAIN)
+        self.assertIn('ApprovedTerrainPack.loadBundled(this)',MAIN)
+        self.assertIn('APPROVED TERRAIN ACTIVE: bundled PC verified atlas',MAIN)
+        self.assertIn('APPROVED TERRAIN ACTIVE: user',MAIN)
+        self.assertIn('nativeSetApprovedTerrainActive(true)',MAIN)
     def test_native_seamless_3d_world_gets_six_new_materials(self):
         self.assertIn('GLuint terrainTexture[8]',SCENE)
         self.assertIn('slot<0||slot>7',SCENE)

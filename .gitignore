@@ -12,3 +12,5 @@ __pycache__/
 *.pyc
 /app/src/main/assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png
 /app/src/main/assets/models/
+/approved_source/
+/app/src/main/assets/approved_ground/
