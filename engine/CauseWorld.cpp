@@ -777,7 +777,7 @@ double World::windStrength() const {
 }
 std::string World::save() const {
     std::ostringstream o;o<<std::setprecision(17);
-    o<<"TAKS_NATIVE_10 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
+    o<<"TAKS_NATIVE_11 "<<groundWood<<' '<<groundStone<<' '<<groundTinder<<' '
      <<carriedWood<<' '<<carriedStone<<' '<<carriedTinder<<' '
      <<hours<<' '<<humidity<<' '<<rainIntensity<<' '<<woodMoisture<<' '
      <<groundMoisture<<' '<<stamina<<' '<<fireFuel<<' '
@@ -790,7 +790,7 @@ std::string World::save() const {
     o<<' '<<npcSimulatedHours;
     for(const auto& n:npcs)
         o<<' '<<n.x<<' '<<n.z<<' '<<n.energy<<' '<<n.hunger<<' '<<n.wetness
-         <<' '<<n.role<<' '<<n.carrying<<' '<<n.task<<' '<<n.delivered<<' '<<n.walkPhase;
+         <<' '<<n.role<<' '<<n.carrying<<' '<<n.task<<' '<<n.delivered<<' '<<n.walkPhase<<' '<<n.searchWaypoint;
     o<<' '<<siteCount;
     for(const auto& site:sites)
         o<<' '<<site.x<<' '<<site.z<<' '<<site.stage<<' '<<site.condition;
@@ -799,6 +799,7 @@ std::string World::save() const {
     // Egyedi tárgyak főkönyve (LEDG1): csak a meglévő tárgyak; az elhasználtakat számláló őrzi.
     o<<" LEDG1 "<<nextItemId<<' '<<consumedItems[0]<<' '<<consumedItems[1]<<' '<<items.size();
     for(const Item& it:items)o<<' '<<it.id<<' '<<it.type<<' '<<it.where<<' '<<it.node<<' '<<it.by;
+    memory.write(o); // MEM1: persisted personal discoveries, never a global UI map.
     o<<' '<<structure.save(); // F2: szerkezetek (STRUCT2; a STRUCT1 is betölthető)
     return o.str();
 }
@@ -807,8 +808,8 @@ bool World::load(const std::string& data) {
     if(!(is>>header) ||
        header.rfind("TAKS_NATIVE_",0)!=0)return false;
     int version=1;
-    while(version<=10&&header!="TAKS_NATIVE_"+std::to_string(version))++version;
-    if(version>10)return false;
+    while(version<=11&&header!="TAKS_NATIVE_"+std::to_string(version))++version;
+    if(version>11)return false;
     if(!(is>>tmp.groundWood>>tmp.groundStone>>tmp.groundTinder
       >>tmp.carriedWood>>tmp.carriedStone>>tmp.carriedTinder
       >>tmp.hours>>tmp.humidity>>tmp.rainIntensity>>tmp.woodMoisture
@@ -827,6 +828,7 @@ bool World::load(const std::string& data) {
         for(auto& n:tmp.npcs) {
             if(!(is>>n.x>>n.z>>n.energy>>n.hunger>>n.wetness
                    >>n.role>>n.carrying>>n.task>>n.delivered>>n.walkPhase))return false;
+            if(version>=11 && !(is>>n.searchWaypoint))return false;
         }
     }
     if(version>=5){
@@ -840,12 +842,12 @@ bool World::load(const std::string& data) {
     const bool classicEcology=format==EcoFormat::Initial||format==EcoFormat::TrampledGrass;
     // Version 7/8 had two writers. Their ecology layouts decide which suffix
     // is mandatory, so truncation cannot turn a damaged ledger into a new one.
-    const bool hasLedger=version==10||(version>=7&&version<=9&&classicEcology);
+    const bool hasLedger=version>=10||(version>=7&&version<=9&&classicEcology);
     const bool hasStruct=hasLedger&&version>=8;
-    const bool hasWater=version==10||(version==8&&format==EcoFormat::Water);
+    const bool hasWater=version>=10||(version==8&&format==EcoFormat::Water);
     if((version==6&&!classicEcology)||(version==7&&!hasLedger&&format!=EcoFormat::Footprints)||
        (version==8&&!hasLedger&&!hasWater)||(version==9&&!hasLedger)||
-       (version==10&&format!=EcoFormat::Combined))return false;
+       (version>=10&&format!=EcoFormat::Combined))return false;
     if(hasWater&&!(is>>tmp.playerThirst>>tmp.waterCollectorStage>>tmp.storedRainwater))return false;
     if(version>=6){
         // V6+ store a second moisture value. Preserve the ecology state on load
@@ -871,6 +873,7 @@ bool World::load(const std::string& data) {
             loadedItems.push_back(it);
         }
     }
+    if(version>=11 && !tmp.memory.read(is))return false;
     Structure loadedStructure;
     if(hasStruct){
         std::string rest;std::getline(is,rest);
@@ -908,7 +911,7 @@ bool World::load(const std::string& data) {
         for(int i=0;i<npcCount;++i){
             const auto& n=tmp.npcs[i];
             if(n.role!=i||n.carrying<0||n.carrying>1||n.delivered<0||n.delivered>100000||
-               n.task<0||n.task>4||
+               n.task<0||n.task>5||n.searchWaypoint<0||n.searchWaypoint>=8||
                !std::isfinite(n.x)||n.x<-7.5||n.x>7.5||
                !std::isfinite(n.z)||n.z<-7.5||n.z>13.0||
                !std::isfinite(n.energy)||n.energy<0||n.energy>100||
@@ -974,6 +977,13 @@ bool World::load(const std::string& data) {
         if(!tmp.ledgerConsistent())return false; // a főkönyv és a készlet nem térhet el
     }else{
         tmp.rebuildLedgerFromCounts(); // régi mentés: azonosítók a készletből, előzmény nélkül
+    }
+    if(version<11){
+        // Old saves have no known places: discover only nearby landmarks.
+        tmp.memory=SpatialMemory{};
+        tmp.observeLandmarks(0,tmp.playerX,tmp.playerZ);
+        for(int i=0;i<npcCount;++i)
+            tmp.observeLandmarks(i+1,tmp.npcs[i].x,tmp.npcs[i].z);
     }
     tmp.hearthBuilt=hearth!=0;tmp.fireLit=fire!=0;tmp.underShelter=covered!=0;
     // Sérült mentésben a fedés nem védhet a távolból.
