@@ -1,5 +1,5 @@
 ﻿param(
-    [ValidateSet("menu","check","build","install","tests","studio","copy-images","logs")]
+    [ValidateSet("menu","check","build","install","tests","studio","copy-images","logs","ground")]
     [string]$Mode = "menu",
     [string]$DeviceSerial = "",
     [string]$SourceZip = ""
@@ -185,6 +185,42 @@ function Prepare-Models {
     $missing=@($RequiredModels | Where-Object { -not (Test-Path (Join-Path $modelFolder $_)) })
     if($missing.Count -gt 0){Fail "A 3D modellek importja utan meg hianyzik: $($missing -join ', ')"}
 }
+function Prepare-ApprovedGround {
+    $assetFolder=Join-Path $Root "app\src\main\assets\approved_ground"
+    $manifestPath=Join-Path $assetFolder "approved_ground_manifest.json"
+    $sourceCandidate=$SourceZip
+    if(-not $sourceCandidate){
+        $sourceCandidate=Join-Path $Root "approved_source\SuperImage.zip"
+    }
+    $hasSource=(Test-Path -LiteralPath $sourceCandidate -PathType Leaf)
+    if($hasSource){
+        Say "Hat eredeti SuperImage-talaj automatikus eloallitasa a teszt APK-hoz."
+        $python=Need-PythonVenv
+        Run $python @((Join-Path $Root "scripts\bake_approved_ground.py"),
+                     "--source",$sourceCandidate,"--out",$assetFolder)
+    }else{
+        Say "Nem kaptam forras ZIP-et; ellenorzom, van-e mar korabban elkeszitett talajkeszlet."
+    }
+    $expected=@("dry.png","red.png","stone.png","sand.png","mud.png","transition.png")
+    $missing=@($expected | Where-Object { -not (Test-Path (Join-Path $assetFolder $_)) })
+    if($missing.Count -gt 0 -or -not (Test-Path $manifestPath)){
+        Fail "A korabbi barna jatekteret NEM epitem ujra! Hianyzik a hiteles SuperImage.zip. Masold ide: approved_source\SuperImage.zip, vagy inditsd: PC_TAKS_WORLD.cmd -Mode build -SourceZip 'D:\Kepek\SuperImage.zip'"
+    }
+    $manifest=Get-Content -LiteralPath $manifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $known="71600a427e5d17cc0334a07ca9a0a827ad747f2caaed326efaa2603c30d55660"
+    if($manifest.source_sha256 -ne $known){
+        Fail "Nem az elfogadott eredeti kepbol szarmazik a helyi talajkeszlet."
+    }
+    foreach($record in $manifest.tiles){
+        if($expected -notcontains $record.file){Fail "Ismeretlen talajnev a manifestben."}
+        $file=Join-Path $assetFolder $record.file
+        if(-not (Test-Path -LiteralPath $file)){Fail "Hianyzo talaj: $file"}
+        if((Get-FileHash -Algorithm SHA256 -LiteralPath $file).Hash -ine $record.sha256){
+            Fail "A talajkep hash-e megvaltozott. Nem irom felul: $file"
+        }
+    }
+    Say "A teszt APK hat igazolt, fotoalapu talajmasolatot tartalmaz, az eredeti ZIP valtozatlan."
+}
 function Build-Android {
     Say "TAKS WORLD: PC -> Android teszt-APK epitese."
     $sdk=Need-Sdk
@@ -192,6 +228,7 @@ function Build-Android {
     Save-SdkPath $sdk
     Prepare-ApprovedMenu
     Prepare-Models
+    Prepare-ApprovedGround
     $gradle=Need-Gradle
     Push-Location $Root
     try{Run $gradle @("--no-daemon",":app:assembleDebug","--stacktrace")}
@@ -289,6 +326,7 @@ function Check-PC {
     Write-Host ("Helyi Gradle 8.9: "+$(if(Test-Path $gradle){"megtalalva"}else{"elso buildnel letoltodik"}))
     Write-Host ("Python Launcher: "+$(if(Find-Command "py.exe"){"megtalalva"}else{"ellenorizendo"}))
     Write-Host ("Elfogadott eredeti menu: "+$(if(Test-Path $ApprovedPath){"helyben"}else{"elso buildnel ellenorzott forrasbol"}))
+    Write-Host ("Talajok a teszt APK-hoz: "+$(if(Test-Path (Join-Path $Root "app\src\main\assets\approved_ground\approved_ground_manifest.json")){"ellenorizheto"}else{"forras SuperImage.zip kell"}))
     Write-Host ("Teszt APK: "+$(if(Test-Path $TestApk){$TestApk}else{"meg nincs leforditva"}))
     Write-Host "Kovetelmenyek: Android SDK API35 + NDK27.2.12479018 + CMake3.22.1 + Java17+ + Python3.11+."
 }
@@ -302,6 +340,7 @@ function Execute([string]$Action){
             "tests"       { Tests }
             "studio"      { Open-Studio }
             "copy-images" { Copy-Images }
+            "ground"      { Prepare-ApprovedGround }
             "logs"        { Capture-Logs }
             default       { Fail "Ismeretlen muvelet: $Action" }
         }
@@ -320,10 +359,11 @@ while($true){
     Write-Host "5 - Projekt megnyitasa Android Studioban"
     Write-Host "6 - Forraskod-ellenorzo tesztek"
     Write-Host "7 - Android hibanaplo mentese"
+    Write-Host "8 - Eredeti SuperImage talajok elokeszitese az APK-ba"
     Write-Host "0 - Kilepes"
     $choice=Read-Host "Valassz"
     if($choice -eq "0"){exit 0}
-    $actions=@{"1"="check";"2"="build";"3"="install";"4"="copy-images";"5"="studio";"6"="tests";"7"="logs"}
+    $actions=@{"1"="check";"2"="build";"3"="install";"4"="copy-images";"5"="studio";"6"="tests";"7"="logs";"8"="ground"}
     $action=$actions[$choice]
     if(-not $action){Write-Host "Ismeretlen menupont." -ForegroundColor Yellow;continue}
     try{Execute $action}catch{Write-Host ("HIBA: "+$_.Exception.Message) -ForegroundColor Red}
