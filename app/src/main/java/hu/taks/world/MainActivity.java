@@ -94,15 +94,33 @@ public final class MainActivity extends Activity {
     private float orbit=-.785398f,cameraPitch=.615480f,zoom=19f,lastX=0,lastY=0,lastSpan=0;
     private int activePanel=0;
     private final Handler worldHandler=new Handler(Looper.getMainLooper());
-    private final Handler renderHandler=new Handler(Looper.getMainLooper());
+    // The old 40 ms Handler timer capped the world at ~25 frames/second,
+    // even on a capable Android GPU. Vsync follows the phone display without
+    // racing two independent rendering clocks or building up delayed frames.
+    private boolean renderLoopRunning=false;
+    private long lastRenderVsyncNs=0L;
+    private final android.view.Choreographer.FrameCallback renderLoop=
+        new android.view.Choreographer.FrameCallback(){
+            @Override public void doFrame(long frameTimeNanos){
+                if(!renderLoopRunning||inMainMenu||surface==null)return;
+                if(lastRenderVsyncNs==0L||frameTimeNanos-lastRenderVsyncNs>=15_000_000L){
+                    surface.requestRender();
+                    lastRenderVsyncNs=frameTimeNanos;
+                }
+                android.view.Choreographer.getInstance().postFrameCallback(this);
+            }
+        };
+    private void startFrameLoop(){
+        stopFrameLoop();
+        renderLoopRunning=true;
+        lastRenderVsyncNs=0L;
+        android.view.Choreographer.getInstance().postFrameCallback(renderLoop);
+    }
+    private void stopFrameLoop(){
+        renderLoopRunning=false;
+        android.view.Choreographer.getInstance().removeFrameCallback(renderLoop);
+    }
     private int worldTickNumber=0;
-    private final Runnable renderLoop=new Runnable(){
-        @Override public void run(){
-            if(inMainMenu)return;
-            if(surface!=null)surface.requestRender();
-            renderHandler.postDelayed(this,40);
-        }
-    };
     private final Runnable worldLoop=new Runnable(){
         @Override public void run(){
             if(inMainMenu)return;
@@ -796,8 +814,7 @@ public final class MainActivity extends Activity {
         if(menuCover!=null){root.removeView(menuCover);menuCover=null;}
         setHudVisibility(true);
         refreshScene();
-        renderHandler.removeCallbacks(renderLoop);
-        renderHandler.post(renderLoop);
+        startFrameLoop();
         worldHandler.removeCallbacks(worldLoop);
         worldHandler.postDelayed(worldLoop,1800);
     }
@@ -1014,7 +1031,7 @@ public final class MainActivity extends Activity {
     }
     private void showMainMenu(){
         inMainMenu=true;
-        renderHandler.removeCallbacks(renderLoop);
+        stopFrameLoop();
         worldHandler.removeCallbacks(worldLoop);
         padActive=false;moveIntent=false;sprinting=false;
         stopMovement();
@@ -1288,7 +1305,7 @@ public final class MainActivity extends Activity {
         worldHandler.removeCallbacks(worldLoop);
         if(!inMainMenu){
             worldHandler.postDelayed(worldLoop,1800);
-            renderHandler.removeCallbacks(renderLoop);renderHandler.post(renderLoop);
+            startFrameLoop();
         }
         skinHandler.removeCallbacks(skinLoop);
         skinHandler.post(skinLoop);
@@ -1297,7 +1314,7 @@ public final class MainActivity extends Activity {
         padActive=false;moveIntent=false;sprinting=false;
         stopMovement();
         worldHandler.removeCallbacks(worldLoop);
-        renderHandler.removeCallbacks(renderLoop);
+        stopFrameLoop();
         skinHandler.removeCallbacks(skinLoop);
         saves.edit().putString("state",nativeSave()).apply();
         if(menuMotion!=null)menuMotion.setPlaying(false);
