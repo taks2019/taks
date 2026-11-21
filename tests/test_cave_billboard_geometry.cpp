@@ -31,9 +31,9 @@ int main(){
         // The midpoint at the lowest actual opaque pixel stays pinned on the
         // same WORLD terrain position, independent of rotation and zoom.
         Point alphaFoot{
-           (bl.x+br.x)*.5f+(tl.x-bl.x)*foot,
-           (bl.y+br.y)*.5f+(tl.y-bl.y)*foot,
-           (bl.z+br.z)*.5f+(tl.z-bl.z)*foot,0,0};
+           (bl.x+br.x)*.5f+(tl.x-bl.x)*(1.f-foot),
+           (bl.y+br.y)*.5f+(tl.y-bl.y)*(1.f-foot),
+           (bl.z+br.z)*.5f+(tl.z-bl.z)*(1.f-foot),0,0};
         assert(std::abs(alphaFoot.x)<.002f);
         assert(std::abs(alphaFoot.y+.48f)<.002f);
         assert(std::abs(alphaFoot.z-2.2f)<.002f);
