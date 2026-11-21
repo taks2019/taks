@@ -9,8 +9,6 @@ static float distance(Point p,Point q){
     return std::sqrt(std::pow(p.x-q.x,2)+std::pow(p.y-q.y,2)+std::pow(p.z-q.z,2));
 }
 static Point diff(Point a,Point b){return {a.x-b.x,a.y-b.y,a.z-b.z,0,0};}
-static Point cross(Point a,Point b){return {a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,
-                                       a.x*b.y-a.y*b.x,0,0};}
 int main(){
     constexpr float rad=.01745329251994329577f;
     constexpr float foot=444.f/512.f;
