@@ -395,7 +395,14 @@ public final class MainActivity extends Activity {
             }
             return;
         }
-        if(approvedMotion!=null)return;
+        if(approvedMotion!=null && approvedMotion.getParent()==menuCover)return;
+        // A menu opened twice creates a NEW menuCover. The old media layer
+        // belongs to the detached container and must not suppress playback
+        // on the newly opened approved menu.
+        if(approvedMotion!=null){
+            approvedMotion.releaseVideo();
+            approvedMotion=null;
+        }
         // Keep the accepted RestoredStoneMenu source and the exact bytes of
         // its 1664x768 background frozen. Only attach a noninteractive MP4
         // presentation layer above its pixels, below its existing touch input.
