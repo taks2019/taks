@@ -59,8 +59,11 @@ def fail_on_render_errors():
 
 def run():
     adb("shell","settings","put","secure","immersive_mode_confirmations","confirmed",check=False)
+    # The emulator is created fresh per GitHub job. An immediate 'pm clear'
+    # can race the ActivityManager and kill the app *after* am start returns,
+    # producing a false Android Home screenshot. Never clear after install.
     adb("shell","am","force-stop",PACKAGE,check=False)
-    adb("shell","pm","clear",PACKAGE,check=False) # ONLY isolated emulator test data.
+    time.sleep(1)
     adb("logcat","-c",check=False)
     launched=adb("shell","am","start","-W","-n",PACKAGE+"/hu.taks.world.MainActivity",check=False).decode(errors="replace")
     print("ANDROID LAUNCH:",launched,flush=True)
@@ -143,6 +146,12 @@ if __name__=="__main__":
         # Always capture diagnostics, even when app crashes or opens Home.
         (OUT/"full_logcat.txt").write_text(
             adb("logcat","-d","-v","time",check=False).decode(errors="replace")[-500000:],
+            encoding="utf-8"
+        )
+        (OUT/"targeted_crash_logcat.txt").write_text(
+            adb("logcat","-d","-v","time","-s","AndroidRuntime:E","ActivityTaskManager:I",
+                "ActivityManager:I","libc:F","DEBUG:E","TAKS_RENDER:E","TAKS_MODEL:E",
+                "TAKS_HUMAN:I","TAKS_MENU:I",check=False).decode(errors="replace")[-300000:],
             encoding="utf-8"
         )
         (OUT/"window_focus.txt").write_text(
