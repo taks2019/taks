@@ -2,6 +2,7 @@
 #include "RealModels.h"
 #include "CaveSprite.h"
 #include "RoofCutaway.h"
+#include "WorldTerrain.h"
 #include <GLES3/gl3.h>
 #include <algorithm>
 #include <array>
@@ -29,14 +30,7 @@ float dot(Vec3 a,Vec3 b){return a.x*b.x+a.y*b.y+a.z*b.z;}
 Vec3 cross(Vec3 a,Vec3 b){return {a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x};}
 Vec3 norm(Vec3 v){float d=std::sqrt(std::max(dot(v,v),.00000001f));return mul(v,1.f/d);}
 float surfaceHeight(float x,float z){
-    // A részletgazdag belső régió lágyan csatlakozik a távoli talajhoz;
-    // a korábbi négyzet alakú térképlap éle így nem látszik a kamerából.
-    auto saturate=[](float v){return std::max(0.f,std::min(1.f,v));};
-    float e=saturate((11.f-std::abs(x))/2.4f) *
-            saturate((z+11.f)/2.4f)*saturate((17.f-z)/2.4f);
-    float relief=-.27f+.17f*std::sin(x*.21f)*std::cos(z*.22f)+
-                 .09f*std::sin(x*.87f+z*.57f)+.065f*std::cos(z*.73f-x*.42f);
-    return -.48f+(relief+.48f)*e;
+    return taks::WorldTerrain::height(x,z);
 }
 float top(float x){
     const float taper=std::sqrt(std::max(0.f,1.f-x*x/(9.4f*9.4f)));
@@ -50,6 +44,46 @@ void triangle(std::vector<Vertex>& v,Vec3 a,Vec3 b,Vec3 c,float kind){
 }
 void quad(std::vector<Vertex>& v,Vec3 a,Vec3 b,Vec3 c,Vec3 d,float kind){
     triangle(v,a,b,c,kind);triangle(v,a,c,d,kind);
+}
+// Smooth-shaded 3D triangles: every ground vertex gets the true slope normal,
+// unlike flat cards or the old per-triangle-faceted brown plane.
+void smoothTerrainVertex(std::vector<Vertex>& vertices,Vec3 p) {
+    float nx=0.f,ny=1.f,nz=0.f;
+    taks::WorldTerrain::normal(p.x,p.z,nx,ny,nz);
+    vertices.push_back({p.x,p.y,p.z,nx,ny,nz,0.f});
+}
+void sculptedTerrainGrid(std::vector<Vertex>& dst,float x0,float x1,
+                         float z0,float z1,int cols,int rows,
+                         bool skipCentralRegion) {
+    struct TerrainPoint {Vec3 p;Vec3 n;};
+    std::vector<TerrainPoint> grid(std::size_t(cols+1)*std::size_t(rows+1));
+    auto index=[cols](int i,int j){return std::size_t(j)*std::size_t(cols+1)+std::size_t(i);};
+    for(int j=0;j<=rows;++j)for(int i=0;i<=cols;++i){
+        const float x=x0+(x1-x0)*float(i)/float(cols);
+        const float z=z0+(z1-z0)*float(j)/float(rows);
+        float nx,ny,nz;
+        taks::WorldTerrain::normal(x,z,nx,ny,nz);
+        grid[index(i,j)]={{x,surfaceHeight(x,z),z},{nx,ny,nz}};
+    }
+    auto push=[&dst](const TerrainPoint& p){
+        dst.push_back({p.p.x,p.p.y,p.p.z,p.n.x,p.n.y,p.n.z,0.f});
+    };
+    for(int j=0;j<rows;++j)for(int i=0;i<cols;++i){
+        const float xa=x0+(x1-x0)*float(i)/float(cols);
+        const float xb=x0+(x1-x0)*float(i+1)/float(cols);
+        const float za=z0+(z1-z0)*float(j)/float(rows);
+        const float zb=z0+(z1-z0)*float(j+1)/float(rows);
+        // Far and near tiles join on exact x=-28/+28,z=-28/+40
+        // boundaries; there is no 160m flat quad showing through.
+        if(skipCentralRegion && xa>=-28.f && xb<=28.f &&
+           za>=-28.f && zb<=40.f)continue;
+        const auto& a=grid[index(i,j)];
+        const auto& b=grid[index(i+1,j)];
+        const auto& c=grid[index(i+1,j+1)];
+        const auto& d=grid[index(i,j+1)];
+        push(a);push(d);push(c);
+        push(a);push(c);push(b);
+    }
 }
 void axisBar(std::vector<Vertex>& v,Vec3 a,Vec3 b,float radius,float kind,int sides=7){
     Vec3 axis=norm(sub(b,a));
@@ -241,17 +275,14 @@ void buildStatic(){
     terrainMesh.clear();
     caveMesh.clear();
     roofMesh.clear();
-    // Nagyméretű háttértalaj, valódi mélységi teszttel; nincs látható "lebegő táblaszél".
-    quad(terrainMesh,{-160.f,-.485f,-160.f},{-160.f,-.485f,160.f},
-         {160.f,-.485f,160.f},{160.f,-.485f,-160.f},0.f);
-    constexpr int nx=72,nz=92;
-    const float x0=-11.f,x1=11.f,z0=-11.f,z1=17.f;
-    for(int j=0;j<nz;++j)for(int i=0;i<nx;++i){
-        float x=x0+(x1-x0)*float(i)/float(nx),xx=x0+(x1-x0)*float(i+1)/float(nx);
-        float z=z0+(z1-z0)*float(j)/float(nz),zz=z0+(z1-z0)*float(j+1)/float(nz);
-        Vec3 a{x,surfaceHeight(x,z),z},b{xx,surfaceHeight(xx,z),z},c{xx,surfaceHeight(xx,zz),zz},d{x,surfaceHeight(x,zz),zz};
-        quad(terrainMesh,a,d,c,b,0.f);
-    }
+    // FULLY GEOMETRIC TERRAIN. A fine 0.5m tessellated foreground with
+    // smoothly varying slopes joins a coarser 4m 3D horizon. The original
+    // fake flat 320x320 brown quad is not drawn ANYWHERE in this renderer.
+    // Both grids use exactly the same deterministic CPU height function.
+    sculptedTerrainGrid(terrainMesh,-120.f,120.f,-120.f,120.f,
+                       60,60,true);
+    sculptedTerrainGrid(terrainMesh,-28.f,28.f,-28.f,40.f,
+                       112,136,false);
     // Természetes sziklafal, valódi 3D elülső és oldalsó mélységgel.
     const int mx=95,my=34;
     for(int j=0;j<my;++j)for(int i=0;i<mx;++i){
@@ -525,6 +556,31 @@ vec3 gravelNoTile(vec2 world){
     vec3 d=texture(u_groundTexture,uv+gravelOffset(tile+vec2(1.,1.))).rgb;
     return mix(mix(a,b,w.x),mix(c,d,w.x),w.y);
 }
+// Existing photographic dolomite is sampled in three physical dimensions;
+// the same stone material transitions from the real cave wall into its
+// 3D scree apron, without adding a new invented ground colour slab.
+vec3 photoDolomite(vec3 p,vec3 n){
+    vec3 weights=pow(abs(normalize(n)),vec3(4.0));
+    weights/=max(dot(weights,vec3(1.0)),.0001);
+    const float scale=.44;
+    vec3 sideX=texture(u_cliffTexture,p.zy*scale+vec2(.13,.27)).rgb;
+    vec3 topY=texture(u_cliffTexture,p.xz*scale+vec2(.19,.43)).rgb;
+    vec3 sideZ=texture(u_cliffTexture,p.xy*scale+vec2(.34,.31)).rgb;
+    return sideX*weights.x+topY*weights.y+sideZ*weights.z;
+}
+float geologicalScree(vec3 p,vec3 n){
+    // Same footprint as WorldTerrain::height: stone shoulder mounds
+    // around both sides of the 3 metre cave opening.
+    vec2 l=(p.xz-vec2(-6.8,6.2))/vec2(5.0,8.0);
+    vec2 r=(p.xz-vec2(6.5,6.8))/vec2(5.5,8.5);
+    vec2 c=(p.xz-vec2(0.0,9.1))/vec2(9.0,12.0);
+    float exposed=exp(-.5*dot(l,l))+exp(-.5*dot(r,r))
+                  +.43*exp(-.5*dot(c,c));
+    float steepness=1.0-clamp(normalize(n).y,0.0,1.0);
+    vec2 opening=(p.xz-vec2(0.0,3.5))/vec2(2.6,6.8);
+    float door=exp(-.5*dot(opening,opening));
+    return clamp((exposed*.72+steepness*1.35)*(1.0-.82*door),0.,1.);
+}
 void main(){
     float grain=hash(floor(wPos*12.));
     float lines=.5+.5*sin(wPos.y*8.5+sin(wPos.x*.69+wPos.z*.21)*1.8);
@@ -546,12 +602,23 @@ void main(){
         float mudCoverage=smoothstep(.12,.77,u_mud+drainage*.43)*smoothstep(.02,.20,u_mud);
         base=mix(base,base*vec3(.48,.44,.38),mudCoverage);
         base+=vec3(.065,.058,.049)*mudCoverage*mudCoverage*pow(.5+.5*sin(lines*6.+wPos.x*3.),4.);
+        // Dolomite outcrop and sediment are parts of ONE actual height mesh.
+        // Preserve the photographed limestone palette around the entrance
+        // and warm Kalahari sand in the traversable clearing.
+        float stone=geologicalScree(wPos,wNorm);
+        float grit=hash(floor(wPos*19.7));
+        vec3 limestone=photoDolomite(wPos,wNorm);
+        vec3 weathered=limestone*(.86+.12*grit);
+        base=mix(base,weathered,stone*.83);
+        float channelX=-9.2+.087*(wPos.z+10.)+.7*sin(wPos.z*.12+2.);
+        float wetChannel=exp(-.5*pow((wPos.x-channelX)/1.2,2.))*
+                         exp(-.5*pow((wPos.z+9.5)/22.,2.));
+        // Physically lower runoff gully uses the actual WorldTerrain shape;
+        // it darkens only when rainfall/moisture exists.
+        float gullyMoisture=wetChannel*clamp(u_rain*.65+u_mud*.5,0.,1.);
+        base=mix(base,base*vec3(.69,.72,.68),gullyMoisture);
     }else if(matId==1){
-        vec3 weights=pow(abs(normalize(wNorm)),vec3(4.));
-        weights/=max(dot(weights,vec3(1.)),.001);
-        base=(texture(u_cliffTexture,wPos.zy*.64).rgb*weights.x+
-              texture(u_cliffTexture,wPos.xz*.64).rgb*weights.y+
-              texture(u_cliffTexture,wPos.xy*.64).rgb*weights.z)*(.88+.12*lines);
+        base=photoDolomite(wPos,wNorm)*(.90+.10*lines);
     }else if(matId==2){
         base=mix(vec3(.32,.30,.27),vec3(.59,.53,.46),grain*.7);
     }else if(matId==3){

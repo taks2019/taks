@@ -1,0 +1,69 @@
+name: TAKS World 0.15.6 - native 3D ground Android GLES runtime smoke
+on:
+  push:
+    branches: [codex/taks-world-update21-true-3d-wonderwerk-terrain-2026-11-21]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  true-3d-gles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Actual Android screen-inspection libraries
+        run: python -m pip install --disable-pip-version-check 'numpy>=1.26,<3' 'Pillow>=10'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-33 build-tools;33.0.2'
+      - name: Download compiled 0.15.6 game core, never use it as user's UPDATE
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/terrain21
+          gh run download 44905393639 --repo "$GITHUB_REPOSITORY" \
+            --name TAKS_World_UPDATE21_TRUE_3D_TERRAIN_CORE \
+            --dir /tmp/terrain21
+          test -s /tmp/terrain21/TAKS_WORLD_0_15_6_TRUE_3D_TERRAIN_CORE_FOR_SIGNING.apk
+      - name: Activate Linux Android virtualization
+        run: |
+          if test -e /dev/kvm; then sudo chmod 666 /dev/kvm; fi
+      - name: Test real main menu, native gameplay, actual 3D terrain and inside cave
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 3072M
+          heap-size: 512M
+          emulator-options: -no-window -no-audio -no-snapshot -gpu swiftshader_indirect -no-boot-anim
+          disable-animations: true
+          script: |
+            mkdir -p snapshots
+            adb install -r /tmp/terrain21/TAKS_WORLD_0_15_6_TRUE_3D_TERRAIN_CORE_FOR_SIGNING.apk
+            python scripts/prove_menu_and_game_update19.py
+            adb logcat -d -v time > snapshots/graphics_runtime.log
+            if grep -q 'Fast GLES3 init:' snapshots/graphics_runtime.log; then
+              echo 'ERROR: native TAKS 3D shader or GPU initialization failure'
+              grep -A 3 -B 3 'Fast GLES3 init:' snapshots/graphics_runtime.log
+              exit 1
+            fi
+            echo "REAL Android native 3D renderer startup & cave inspection: PASS"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TAKS_0_15_6_3D_GROUND_REAL_ANDROID_PROOF
+          path: snapshots/
+          retention-days: 7
+          if-no-files-found: warn

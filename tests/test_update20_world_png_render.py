@@ -45,7 +45,7 @@ class CameraAlignedCave(unittest.TestCase):
         self.assertIn("this::newWorldFromMenu,this::showSettings",MAIN)
         self.assertIn("this::showCredits,this::confirmExit",MAIN)
         self.assertIn("nativeSetCaveInspection(caveInspecting)",MAIN)
-        self.assertIn("versionCode 20",GRADLE)
+        self.assertIn("versionCode 21",GRADLE)
         self.assertIn("applicationIdSuffix '.menufixedgame'",GRADLE)
 
 if __name__=="__main__":

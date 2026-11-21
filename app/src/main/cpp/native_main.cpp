@@ -5,6 +5,7 @@
 #include "CauseWorld.h"
 #include "AfricanClimate.h"
 #include "FastScene.h"
+#include "WorldTerrain.h"
 #include "CaveSprite.h"
 #include "RealModels.h"
 #include <vector>
@@ -65,7 +66,23 @@ extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeDo(JN
 extern "C" JNIEXPORT jstring JNICALL Java_hu_taks_world_MainActivity_nativeMove(JNIEnv* env,jobject,jfloat dx,jfloat dz){
     std::lock_guard<std::mutex> guard(worldLock);
     const double beforeX=world.playerX,beforeZ=world.playerZ;
-    const std::string result=world.move(static_cast<double>(dx),static_cast<double>(dz));
+    // The world is now a real 3D heightfield. Gameplay physics must use
+    // exactly the same terrain as the renderer, so the actor cannot walk
+    // through a near-vertical ledge or stride uphill at flat-ground speed.
+    const float requested=std::hypot(dx,dz);
+    float steepness=0.f;
+    if(std::isfinite(requested) && requested>.0001f){
+        const float begin=taks::WorldTerrain::height(float(beforeX),float(beforeZ));
+        const float finish=taks::WorldTerrain::height(float(beforeX+dx),float(beforeZ+dz));
+        steepness=(finish-begin)/requested;
+        if(steepness>.73f)return toJava(env,
+            "A meredek sziklás terepen nem tudsz egyenesen felmenni.");
+    }
+    const float walkFactor=steepness>0.f?
+        std::clamp(1.f-.48f*steepness,.55f,1.f):1.f;
+    const std::string result=world.move(
+        static_cast<double>(dx)*walkFactor,
+        static_cast<double>(dz)*walkFactor);
     const double deltaX=world.playerX-beforeX,deltaZ=world.playerZ-beforeZ;
     if(std::hypot(deltaX,deltaZ)>.00001){
         playerHeading=static_cast<float>(std::atan2(deltaX,deltaZ));

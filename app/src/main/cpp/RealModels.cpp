@@ -1,4 +1,5 @@
 #include "RealModels.h"
+#include "WorldTerrain.h"
 #include <GLES3/gl3.h>
 #include <algorithm>
 #include <array>
@@ -278,12 +279,7 @@ bool uploadRigged(const std::uint8_t* bytes,std::size_t size,const std::uint32_t
  return true;
 }
 float surfaceHeight(float x,float z){
- auto saturate=[](float v){return std::max(0.f,std::min(1.f,v));};
- float e=saturate((11.f-std::abs(x))/2.4f) *
-        saturate((z+11.f)/2.4f)*saturate((17.f-z)/2.4f);
- float relief=-.27f+.17f*std::sin(x*.21f)*std::cos(z*.22f)+
-              .09f*std::sin(x*.87f+z*.57f)+.065f*std::cos(z*.73f-x*.42f);
- return -.48f+(relief+.48f)*e;
+ return taks::WorldTerrain::height(x,z);
 }
 void draw(const Model& m,float x,float z,float scale,float radians){
  float c=std::cos(radians),s=std::sin(radians);
