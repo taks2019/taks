@@ -28,13 +28,14 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/menu-repair-apk
           for attempt in $(seq 1 25); do
-            if gh run download 44883584790 --repo "$GITHUB_REPOSITORY" --name TAKS_World_Approved_Menu_Fullscreen_Android_Repair --dir /tmp/menu-repair-apk; then
+            build_run=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow approved-menu-black-screen-fixed-android.yml --branch "$GITHUB_REF_NAME" --limit 12 --json databaseId,conclusion --jq '[.[] | select(.conclusion=="success")][0].databaseId' 2>/dev/null || true)
+            if [[ -n "$build_run" && "$build_run" != "null" ]] && gh run download "$build_run" --repo "$GITHUB_REPOSITORY" --name TAKS_World_Approved_Menu_Fullscreen_Android_Repair --dir /tmp/menu-repair-apk; then
               break
             fi
             echo "Awaiting signed APK build artifact, attempt $attempt"
             sleep 12
           done
-          test -s '/tmp/menu-repair-apk/TAKS_WORLD_MENÜ_MEGJELENÉS_JAVÍTOTT_TESZT.apk'
+          test -s '/tmp/menu-repair-apk/TAKS_WORLD_MENU_JAVITOTT_TESZT.apk'
       - name: Activate virtualization for x86 Android emulator
         run: |
           if test -e /dev/kvm; then sudo chmod 666 /dev/kvm; fi
@@ -52,7 +53,7 @@ jobs:
           disable-animations: true
           script: |
             mkdir -p snapshots
-            adb install -r '/tmp/menu-repair-apk/TAKS_WORLD_MENÜ_MEGJELENÉS_JAVÍTOTT_TESZT.apk'
+            adb install -r '/tmp/menu-repair-apk/TAKS_WORLD_MENU_JAVITOTT_TESZT.apk'
             adb shell am force-stop hu.taks.world.menufixedgame || true
             adb shell am start -n hu.taks.world.menufixedgame/hu.taks.world.MainActivity
             sleep 20
