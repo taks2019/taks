@@ -4,7 +4,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"scripts"))
-from visual_surface_gate import neutral_blank_fraction, require_visible_world
+from visual_surface_gate import neutral_blank_fraction, require_visible_world, world_view_difference
 
 class NativeWorldScreenshot(unittest.TestCase):
     def test_rejects_blank_world_even_when_hud_draws(self):
@@ -30,6 +30,17 @@ class NativeWorldScreenshot(unittest.TestCase):
         self.assertGreater(neutral_blank_fraction(img),.9)
         with self.assertRaises(AssertionError):
             require_visible_world(img)
+
+
+    def test_camera_orbit_comparison_excludes_static_hud(self):
+        old=Image.new("RGB",(1000,500),(71,58,36))
+        new=old.copy()
+        brush=ImageDraw.Draw(new)
+        brush.rectangle((0,0,1000,60),fill=(230,55,25))
+        brush.rectangle((0,420,1000,500),fill=(25,160,200))
+        self.assertAlmostEqual(world_view_difference(old,new),0.0)
+        brush.rectangle((340,150,620,335),fill=(120,140,35))
+        self.assertGreater(world_view_difference(old,new),8.0)
 
 if __name__=="__main__":
     unittest.main()

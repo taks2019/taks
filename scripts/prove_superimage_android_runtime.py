@@ -187,6 +187,18 @@ def run():
     # actual 3D scene is unpainted #303030. Evaluate the WORLD-only window.
     from visual_surface_gate import require_visible_world
     require_visible_world(game)
+    # Prove that the CAMERA really orbits a nonblank native 3D scene.
+    from visual_surface_gate import world_view_difference
+    adb("shell","input","swipe",
+        str(int(game.width*.75)),str(int(game.height*.41)),
+        str(int(game.width*.53)),str(int(game.height*.37)),"850")
+    time.sleep(3)
+    rotated=screenshot("05b_actual_isometric_camera_orbit")
+    require_visible_world(rotated)
+    motion=world_view_difference(game,rotated)
+    print("ACTUAL 3D CAMERA ORBIT WORLD PIXEL CHANGE",motion,flush=True)
+    if motion<2.5:
+        raise AssertionError("Camera orbit did not redraw actual 3D world.")
     ui=dump()
     (OUT/"05_gameplay_accessibility.xml").write_text(ui,encoding="utf-8")
     # A chooser or static main menu must NEVER satisfy gameplay proof:
@@ -214,6 +226,7 @@ def run():
         "game_mean_difference_vs_menu":round(difference(initial,game),3),
         "game_contrast":round(contrast(game),3),
         "rendered_world_region_verified":True,
+        "camera_orbit_world_pixel_change":round(motion,3),
         "menu_is_still_static_png":True,
         "fully_realistic_graphics_approved":False,
         "cave_mean_difference":round(difference(game,cave),3),

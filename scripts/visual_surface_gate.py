@@ -33,3 +33,14 @@ def require_visible_world(frame):
             f"hogy a valós 3D világ megjelent. Üres képrész: {blank:.1%}"
         )
     return blank
+
+def world_view_difference(a,b):
+    """Compare native game pixels, excluding static Android HUD."""
+    from PIL import ImageChops, ImageStat
+    if a.size!=b.size:
+        raise AssertionError("Device changed orientation during orbit")
+    w,h=a.size
+    bounds=(int(w*.26),int(h*.19),int(w*.74),int(h*.71))
+    diff=ImageChops.difference(a.convert("RGB").crop(bounds),
+                               b.convert("RGB").crop(bounds))
+    return float(sum(ImageStat.Stat(diff).mean)/3)
