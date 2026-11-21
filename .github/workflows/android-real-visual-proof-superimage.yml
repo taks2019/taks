@@ -27,14 +27,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Install original model import dependencies and image checker
+        run: python -m pip install --disable-pip-version-check 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'trimesh>=4.10,<5' 'scipy>=1.11,<2'
       - name: Generate one moving menu from the exact approved original
         run: |
           command -v ffmpeg
           command -v ffprobe
           python scripts/build_wonderwerk_menu_video.py
           python -m unittest discover -s tests -p 'test_menu_video_contract.py' -v
-      - name: Install original model import dependencies and image checker
-        run: python -m pip install --disable-pip-version-check 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'trimesh>=4.10,<5' 'scipy>=1.11,<2'
       - name: Import existing experimental 3D model resources, review only
         run: |
           python scripts/import_cc0_rocks.py
