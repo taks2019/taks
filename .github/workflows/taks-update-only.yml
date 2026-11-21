@@ -82,7 +82,7 @@ jobs:
         run: |
           mkdir -p delivery
           cp app/build/outputs/apk/debug/app-debug.apk delivery/TAKS_WORLD_UPDATE16_DEBUG_SIGNED_ONLY.apk
-          echo "NOT FOR INSTALLATION: Gradle's freshly generated DEBUG signing key cannot update the previous installed release. Re-sign locally using the existing original key, then validate package/certificate/version and unchanged artwork with scripts/verify_taks_update_apk.py." > delivery/IMPORTANT_REQUIRES_ORIGINAL_SIGNING_KEY.txt
+          echo "NOT FOR INSTALLATION: Gradle's freshly generated DEBUG signing key cannot update the previous installed release. Use scripts/package_taks_inplace_update.py with the previous signed APK and its original private signing key. It restores ALL 8 unchanged cave PNGs missing from CI's built APK before signing. Validate same package, certificate, versionCode and original assets. NEVER install or distribute this incomplete CI debug APK directly." > delivery/IMPORTANT_REQUIRES_ORIGINAL_SIGNING_KEY.txt
       - uses: actions/upload-artifact@v4
         with:
           name: TAKS_World_UPDATE16_BUILD_NOT_YET_INSTALLABLE
