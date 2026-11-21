@@ -199,6 +199,11 @@ extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUplo
     if(env->ExceptionCheck())return JNI_FALSE;
     return taks::CaveSprite::upload(direction,argb.data(),width,height)?JNI_TRUE:JNI_FALSE;
 }
+extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetApprovedTerrainActive(
+    JNIEnv*,jobject,jboolean enabled){
+    // Called only on the GL thread after all six textures were imported.
+    taks::FastScene::setApprovedTerrainActive(enabled==JNI_TRUE);
+}
 extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeUploadTerrainTexture(
     JNIEnv* env,jobject,jint id,jintArray pixels,jint width,jint height){
     if(!pixels||width<1||height<1||width>2048||height>2048)return JNI_FALSE;
