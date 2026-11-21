@@ -833,6 +833,10 @@ public final class MainActivity extends Activity {
         if(approvedMotion!=null){approvedMotion.releaseVideo();approvedMotion=null;}
         closeModal();
         inMainMenu=false;
+        // A GLSurfaceView has its own compositor layer on Android.
+        // It must be visible in the game, but never paint black over the
+        // accepted original main menu when the activity rotates/resumes.
+        surface.setVisibility(View.VISIBLE);
         if(menuMotion!=null){menuMotion.release();menuMotion=null;}
         if(menuCover!=null){root.removeView(menuCover);menuCover=null;}
         setHudVisibility(true);
@@ -1055,6 +1059,10 @@ public final class MainActivity extends Activity {
     private void showMainMenu(){
         inMainMenu=true;
         stopFrameLoop();
+        // Prevent the separate native EGL Surface layer from covering the
+        // original 1664x768 approved image. INVISIBLE (not GONE) retains the
+        // layout and safe insets; it becomes VISIBLE again only in gameplay.
+        if(surface!=null)surface.setVisibility(View.INVISIBLE);
         worldHandler.removeCallbacks(worldLoop);
         padActive=false;moveIntent=false;sprinting=false;
         stopMovement();
@@ -1180,6 +1188,8 @@ public final class MainActivity extends Activity {
 
         root=new FrameLayout(this);
         surface=new GLSurfaceView(this);
+        surface.setZOrderOnTop(false); // Native GL stays BELOW all Android menus.
+        surface.setZOrderMediaOverlay(false);
         surface.setEGLContextClientVersion(3);
         // Isometric GPU mesh renderer: dynamic resolution menu, aspect ratio always preserved.
         applyFramebufferSize(840);

@@ -26,6 +26,10 @@ class RestoredApprovedMenu(unittest.TestCase):
         self.assertIn('modalOverlay.setElevation(dp(48))',MAIN)
         self.assertIn('if(pickupButton!=null)pickupButton.setVisibility(View.GONE)',MAIN)
         self.assertIn('RestoredStoneMenu.load(this',MAIN)
+        self.assertIn('if(surface!=null)surface.setVisibility(View.INVISIBLE);',MAIN)
+        self.assertIn('surface.setVisibility(View.VISIBLE);',MAIN)
+        self.assertIn('surface.setZOrderOnTop(false)',MAIN)
+        self.assertIn('surface.setZOrderMediaOverlay(false)',MAIN)
         self.assertIn("applicationIdSuffix '.menufixedgame'",GRADLE)
     def test_exact_original_asset_required_not_synthetic_mp4(self):
         self.assertIn('menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png',MENU)
