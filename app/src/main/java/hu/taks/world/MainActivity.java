@@ -58,7 +58,9 @@ public final class MainActivity extends Activity {
 
     private GLSurfaceView surface;
     private volatile boolean cavePreviewReady=false;
-    // True mesh/heightfield cave is the DEFAULT. The 8-angle PNG is a 2.5D\n    // review aid only and must be enabled explicitly in Settings.\n    private volatile boolean cavePreviewWanted=false;
+    // True mesh/heightfield cave is the DEFAULT. The 8-angle PNG is a 2.5D
+    // review aid only and must be enabled explicitly in Settings.
+    private volatile boolean cavePreviewWanted=false;
     private SharedPreferences saves;
     private FrameLayout root;
     private LinearLayout sheet;
