@@ -104,8 +104,18 @@ function Need-PythonVenv {
         $arguments=@($py.Prefix)+@("-m","venv",$Venv)
         Run $py.Exe $arguments
     }
-    & $exe "-c" "import numpy, requests, trimesh, PIL, scipy" 2>$null
-    if($LASTEXITCODE -ne 0){
+    # Missing Python packages are normal on the first build, not a fatal
+    # PowerShell stderr exception (Windows PowerShell 5.1 treats it as one
+    # when ErrorActionPreference=Stop).
+    $savedErrorPreference=$ErrorActionPreference
+    try{
+        $ErrorActionPreference="Continue"
+        & $exe "-c" "import numpy, requests, trimesh, PIL, scipy" 2>$null
+        $packagesReady=($LASTEXITCODE -eq 0)
+    }finally{
+        $ErrorActionPreference=$savedErrorPreference
+    }
+    if(-not $packagesReady){
         Say "Elso alkalom: a valodi 3D modellek importjanak ingyenes fuggosegei..."
         Run $exe @("-m","pip","install","--disable-pip-version-check","numpy>=1.26,<3","Pillow>=10","requests>=2.31","trimesh>=4.10,<5","scipy>=1.11,<2")
     }
@@ -313,7 +323,8 @@ while($true){
     Write-Host "0 - Kilepes"
     $choice=Read-Host "Valassz"
     if($choice -eq "0"){exit 0}
-    $action=@{"1"="check";"2"="build";"3"="install";"4"="copy-images";"5"="studio";"6"="tests";"7"="logs"}[$choice]
+    $actions=@{"1"="check";"2"="build";"3"="install";"4"="copy-images";"5"="studio";"6"="tests";"7"="logs"}
+    $action=$actions[$choice]
     if(-not $action){Write-Host "Ismeretlen menupont." -ForegroundColor Yellow;continue}
     try{Execute $action}catch{Write-Host ("HIBA: "+$_.Exception.Message) -ForegroundColor Red}
     [void](Read-Host "ENTER = vissza a menube")

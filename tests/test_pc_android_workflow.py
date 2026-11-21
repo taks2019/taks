@@ -19,6 +19,7 @@ class TestWindowsAndroidWorkflow(unittest.TestCase):
         self.assertIn('if($current -ieq $ApprovedHash)',x)
         self.assertIn('if($actual -ine $match.Value)',x)
         self.assertIn('"install" "-r"',x)
+        self.assertIn('if(-not $packagesReady)',x)
         self.assertNotIn('adb uninstall',x.lower())
         self.assertNotIn('pm clear',x.lower())
 if __name__=='__main__': unittest.main()
