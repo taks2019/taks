@@ -10,6 +10,7 @@ import android.graphics.Typeface;
 import android.graphics.SurfaceTexture;
 import android.media.MediaPlayer;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
@@ -36,6 +37,11 @@ final class ApprovedMenuMotion extends FrameLayout
     private final View approvedStaticScene;
     private final View captions;
     private final View[] touches=new View[4];
+    private final Runnable[] menuActions;
+    private int activeTouch=-1;
+    private static final String[] MENUS={
+        "ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐ","KILÉPÉS"
+    };
     private MediaPlayer player;
     private Surface surface;
     private boolean paused;
@@ -57,6 +63,7 @@ final class ApprovedMenuMotion extends FrameLayout
     private ApprovedMenuMotion(Context context,View approvedStaticScene,Runnable[] actions){
         super(context);
         this.approvedStaticScene=approvedStaticScene;
+        this.menuActions=actions;
         setClickable(false);
         setFocusable(false);
         setWillNotDraw(true);
@@ -156,6 +163,50 @@ final class ApprovedMenuMotion extends FrameLayout
             touches[i].setLayoutParams(target);
         }
         captions.invalidate();
+    }
+
+    private int menuButtonIndex(float pointerX,float pointerY){
+        final float w=getWidth(),h=getHeight();
+        if(w<1||h<1)return -1;
+        float ratio=Math.min(w/1664f,h/768f);
+        float left=(w-1664f*ratio)*.5f;
+        float top=(h-768f*ratio)*.5f;
+        float sceneX=(pointerX-left)/ratio;
+        float sceneY=(pointerY-top)/ratio;
+        if(sceneX<1664f*.396f || sceneX>1664f*.396f+414f)return -1;
+        final float[] starts={.443f,.566f,.687f,.809f};
+        final float[] heights={.120f,.120f,.115f,.120f};
+        for(int i=0;i<4;i++){
+            if(sceneY>=768f*starts[i] && sceneY<768f*(starts[i]+heights[i]))
+                return i;
+        }
+        return -1;
+    }
+
+    @Override public boolean dispatchTouchEvent(MotionEvent event){
+        // Parent-first input interception. A TextureView's compositor can be
+        // drawn above its sibling Android buttons, leaving their OnClick
+        // listeners unreachable. Here the menu's four original geometry
+        // rectangles are always tested BEFORE child dispatch.
+        final int action=event.getActionMasked();
+        if(action==MotionEvent.ACTION_DOWN){
+            activeTouch=menuButtonIndex(event.getX(),event.getY());
+            if(activeTouch>=0)return true;
+        }else if(action==MotionEvent.ACTION_UP && activeTouch>=0){
+            int pressed=activeTouch;
+            activeTouch=-1;
+            if(pressed==menuButtonIndex(event.getX(),event.getY())){
+                android.util.Log.i("TAKS_MENU_TOUCH",
+                   "Routed exact approved stone button: "+MENUS[pressed]);
+                menuActions[pressed].run();
+            }
+            return true;
+        }else if(action==MotionEvent.ACTION_CANCEL && activeTouch>=0){
+            activeTouch=-1;return true;
+        }else if(activeTouch>=0){
+            return true;
+        }
+        return super.dispatchTouchEvent(event);
     }
 
     void setRunning(boolean enabled){
