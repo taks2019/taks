@@ -10,6 +10,7 @@ import android.graphics.Typeface;
 import android.graphics.SurfaceTexture;
 import android.media.MediaPlayer;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
@@ -33,19 +34,25 @@ final class ApprovedMenuMotion extends FrameLayout
         implements TextureView.SurfaceTextureListener {
     private static final String VIDEO="menu/wonderwerk_loop.mp4";
     private final TextureView video;
+    private final View approvedStaticScene;
     private final View captions;
     private final View[] touches=new View[4];
+    private final Runnable[] menuActions;
+    private int activeTouch=-1;
+    private static final String[] MENUS={
+        "ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐ","KILÉPÉS"
+    };
     private MediaPlayer player;
     private Surface surface;
     private boolean paused;
     private boolean prepared;
     private boolean renderedFirstFrame;
 
-    static ApprovedMenuMotion create(Context context,Runnable newGame,
+    static ApprovedMenuMotion create(Context context,View approvedStaticScene,Runnable newGame,
                                      Runnable settings,Runnable credits,Runnable exit){
         try(InputStream input=context.getAssets().open(VIDEO)){
             if(input.read()<0)return null;
-            return new ApprovedMenuMotion(context,
+            return new ApprovedMenuMotion(context,approvedStaticScene,
                 new Runnable[]{newGame,settings,credits,exit});
         }catch(Exception noMedia){
             android.util.Log.w("TAKS_MENU_MOTION","Approved menu animation not bundled; original image remains");
@@ -53,8 +60,10 @@ final class ApprovedMenuMotion extends FrameLayout
         }
     }
 
-    private ApprovedMenuMotion(Context context,Runnable[] actions){
+    private ApprovedMenuMotion(Context context,View approvedStaticScene,Runnable[] actions){
         super(context);
+        this.approvedStaticScene=approvedStaticScene;
+        this.menuActions=actions;
         setClickable(false);
         setFocusable(false);
         setWillNotDraw(true);
@@ -156,6 +165,50 @@ final class ApprovedMenuMotion extends FrameLayout
         captions.invalidate();
     }
 
+    private int menuButtonIndex(float pointerX,float pointerY){
+        final float w=getWidth(),h=getHeight();
+        if(w<1||h<1)return -1;
+        float ratio=Math.min(w/1664f,h/768f);
+        float left=(w-1664f*ratio)*.5f;
+        float top=(h-768f*ratio)*.5f;
+        float sceneX=(pointerX-left)/ratio;
+        float sceneY=(pointerY-top)/ratio;
+        if(sceneX<1664f*.396f || sceneX>1664f*.396f+414f)return -1;
+        final float[] starts={.443f,.566f,.687f,.809f};
+        final float[] heights={.120f,.120f,.115f,.120f};
+        for(int i=0;i<4;i++){
+            if(sceneY>=768f*starts[i] && sceneY<768f*(starts[i]+heights[i]))
+                return i;
+        }
+        return -1;
+    }
+
+    @Override public boolean dispatchTouchEvent(MotionEvent event){
+        // Parent-first input interception. A TextureView's compositor can be
+        // drawn above its sibling Android buttons, leaving their OnClick
+        // listeners unreachable. Here the menu's four original geometry
+        // rectangles are always tested BEFORE child dispatch.
+        final int action=event.getActionMasked();
+        if(action==MotionEvent.ACTION_DOWN){
+            activeTouch=menuButtonIndex(event.getX(),event.getY());
+            if(activeTouch>=0)return true;
+        }else if(action==MotionEvent.ACTION_UP && activeTouch>=0){
+            int pressed=activeTouch;
+            activeTouch=-1;
+            if(pressed==menuButtonIndex(event.getX(),event.getY())){
+                android.util.Log.i("TAKS_MENU_TOUCH",
+                   "Routed exact approved stone button: "+MENUS[pressed]);
+                menuActions[pressed].run();
+            }
+            return true;
+        }else if(action==MotionEvent.ACTION_CANCEL && activeTouch>=0){
+            activeTouch=-1;return true;
+        }else if(activeTouch>=0){
+            return true;
+        }
+        return super.dispatchTouchEvent(event);
+    }
+
     void setRunning(boolean enabled){
         paused=!enabled;
         if(player!=null && prepared){
@@ -187,6 +240,7 @@ final class ApprovedMenuMotion extends FrameLayout
 
     @Override public void onSurfaceTextureAvailable(SurfaceTexture texture,int w,int h){
         releaseVideo();
+        renderedFirstFrame=false;
         surface=new Surface(texture);
         try{
             final MediaPlayer mp=new MediaPlayer();
@@ -202,20 +256,30 @@ final class ApprovedMenuMotion extends FrameLayout
             mp.setOnInfoListener((ready,what,extra)->{
                 if(what==MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START&&!renderedFirstFrame){
                     renderedFirstFrame=true;
-                    // Fade from original static image to same pixels now moving.
-                    animate().alpha(1f).setDuration(220).start();
+                    // Display exactly ONE source image at any point. Blending
+                    // a translated live MP4 over the previous static image
+                    // produced double leaves, double sun and ghost clouds.
+                    // Keep the original View for safe instant fallback, but
+                    // stop drawing it while the video owns the background.
+                    approvedStaticScene.setVisibility(View.INVISIBLE);
+                    setAlpha(1f);
+                    android.util.Log.i("TAKS_MENU_MOTION","SINGLE_SCENE: MP4 visible, static scene hidden");
                 }
                 return false;
             });
             mp.setOnErrorListener((ready,what,extra)->{
                 android.util.Log.e("TAKS_MENU_MOTION","MP4 decoding failed "+what+"/"+extra);
-                setAlpha(0f);releaseVideo();
+                setAlpha(0f);
+                approvedStaticScene.setVisibility(View.VISIBLE);
+                releaseVideo();
                 return true;
             });
             mp.prepareAsync();
         }catch(Exception error){
             android.util.Log.e("TAKS_MENU_MOTION","Unable to load moving menu",error);
-            setAlpha(0f);releaseVideo();
+            setAlpha(0f);
+            approvedStaticScene.setVisibility(View.VISIBLE);
+            releaseVideo();
         }
     }
     @Override public void onSurfaceTextureSizeChanged(SurfaceTexture texture,int w,int h){}
@@ -227,6 +291,8 @@ final class ApprovedMenuMotion extends FrameLayout
 
     void releaseVideo(){
         prepared=false;
+        setAlpha(0f);
+        approvedStaticScene.setVisibility(View.VISIBLE);
         if(player!=null){
             try{player.reset();}catch(IllegalStateException ignored){}
             player.release();

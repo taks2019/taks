@@ -85,6 +85,10 @@ void shutdown(){
 }
 bool init(){
     shutdown();error.clear();
+    // Android GLES error state is shared across all render modules. The
+    // prior 3D model uploader may leave a stale error. It is NOT evidence
+    // that this shader/PNG renderer failed; isolate this module's operations.
+    for(int i=0;i<16 && glGetError()!=GL_NO_ERROR;++i){}
     GLuint vs=shader(GL_VERTEX_SHADER,VERT),fs=shader(GL_FRAGMENT_SHADER,FRAG);
     if(!vs||!fs){
         if(vs)glDeleteShader(vs);
@@ -132,8 +136,14 @@ bool init(){
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA,size,size,0,GL_RGBA,GL_UNSIGNED_BYTE,shadow.data());
-    initialized=(glGetError()==GL_NO_ERROR);
-    if(!initialized){error="PNG barlang: GPU inicializálási hiba";shutdown();}
+    const GLenum textureStatus=glGetError();
+    initialized=(textureStatus==GL_NO_ERROR && glIsProgram(program) &&
+                 glIsTexture(shadowTexture));
+    if(!initialized){
+        error="PNG barlang: GPU inicializálási hiba (GL="
+             +std::to_string(static_cast<unsigned>(textureStatus))+")";
+        shutdown();
+    }
     return initialized;
 }
 bool upload(int direction,const std::uint32_t* argb,int width,int height){

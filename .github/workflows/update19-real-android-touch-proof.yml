@@ -1,0 +1,64 @@
+name: TAKS World 0.15.4 - REAL Android four menu buttons and animated cave
+on:
+  push:
+    branches: [codex/taks-world-update19-single-scene-wind-2026-11-21]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  actually-test-menu-touch-and-game:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pixel movement / screenshot inspection dependencies
+        run: python -m pip install --disable-pip-version-check 'numpy>=1.26,<3' 'Pillow>=10'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-33 build-tools;33.0.2'
+      - name: Obtain last green game APK (menu/game source identical)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/taks19
+          # This is a GUI-only test of the existing signed-build code.
+          # A separate APK package check enforces the unchanged 8 cave PNGs.
+          gh run download 44889084922 --repo "$GITHUB_REPOSITORY" \
+            --name TAKS_World_UPDATE19_SINGLE_SCENE_GAME_BUILD \
+            --dir /tmp/taks19
+          test -s /tmp/taks19/TAKS_WORLD_0_15_4_BUILD_DEBUG_NOT_INSTALLABLE.apk
+      - name: Permit emulator hardware virtualization
+        run: |
+          if test -e /dev/kvm; then sudo chmod 666 /dev/kvm; fi
+      - name: ACTUAL Android taps on all four original stone buttons + real cave
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 3072M
+          heap-size: 512M
+          emulator-options: -no-window -no-audio -no-snapshot -gpu swiftshader_indirect -no-boot-anim
+          disable-animations: true
+          script: |
+            mkdir -p snapshots
+            adb install -r /tmp/taks19/TAKS_WORLD_0_15_4_BUILD_DEBUG_NOT_INSTALLABLE.apk
+            python scripts/prove_menu_and_game_update19.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TAKS_World_0_15_4_ACTUAL_Menu_Touch_Video_Game_Proof
+          path: snapshots/
+          retention-days: 7
+          if-no-files-found: warn

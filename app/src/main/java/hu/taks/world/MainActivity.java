@@ -409,12 +409,15 @@ public final class MainActivity extends Activity {
         if(menuCover.getChildCount()==0 ||
            !(menuCover.getChildAt(0) instanceof RestoredStoneMenu))return;
         final ApprovedMenuMotion moving=ApprovedMenuMotion.create(this,
-            this::newWorldFromMenu,this::showSettings,this::showCredits,this::confirmExit);
+            menuCover.getChildAt(0),this::newWorldFromMenu,this::showSettings,this::showCredits,this::confirmExit);
         if(moving==null)return;
         approvedMotion=moving;
         menuCover.addView(moving,new FrameLayout.LayoutParams(-1,-1));
-        // The additional layer never handles touches: the four original
-        // approved 1664x768 stone-button touch targets remain functional.
+        // If Android routes a TextureView tap past its child targets,
+        // dispatch it at the parent too. This is an invisible functional
+        // handler only: it draws NO shapes, panels, or replacement UI.
+        // The original menu's four button handlers are kept unchanged.
+        menuCover.setOnTouchListener((view,event)->moving.dispatchTouchEvent(event));
         moving.setRunning(true);
     }
 
