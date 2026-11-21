@@ -98,21 +98,51 @@ final class RestoredStoneMenu extends FrameLayout {
         offsetY=(height-DESIGN_H*scale)*.5f;
     }
 
+    private int measuredTargetWidth=-1,measuredTargetHeight=-1;
+
+    // The original implementation resized the touch targets in
+    // onSizeChanged(), AFTER FrameLayout had measured the initial 1x1
+    // children. On a real 2400x1080 Android emulator the descendants
+    // therefore stayed ONE PIXEL wide, despite the correct menu artwork.
+    // Install the exact same four hitboxes BEFORE FrameLayout measures.
+    @Override protected void onMeasure(int widthMeasureSpec,int heightMeasureSpec){
+        int width=View.MeasureSpec.getSize(widthMeasureSpec);
+        int height=View.MeasureSpec.getSize(heightMeasureSpec);
+        if(width>0&&height>0 &&
+           (width!=measuredTargetWidth||height!=measuredTargetHeight)){
+            geometry(width,height);
+            for(int i=0;i<4;++i){
+                FrameLayout.LayoutParams area=new FrameLayout.LayoutParams(
+                    Math.max(1,Math.round(414f*scale)),
+                    Math.max(1,Math.round(DESIGN_H*HEIGHT[i]*scale)),
+                    Gravity.LEFT|Gravity.TOP);
+                area.leftMargin=Math.round(offsetX+DESIGN_W*.396f*scale);
+                area.topMargin=Math.round(offsetY+DESIGN_H*TOP[i]*scale);
+                touch[i].setLayoutParams(area);
+                android.util.Log.i("TAKS_MENU_TOUCH","Measured hitbox "+LABELS[i]+
+                    " x="+area.leftMargin+" y="+area.topMargin+
+                    " w="+area.width+" h="+area.height);
+            }
+            measuredTargetWidth=width;
+            measuredTargetHeight=height;
+        }
+        super.onMeasure(widthMeasureSpec,heightMeasureSpec);
+    }
+
     @Override protected void onSizeChanged(int width,int height,int oldWidth,int oldHeight){
         super.onSizeChanged(width,height,oldWidth,oldHeight);
         geometry(width,height);
-        for(int i=0;i<4;++i){
-            FrameLayout.LayoutParams area=new FrameLayout.LayoutParams(
-                   Math.round(414f*scale), Math.round(DESIGN_H*HEIGHT[i]*scale),
-                   Gravity.LEFT|Gravity.TOP);
-            area.leftMargin=Math.round(offsetX+DESIGN_W*.396f*scale);
-            area.topMargin=Math.round(offsetY+DESIGN_H*TOP[i]*scale);
-            touch[i].setLayoutParams(area);
-            android.util.Log.i("TAKS_MENU_TOUCH","Hitbox "+LABELS[i]+
-               " x="+area.leftMargin+" y="+area.topMargin+
-               " w="+area.width+" h="+area.height);
-        }
         invalidate();
+    }
+
+    @Override protected void onLayout(boolean changed,int l,int t,int r,int b){
+        super.onLayout(changed,l,t,r,b);
+        for(int i=0;i<touch.length;++i){
+            if(touch[i].getWidth()<30||touch[i].getHeight()<30){
+                android.util.Log.e("TAKS_MENU_TOUCH","INVALID real Android hitbox "+
+                    LABELS[i]+" "+touch[i].getWidth()+"x"+touch[i].getHeight());
+            }
+        }
     }
 
     @Override protected void onDraw(Canvas canvas){
