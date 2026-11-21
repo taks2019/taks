@@ -48,6 +48,14 @@ class ApprovedSuperImageIntegration(unittest.TestCase):
         for slot in range(2,8):
             self.assertIn('terrainTexture[i+2]',SCENE)
 
+    def test_camera_and_weather_frame_pacing_uses_android_vsync(self):
+        self.assertIn('android.view.Choreographer.FrameCallback renderLoop',MAIN)
+        self.assertIn('android.view.Choreographer.getInstance().postFrameCallback(renderLoop)',MAIN)
+        self.assertIn('android.view.Choreographer.getInstance().removeFrameCallback(renderLoop)',MAIN)
+        self.assertIn('private void startFrameLoop()',MAIN)
+        self.assertIn('private void stopFrameLoop()',MAIN)
+        self.assertNotIn('renderHandler.postDelayed(this,40)',MAIN)
+
     def test_same_original_menu_visible_in_settings_with_no_second_motion(self):
         self.assertIn('RestoredStoneMenu.load(this',MAIN)
         self.assertIn('"menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png"',MENU)
