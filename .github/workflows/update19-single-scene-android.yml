@@ -63,7 +63,7 @@ jobs:
                 "assets/wonderwerk_png/$angle.png" > \
                 "app/src/main/assets/wonderwerk_png/$angle.png"; then valid=0; break; fi
             done
-            if [[ "$valid" == 1 ]] && (cd app/src/main/assets/wonderwerk_png &&
+            if [[ "$valid" == 1 ]] && (cd app/src/main/assets/wonderwerk_png && {
               echo "a3f23343c524c8c0800f59925b573b7106a5deaf52d24fffb83c8454e4e40aa4  000.png"
               echo "90e29d775824caf02bfc70f3c567014ae62eebbe4f18dc1a87491cb51c4ea1a4  045.png"
               echo "c5416aa91340abea64e765e094f173310a17358db4b91ec6af5374bdbb7c653b  090.png"
@@ -72,7 +72,7 @@ jobs:
               echo "e0874036f0e292bb885d71e1efd134378413336212307e9d240558931f6001dd  225.png"
               echo "285731023fbf0b4108b23c5c3594195d741a53cbed2da0a5dcb7588187faa009  270.png"
               echo "0382f20b62e2caae0e3a784e1d37a2c520480c177263d0b9c837783e894943ff  315.png"
-              ) | sha256sum -c -; then
+              } | sha256sum -c -); then
                 found=1
                 echo "All 8 original cave PNGs restored unchanged"
                 break
