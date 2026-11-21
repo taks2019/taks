@@ -12,6 +12,7 @@
 #include <cmath>
 #include <chrono>
 #include <array>
+#include <atomic>
 
 namespace {
 taks::World world;
@@ -25,6 +26,7 @@ std::array<float,8> npcPrevious{};
 std::array<float,8> npcTarget{};
 std::chrono::steady_clock::time_point npcSegmentStart{};
 bool npcInterpolationReady=false;
+std::atomic<bool> pngCavePreview{false};
 std::string rendererError;
 jstring toJava(JNIEnv* env,const std::string& s){return env->NewStringUTF(s.c_str());}
 GLuint compile(GLenum type,const char* source){
@@ -102,6 +104,12 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeTick(JNI
 extern "C" JNIEXPORT jboolean JNICALL Java_hu_taks_world_MainActivity_nativeLogoUnlocked(JNIEnv*,jobject){
     std::lock_guard<std::mutex> guard(worldLock);
     return world.logoUnlocked()?JNI_TRUE:JNI_FALSE;
+}
+extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeSetCavePreview(
+    JNIEnv*,jobject,jboolean enabled){
+    // Graphics-only toggle. Atomic because Android UI and GL renderer are
+    // different threads; nothing in the persistent World state changes.
+    pngCavePreview.store(enabled==JNI_TRUE,std::memory_order_relaxed);
 }
 extern "C" JNIEXPORT jfloatArray JNICALL Java_hu_taks_world_MainActivity_nativePlayerCoordinates(JNIEnv* env,jobject){
     // Consistent world-space anchor for Android's separate eight-view PNG artwork.
@@ -221,6 +229,7 @@ extern "C" JNIEXPORT void JNICALL Java_hu_taks_world_MainActivity_nativeRender(J
     {
         std::lock_guard<std::mutex> guard(worldLock);
         f.yaw=orbit;f.pitch=pitch;f.zoom=zoom;
+        f.pngCavePreview=pngCavePreview.load(std::memory_order_relaxed);
         f.clock=static_cast<float>(world.hours);
         f.rain=static_cast<float>(world.rainIntensity);
         f.moisture=static_cast<float>(world.groundMoisture);
