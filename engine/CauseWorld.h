@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include "LivingWorld.h"
+#include "SpatialMemory.h"
 #include "Structure.h"
 #include "Era.h"
 #include <array>
@@ -14,6 +15,7 @@ struct Npc {
     int role=0; // 0: fa, 1: kő, 2: levél, 3: gyújtós
     int carrying=0, task=0, delivered=0; // task: 0 indul,1 odamegy,2 hazavisz,3 pihen,4 nincs anyag
     double walkPhase=0.0;
+    int searchWaypoint=0; // Deterministic local exploration, persisted across saves.
 };
 struct BuildSite {
     double x=0.0,z=0.0;
@@ -24,7 +26,11 @@ struct BuildSite {
 // where: 0 lelőhelyen, 1 játékosnál, 2 tábori készletben, 4 társ kezében. Elfogyott tárgy kikerül a főkönyvből.
 struct Item { unsigned id=0; int type=0; /*0 faág, 1 kő*/ int where=0; int node=-1; int by=-1; };
 struct World {
-    World(){ rebuildLedgerFromCounts(); } // minden induló kő/faág azonnal egyedi azonosítót kap
+    World(){
+        rebuildLedgerFromCounts();
+        observeLandmarks(0,playerX,playerZ);
+        for(int i=0;i<npcCount;++i)observeLandmarks(i+1,npcs[i].x,npcs[i].z);
+    } // No character starts with knowledge of the full world.
     LivingWorld ecology; // canonical living ground, plants and animals
     int groundWood=14, groundStone=8, groundTinder=5;
     int carriedWood=0, carriedStone=0, carriedTinder=0;
@@ -63,6 +69,7 @@ struct World {
         {4.4,-2.0,90,12,.08,2,0,0,0,0.0},
         {-1.8,-2.4,88,13,.08,3,0,0,0,0.0}
     }};
+    SpatialMemory memory; // Personal learned locations, no prehistoric GPS or global map.
     std::array<int,4> campStock{{0,0,0,0}};
     double npcSimulatedHours=0.0;
     unsigned long eventCounter=0;
@@ -86,6 +93,7 @@ struct World {
     std::string npcStatus() const;
     std::string campStatus() const;
     void updateNpcs(double hoursElapsed);
+    void observeLandmarks(int observer,double x,double z);
     void syncGroundCounts();
     bool isNear(double x,double z,double radius) const;
     void step(double hoursElapsed);
