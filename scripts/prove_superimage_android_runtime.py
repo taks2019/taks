@@ -4,6 +4,7 @@ menu and continuously rendered isometric gameplay. On-device screenshots,
 not mockups. This job does NOT approve newly imported photogrammetry assets.
 """
 import json, re, subprocess, time
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from PIL import Image, ImageStat, ImageChops
 
@@ -52,6 +53,35 @@ def dump():
     adb("shell","uiautomator","dump","--compressed","/sdcard/taks.xml",check=False)
     return adb("exec-out","cat","/sdcard/taks.xml",check=False).decode(errors="replace")
 
+def menu_tap_accessible(label):
+    """Tap the Android REAL hit target, including display cutout safe insets."""
+    xml=dump()
+    (OUT/("ui_before_"+label+".xml")).write_text(xml,encoding="utf-8")
+    if "<hierarchy" not in xml:
+        raise AssertionError("Android accessibility hierarchy absent before "+label)
+    root=ET.fromstring(xml[xml.index("<hierarchy"):])
+    candidates=[]
+    for node in root.iter("node"):
+        if node.attrib.get("content-desc")==label:
+            bounds=node.attrib.get("bounds","")
+            xy=list(map(int,re.findall(r"-?\\d+",bounds)))
+            if len(xy)==4 and xy[2]>xy[0]+8 and xy[3]>xy[1]+8:
+                candidates.append(tuple(xy))
+    if not candidates:
+        names=[node.attrib.get("content-desc","") for node in root.iter("node")]
+        raise AssertionError("No clickable approved stone hitbox "+label+
+                             ", available: "+repr(names[:30]))
+    left,top,right,bottom=candidates[0]
+    x=(left+right)//2;y=(top+bottom)//2
+    print("ACCESSIBILITY-TAP",label,"bounds",candidates[0],"tap",x,y,flush=True)
+    adb("shell","input","tap",str(x),str(y))
+    time.sleep(1.4)
+    touch_log=adb("logcat","-d","-s","TAKS_MENU_TOUCH:I",check=False).decode(errors="replace")
+    (OUT/("touch_"+label+".txt")).write_text(touch_log,encoding="utf-8")
+    if label+" pressed" not in touch_log:
+        raise AssertionError("Genuine Android touch hitbox did not receive click "+label+
+                             " (check layout and z-order): "+touch_log[-2500:])
+
 def fail_on_render_errors():
     logs=log_line()
     if "Fast GLES3 init:" in logs or "FATAL EXCEPTION" in logs:
@@ -91,7 +121,7 @@ def run():
     if menuDiff>3:
         raise AssertionError("Unexpected second/compositor image over original menu")
     fail_on_render_errors()
-    tap_designed(initial,928,479) # BEÁLLÍTÁSOK
+    menu_tap_accessible("BEÁLLÍTÁSOK")
     time.sleep(2)
     settings=screenshot("03_settings_same_approved_background")
     change=difference(initial,settings)
@@ -104,7 +134,7 @@ def run():
     home=screenshot("04_menu_after_settings")
     if difference(initial,home)>8:
         raise AssertionError("Returning from Settings does not restore the same original menu")
-    tap_designed(initial,928,387) # ÚJ JÁTÉK
+    menu_tap_accessible("ÚJ JÁTÉK")
     time.sleep(9)
     game=screenshot("05_native_isometric_gameplay")
     print("PLAYABLE GAME",game.size,"contrast",contrast(game),
@@ -151,7 +181,7 @@ if __name__=="__main__":
         (OUT/"targeted_crash_logcat.txt").write_text(
             adb("logcat","-d","-v","time","-s","AndroidRuntime:E","ActivityTaskManager:I",
                 "ActivityManager:I","libc:F","DEBUG:E","TAKS_RENDER:E","TAKS_MODEL:E",
-                "TAKS_HUMAN:I","TAKS_MENU:I",check=False).decode(errors="replace")[-300000:],
+                "TAKS_HUMAN:I","TAKS_MENU:I","TAKS_MENU_TOUCH:I",check=False).decode(errors="replace")[-300000:],
             encoding="utf-8"
         )
         (OUT/"window_focus.txt").write_text(
