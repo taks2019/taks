@@ -4,6 +4,7 @@ No texture, approved menu, APK identity, or save schema is modified.
 """
 from pathlib import Path
 import unittest
+import re
 
 ROOT = Path(__file__).resolve().parents[1]
 JAVA = (ROOT / "app/src/main/java/hu/taks/world/MainActivity.java").read_text(encoding="utf-8")
@@ -14,7 +15,7 @@ GRADLE = (ROOT / "app/build.gradle").read_text(encoding="utf-8")
 
 class Real3DByDefault(unittest.TestCase):
     def test_flat_cave_never_enabled_automatically(self):
-        self.assertIn("private volatile boolean cavePreviewWanted=false;", JAVA)
+        self.assertRegex(JAVA, r"(?m)^\s*private volatile boolean cavePreviewWanted=false;\s*$")
         self.assertNotIn("private volatile boolean cavePreviewWanted=true;", JAVA)
         self.assertIn("std::atomic<bool> pngCavePreview{false}", NATIVE)
         self.assertIn("nativeSetCavePreview(cavePreviewReady && cavePreviewWanted)", JAVA)
