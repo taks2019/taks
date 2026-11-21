@@ -1,4 +1,4 @@
-name: TAKS World UPDATE 0.15.2 - REAL MP4 menu + playable Wonderwerk inside
+name: TAKS World UPDATE 0.15.3 - REAL MP4 menu + playable Wonderwerk inside
 on:
   push:
     branches: [codex/taks-world-update17-live-mp4-and-playable-scene-2026-11-21]
@@ -88,7 +88,7 @@ jobs:
       - name: Stage for local signing WITH the previous actual install's key
         run: |
           mkdir -p delivery
-          cp app/build/outputs/apk/debug/app-debug.apk delivery/TAKS_WORLD_0_15_2_BUILD_DEBUG_NOT_INSTALLABLE.apk
+          cp app/build/outputs/apk/debug/app-debug.apk delivery/TAKS_WORLD_0_15_3_BUILD_DEBUG_NOT_INSTALLABLE.apk
           cp app/src/main/assets/menu/wonderwerk_loop.mp4 delivery/wonderwerk_loop_24fps.mp4
           echo "This artifact is NOT A VALID IN-PLACE UPDATE until signed with the previous installed APK's exact signing certificate. Keep the original signing key private. Do not uninstall or erase game saves." > delivery/SIGN_WITH_ORIGINAL_KEY.txt
       - uses: actions/upload-artifact@v4
