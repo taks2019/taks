@@ -236,6 +236,10 @@ function Build-Android {
     finally{Pop-Location}
     $built=Join-Path $Root "app\build\outputs\apk\debug\app-debug.apk"
     if(-not (Test-Path $built)){Fail "A Gradle nem hozta letre az app-debug.apk fajlt."}
+    # DO NOT announce another 'fixed' APK if the approved scene and six
+    # photographic surfaces were silently absent from Gradle's output.
+    $verifyPython=Need-PythonVenv
+    Run $verifyPython @((Join-Path $Root "scripts\check_apk_ground_pack.py"),"--apk",$built)
     New-Item -ItemType Directory -Force $Out | Out-Null
     Copy-Item -LiteralPath $built -Destination $TestApk -Force
     Say "KESZ - TESZT APK: $TestApk"
