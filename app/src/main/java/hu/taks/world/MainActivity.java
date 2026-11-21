@@ -833,10 +833,19 @@ public final class MainActivity extends Activity {
         if(approvedMotion!=null){approvedMotion.releaseVideo();approvedMotion=null;}
         closeModal();
         inMainMenu=false;
-        // A GLSurfaceView has its own compositor layer on Android.
-        // It must be visible in the game, but never paint black over the
-        // accepted original main menu when the activity rotates/resumes.
-        surface.setVisibility(View.VISIBLE);
+        // The original approved menu is an opaque, elevated Android View
+        // above the native GLES surface. Do NOT toggle GLSurfaceView from
+        // INVISIBLE to VISIBLE: SurfaceView may destroy/recreate its EGL
+        // surface asynchronously and leave an empty #303030 playfield until
+        // the next cave/zoom tap. Keep its GL lifecycle stable.
+        if(surface.getVisibility()!=View.VISIBLE){
+            android.util.Log.e("TAKS_RENDER","Unexpected hidden 3D surface before gameplay; restoring");
+            surface.setVisibility(View.VISIBLE);
+        }
+        // Request fresh world frames AFTER removing the menu on the UI thread,
+        // including after SurfaceFlinger/Android completes a surface relayout.
+        surface.post(()->{ if(!inMainMenu)surface.requestRender(); });
+        surface.postDelayed(()->{ if(!inMainMenu)surface.requestRender(); },300);
         if(menuMotion!=null){menuMotion.release();menuMotion=null;}
         if(menuCover!=null){root.removeView(menuCover);menuCover=null;}
         setHudVisibility(true);
@@ -1059,10 +1068,16 @@ public final class MainActivity extends Activity {
     private void showMainMenu(){
         inMainMenu=true;
         stopFrameLoop();
-        // Prevent the separate native EGL Surface layer from covering the
-        // original 1664x768 approved image. INVISIBLE (not GONE) retains the
-        // layout and safe insets; it becomes VISIBLE again only in gameplay.
-        if(surface!=null)surface.setVisibility(View.INVISIBLE);
+        // Keep the EGL surface alive and 3D world GL resources valid across
+        // main menu -> settings -> gameplay. The approved RestoredStoneMenu
+        // paints an OPAQUE, full-screen view ABOVE GLSurfaceView and cannot
+        // be occluded by GLES (setZOrderOnTop(false)).
+        // Hiding GLSurfaceView was the cause of delayed/blank gameplay frames.
+        if(surface!=null){
+            if(surface.getVisibility()!=View.VISIBLE)
+                surface.setVisibility(View.VISIBLE);
+            surface.requestRender();
+        }
         worldHandler.removeCallbacks(worldLoop);
         padActive=false;moveIntent=false;sprinting=false;
         stopMovement();
@@ -1236,6 +1251,8 @@ public final class MainActivity extends Activity {
             @Override public void onDrawFrame(javax.microedition.khronos.opengles.GL10 gl){nativeRender();}
         });
         surface.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
+        // An initial native frame must be ready under the approved main menu.
+        // No extra menu artwork/video layers are introduced.
         surface.setOnTouchListener((v,e)->touch(e,false));
         root.addView(surface,new FrameLayout.LayoutParams(-1,-1));
         inspectButton=button("BARLANG BELSEJE",this::toggleCaveInspection,false);
