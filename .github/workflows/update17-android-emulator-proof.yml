@@ -1,0 +1,78 @@
+name: TAKS World Android REAL emulator - motion, playable world and cave-inside
+on:
+  push:
+    branches: [codex/taks-world-update17-live-mp4-and-playable-scene-2026-11-21]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  actual-android-touches-and-pixels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install screenshot checks
+        run: python -m pip install --disable-pip-version-check 'numpy>=1.26,<3' 'Pillow>=10'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-33 build-tools;33.0.2'
+      - name: Fetch fully compiled UPDATE 0.15.2 native Android APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/taks17
+          for attempt in $(seq 1 25); do
+            if gh run download 44887203090 --repo "$GITHUB_REPOSITORY"               --name TAKS_World_UPDATE17_MP4_AND_NATIVE_GAME_BUILD               --dir /tmp/taks17; then break; fi
+            echo "Waiting for compiled native APK, try $attempt"
+            sleep 12
+          done
+          test -s /tmp/taks17/TAKS_WORLD_0_15_2_BUILD_DEBUG_NOT_INSTALLABLE.apk
+      - name: Allow KVM where runner supports it
+        run: |
+          if test -e /dev/kvm; then sudo chmod 666 /dev/kvm; fi
+      - name: Launch actual menu, exercise clicks, inspect actual world screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          cores: 2
+          ram-size: 3072M
+          heap-size: 512M
+          emulator-options: -no-window -no-audio -no-snapshot -gpu swiftshader_indirect -no-boot-anim
+          disable-animations: true
+          script: |
+            mkdir -p snapshots
+            adb install -r /tmp/taks17/TAKS_WORLD_0_15_2_BUILD_DEBUG_NOT_INSTALLABLE.apk
+            adb shell settings put secure immersive_mode_confirmations confirmed
+            adb shell am start -n hu.taks.world.menufixedgame/hu.taks.world.MainActivity
+            sleep 20
+            adb exec-out screencap -p > snapshots/menu_1.png
+            sleep 2
+            adb exec-out screencap -p > snapshots/menu_2.png
+            python scripts/check_update17_android_emulator.py menu snapshots/menu_1.png --other snapshots/menu_2.png
+            python scripts/check_update17_android_emulator.py tap-game snapshots/menu_2.png
+            sleep 10
+            adb exec-out screencap -p > snapshots/game.png
+            python scripts/check_update17_android_emulator.py game snapshots/game.png --other snapshots/menu_2.png
+            python scripts/check_update17_android_emulator.py tap-cave snapshots/game.png
+            sleep 5
+            adb exec-out screencap -p > snapshots/cave_interior.png
+            python scripts/check_update17_android_emulator.py inside snapshots/cave_interior.png --other snapshots/game.png
+            adb logcat -d -v time > snapshots/android_log.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TAKS_Update17_Emulator_MP4_Menu_Game_Interior_Screenshots
+          path: snapshots/
+          retention-days: 7
+          if-no-files-found: warn
