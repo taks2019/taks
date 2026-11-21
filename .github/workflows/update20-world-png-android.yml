@@ -1,0 +1,102 @@
+name: TAKS World 0.15.5 - corrected native 2.5D PNG world update build
+on:
+  push:
+    branches: [codex/taks-world-update20-world-png-proportions-2026-11-21]
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build-android-update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore byte-identical approved 1664x768 original menu
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/approved-menu
+          gh run download 44632455358 --repo "$GITHUB_REPOSITORY"             --name TAKS-World-Android-First-Playable-APK --dir /tmp/approved-menu
+          mkdir -p app/src/main/assets/menu
+          unzip -p /tmp/approved-menu/TAKS_World_Android_KIPROBALO.apk             assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png             > app/src/main/assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png
+          echo "9369d3668b69424d31132e70accbfdb76282d7d9b3f3adfaa51c7c3ca1ea7bc8  app/src/main/assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png" | sha256sum -c -
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install genuine video and native world build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install --disable-pip-version-check             'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10'             'opencv-python-headless>=4.9,<5' 'requests>=2.31' 'scipy>=1.11,<2'
+      - name: Encode genuine animated MP4 - moving leaves ferns water dust sunshine
+        run: |
+          python scripts/render_approved_wonderwerk_motion.py             --width 1152 --fps 24 --seconds 6
+          ffprobe -v error -show_entries             stream=codec_name,width,height,r_frame_rate:format=duration,size             -of default=noprint_wrappers=1             app/src/main/assets/menu/wonderwerk_loop.mp4
+      - name: PROTECTED MENU + real motion + playable interior mode tests
+        run: |
+          python scripts/enforce_taks_update_policy.py
+          python -m unittest discover -s tests -p 'test_menu_draw_regression.py' -v
+          python -m unittest discover -s tests -p 'test_gameplay_original_menu.py' -v
+          python -m unittest discover -s tests -p 'test_update17_mp4_and_gameplay.py' -v
+          python -m unittest discover -s tests -p 'test_update19_single_scene.py' -v
+          python -m unittest discover -s tests -p 'test_png_cave_no_duplicate.py' -v
+          python -m unittest discover -s tests -p 'test_update20_world_png_render.py' -v
+      - name: Import CC0 native terrain rock foliage and rigged actors
+        run: |
+          python scripts/import_cc0_rocks.py
+          python scripts/import_cc0_foliage.py
+          python scripts/import_cc0_rigged_human.py
+      - name: Native TAKS cause-effect engine tests
+        run: |
+          cmake -S engine -B build-native -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-native --parallel 2
+          ctest --test-dir build-native --output-on-failure
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build Android UPDATE with video and interior view in one APK
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Validate real APK package identity + MP4 + actual native GLES engine
+        run: |
+          python scripts/enforce_taks_update_policy.py
+          python - <<'PY'
+          import zipfile,hashlib
+          from pathlib import Path
+          path=Path('app/build/outputs/apk/debug/app-debug.apk')
+          assert path.is_file() and path.stat().st_size > 8_000_000
+          with zipfile.ZipFile(path) as z:
+              names=set(z.namelist())
+              for n in ('assets/menu/wonderwerk_loop.mp4',
+                        'assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png',
+                        'lib/arm64-v8a/libtaks_engine.so','classes.dex'):
+                  assert n in names,n
+              assert hashlib.sha256(z.read(
+                  'assets/menu/WONDERWERK_APPROVED_WIDE_NO_TEXT.png')).hexdigest()==(
+                  '9369d3668b69424d31132e70accbfdb76282d7d9b3f3adfaa51c7c3ca1ea7bc8')
+              assert z.getinfo('assets/menu/wonderwerk_loop.mp4').file_size > 100_000
+          print('MP4 + gameplay in one UPDATE APK; original menu frozen')
+          PY
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging             app/build/outputs/apk/debug/app-debug.apk | head -n 1
+      - name: Stage unapproved core for local original PNG injection and signing
+        run: |
+          mkdir -p delivery
+          cp app/build/outputs/apk/debug/app-debug.apk delivery/TAKS_WORLD_0_15_5_WORLD_PNG_CORE_FOR_LOCAL_SIGNING.apk
+          cp app/src/main/assets/menu/wonderwerk_loop.mp4 delivery/wonderwerk_loop_24fps.mp4
+          echo "This artifact is NOT A VALID IN-PLACE UPDATE until signed with the previous installed APK's exact signing certificate. Keep the original signing key private. Do not uninstall or erase game saves." > delivery/SIGN_WITH_ORIGINAL_KEY.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS_World_UPDATE20_ORIGINAL_MENU_CAVE_ASPECT_CORE
+          path: delivery/
+          retention-days: 7
+          if-no-files-found: error
