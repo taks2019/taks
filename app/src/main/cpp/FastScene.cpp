@@ -2,6 +2,7 @@
 #include "RealModels.h"
 #include "CaveSprite.h"
 #include "RoofCutaway.h"
+#include "WorldTerrain.h"
 #include <GLES3/gl3.h>
 #include <algorithm>
 #include <array>
@@ -29,14 +30,7 @@ float dot(Vec3 a,Vec3 b){return a.x*b.x+a.y*b.y+a.z*b.z;}
 Vec3 cross(Vec3 a,Vec3 b){return {a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x};}
 Vec3 norm(Vec3 v){float d=std::sqrt(std::max(dot(v,v),.00000001f));return mul(v,1.f/d);}
 float surfaceHeight(float x,float z){
-    // A részletgazdag belső régió lágyan csatlakozik a távoli talajhoz;
-    // a korábbi négyzet alakú térképlap éle így nem látszik a kamerából.
-    auto saturate=[](float v){return std::max(0.f,std::min(1.f,v));};
-    float e=saturate((11.f-std::abs(x))/2.4f) *
-            saturate((z+11.f)/2.4f)*saturate((17.f-z)/2.4f);
-    float relief=-.27f+.17f*std::sin(x*.21f)*std::cos(z*.22f)+
-                 .09f*std::sin(x*.87f+z*.57f)+.065f*std::cos(z*.73f-x*.42f);
-    return -.48f+(relief+.48f)*e;
+    return taks::WorldTerrain::height(x,z);
 }
 float top(float x){
     const float taper=std::sqrt(std::max(0.f,1.f-x*x/(9.4f*9.4f)));
@@ -50,6 +44,46 @@ void triangle(std::vector<Vertex>& v,Vec3 a,Vec3 b,Vec3 c,float kind){
 }
 void quad(std::vector<Vertex>& v,Vec3 a,Vec3 b,Vec3 c,Vec3 d,float kind){
     triangle(v,a,b,c,kind);triangle(v,a,c,d,kind);
+}
+// Smooth-shaded 3D triangles: every ground vertex gets the true slope normal,
+// unlike flat cards or the old per-triangle-faceted brown plane.
+void smoothTerrainVertex(std::vector<Vertex>& vertices,Vec3 p) {
+    float nx=0.f,ny=1.f,nz=0.f;
+    taks::WorldTerrain::normal(p.x,p.z,nx,ny,nz);
+    vertices.push_back({p.x,p.y,p.z,nx,ny,nz,0.f});
+}
+void sculptedTerrainGrid(std::vector<Vertex>& dst,float x0,float x1,
+                         float z0,float z1,int cols,int rows,
+                         bool skipCentralRegion) {
+    struct TerrainPoint {Vec3 p;Vec3 n;};
+    std::vector<TerrainPoint> grid(std::size_t(cols+1)*std::size_t(rows+1));
+    auto index=[cols](int i,int j){return std::size_t(j)*std::size_t(cols+1)+std::size_t(i);};
+    for(int j=0;j<=rows;++j)for(int i=0;i<=cols;++i){
+        const float x=x0+(x1-x0)*float(i)/float(cols);
+        const float z=z0+(z1-z0)*float(j)/float(rows);
+        float nx,ny,nz;
+        taks::WorldTerrain::normal(x,z,nx,ny,nz);
+        grid[index(i,j)]={{x,surfaceHeight(x,z),z},{nx,ny,nz}};
+    }
+    auto push=[&dst](const TerrainPoint& p){
+        dst.push_back({p.p.x,p.p.y,p.p.z,p.n.x,p.n.y,p.n.z,0.f});
+    };
+    for(int j=0;j<rows;++j)for(int i=0;i<cols;++i){
+        const float xa=x0+(x1-x0)*float(i)/float(cols);
+        const float xb=x0+(x1-x0)*float(i+1)/float(cols);
+        const float za=z0+(z1-z0)*float(j)/float(rows);
+        const float zb=z0+(z1-z0)*float(j+1)/float(rows);
+        // Far and near tiles join on exact x=-28/+28,z=-28/+40
+        // boundaries; there is no 160m flat quad showing through.
+        if(skipCentralRegion && xa>=-28.f && xb<=28.f &&
+           za>=-28.f && zb<=40.f)continue;
+        const auto& a=grid[index(i,j)];
+        const auto& b=grid[index(i+1,j)];
+        const auto& c=grid[index(i+1,j+1)];
+        const auto& d=grid[index(i,j+1)];
+        push(a);push(d);push(c);
+        push(a);push(c);push(b);
+    }
 }
 void axisBar(std::vector<Vertex>& v,Vec3 a,Vec3 b,float radius,float kind,int sides=7){
     Vec3 axis=norm(sub(b,a));
@@ -241,17 +275,14 @@ void buildStatic(){
     terrainMesh.clear();
     caveMesh.clear();
     roofMesh.clear();
-    // Nagyméretű háttértalaj, valódi mélységi teszttel; nincs látható "lebegő táblaszél".
-    quad(terrainMesh,{-160.f,-.485f,-160.f},{-160.f,-.485f,160.f},
-         {160.f,-.485f,160.f},{160.f,-.485f,-160.f},0.f);
-    constexpr int nx=72,nz=92;
-    const float x0=-11.f,x1=11.f,z0=-11.f,z1=17.f;
-    for(int j=0;j<nz;++j)for(int i=0;i<nx;++i){
-        float x=x0+(x1-x0)*float(i)/float(nx),xx=x0+(x1-x0)*float(i+1)/float(nx);
-        float z=z0+(z1-z0)*float(j)/float(nz),zz=z0+(z1-z0)*float(j+1)/float(nz);
-        Vec3 a{x,surfaceHeight(x,z),z},b{xx,surfaceHeight(xx,z),z},c{xx,surfaceHeight(xx,zz),zz},d{x,surfaceHeight(x,zz),zz};
-        quad(terrainMesh,a,d,c,b,0.f);
-    }
+    // FULLY GEOMETRIC TERRAIN. A fine 0.5m tessellated foreground with
+    // smoothly varying slopes joins a coarser 4m 3D horizon. The original
+    // fake flat 320x320 brown quad is not drawn ANYWHERE in this renderer.
+    // Both grids use exactly the same deterministic CPU height function.
+    sculptedTerrainGrid(terrainMesh,-120.f,120.f,-120.f,120.f,
+                       60,60,true);
+    sculptedTerrainGrid(terrainMesh,-28.f,28.f,-28.f,40.f,
+                       112,136,false);
     // Természetes sziklafal, valódi 3D elülső és oldalsó mélységgel.
     const int mx=95,my=34;
     for(int j=0;j<my;++j)for(int i=0;i<mx;++i){
