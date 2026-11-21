@@ -64,7 +64,7 @@ def menu_tap_accessible(label):
     for node in root.iter("node"):
         if node.attrib.get("content-desc")==label:
             bounds=node.attrib.get("bounds","")
-            xy=list(map(int,re.findall(r"-?\\d+",bounds)))
+            xy=list(map(int,re.findall(r"-?\d+",bounds)))
             if len(xy)==4 and xy[2]>xy[0]+8 and xy[3]>xy[1]+8:
                 candidates.append(tuple(xy))
     if not candidates:
