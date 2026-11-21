@@ -253,18 +253,23 @@ public final class MainActivity extends Activity {
     }
     private Bitmap originalStonePhoto(){
         if(sharedStonePhoto!=null && !sharedStonePhoto.isRecycled())return sharedStonePhoto;
-        // The same real rock photograph is already bundled offline for 3D.
-        // Share one bitmap across every menu surface, no repeated decodes.
-        try(InputStream source=getAssets().open("models/wall_cliff_side.png")){
+        // All submenus share a *read-only sample* of the accepted Wonderwerk
+        // menu composition. Its original full image is never altered.
+        // This deliberately avoids the rejected brown in-game cliff texture.
+        try(InputStream source=getAssets().open(RestoredStoneMenu.ASSET)){
             Bitmap image=BitmapFactory.decodeStream(source);
             if(image==null)return null;
-            if(image.getWidth()>600){
-                sharedStonePhoto=Bitmap.createScaledBitmap(image,512,512,true);
-                image.recycle();
-            }else sharedStonePhoto=image;
+            // Right-side photographed stone hillside, outside the menu labels.
+            int side=Math.min(400,Math.min(image.getWidth(),image.getHeight()));
+            int x=Math.max(0,image.getWidth()-side-28);
+            int y=Math.max(0,Math.min(image.getHeight()-side,135));
+            Bitmap crop=Bitmap.createBitmap(image,x,y,side,side);
+            sharedStonePhoto=Bitmap.createScaledBitmap(crop,512,512,true);
+            if(crop!=image)crop.recycle();
+            image.recycle();
             return sharedStonePhoto;
         }catch(Exception error){
-            android.util.Log.w("TAKS_UI","Scanned-rock GUI skin unavailable",error);
+            android.util.Log.w("TAKS_UI","Approved menu stone source unavailable",error);
             return null;
         }
     }
@@ -316,8 +321,10 @@ public final class MainActivity extends Activity {
                         opacity(state.buttonBottom,220),state.border,10);
                 if(v instanceof TextView)((TextView)v).setTextColor(state.text);
             }else if("TAKS_SKIN_CARD".equals(role)){
-                setNaturalStone(v,opacity(state.panelTop,208),
-                        opacity(state.panelBottom,234),state.border,17);
+                // The source artwork is a real stone sample from the same
+                // approved menu scene, not the rejected brown gameplay cliff.
+                setNaturalStone(v,opacity(state.panelTop,144),
+                        opacity(state.panelBottom,170),state.border,17);
             }else if("TAKS_SKIN_HUD_STATUS".equals(role)){
                 // Same physical stone as the settings panel, but translucent
                 // so real GLES3 gameplay stays visible behind brief messages.
@@ -351,7 +358,9 @@ public final class MainActivity extends Activity {
     }
     private void refreshLivingSkin(){
         if(root==null)return;
-        installApprovedMotionOnCurrentMenu();
+        // Do not composite a second independent MP4 over the approved menu.
+        // Its background and button artwork remain pixel-identical. Motion
+        // stays parked until a frame-matched video passes separate review.
         LivingUiSkin.State state=currentSkin();
         applyMenuScrim(state);
         applySkin(root,state,android.os.SystemClock.uptimeMillis());
@@ -768,7 +777,10 @@ public final class MainActivity extends Activity {
     private void modal(String title,Consumer<LinearLayout> populate){
         closeModal();
         modalOverlay=new FrameLayout(this);
-        modalOverlay.setBackgroundColor(0xD8101411);
+        // A dark opaque cover used to erase most of the approved landscape.
+        // Keep it clearly visible through the menu dialogs; the inner panel
+        // itself is stone-textured and retains readable light labels.
+        modalOverlay.setBackgroundColor(inMainMenu?0x70101411:0xA0101411);
         modalOverlay.setElevation(dp(48)); // Settings and new-game dialogs stay over the original menu.
         modalOverlay.setOnClickListener(v->closeModal());
         LinearLayout card=new LinearLayout(this);
@@ -843,7 +855,7 @@ public final class MainActivity extends Activity {
                 "IRÁNYÍTÁS: bal analóg = mozgás; FUTÁS = gyorsítás; jobb oldali húzás = kamera;"
                 +" két ujj = nagyítás.\n"
                 +"OK → FOLYAMAT → OKOZAT: az időjárás, a tűz, a nedvesség és a"
-                +" tényleges felfedezések vezérlik az összes menü megjelenését.",12,0xFFE3D6BC);
+                +" tényleges felfedezések vezérlik az összes menü megjelenését.",14,0xFFE3D6BC);
             explanation.setPadding(dp(5),dp(10),dp(5),dp(10));
             body.addView(explanation);
             addVertical(body,"Korábbi mentés visszaállítása",this::restoreOldWorld);
@@ -929,6 +941,9 @@ public final class MainActivity extends Activity {
                 this::newWorldFromMenu,this::showSettings,
                 this::showCredits,this::confirmExit);
         if(approved!=null){
+            // Exactly one approved layer is visible. Old motion files remain
+            // untouched for a later separately accepted, aligned version.
+            if(approvedMotion!=null){approvedMotion.releaseVideo();approvedMotion=null;}
             menuCover.addView(approved,new FrameLayout.LayoutParams(-1,-1));
             root.addView(menuCover,new FrameLayout.LayoutParams(-1,-1));
             menuCover.bringToFront();
