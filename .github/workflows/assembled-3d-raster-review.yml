@@ -1,0 +1,51 @@
+name: TAKS World - 3D cave assembly raster review
+on:
+  push:
+    branches: [codex/taks-world-assembled-3d-review-2026-11-21]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-gpu-photos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install real asset converters and Mesa GLES3
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libegl-dev libgles-dev libgl1-mesa-dri libpng-dev
+          python -m pip install --disable-pip-version-check 'trimesh>=4.10,<5' 'numpy>=1.26,<3' 'Pillow>=10' 'requests>=2.31' 'scipy>=1.11,<2'
+      - name: Fetch source-licensed 3D ground rock plants and human meshes for QA
+        run: |
+          python scripts/import_cc0_rocks.py
+          python scripts/import_cc0_foliage.py
+          python scripts/import_cc0_rigged_human.py
+      - name: Compile actual native GLES renderer (no HTML or still-image substitute)
+        run: |
+          mkdir -p build-previews
+          g++ -std=c++17 -O2 -Wall -Wextra -Iapp/src/main/cpp \
+              tests/fast_scene_preview.cpp app/src/main/cpp/FastScene.cpp \
+              app/src/main/cpp/RealModels.cpp app/src/main/cpp/CaveSprite.cpp \
+              -o build-previews/fast_scene_test -lEGL -lGLESv2 -lpng
+      - name: Render actual 3D game scene from three camera angles and interior
+        env:
+          EGL_PLATFORM: surfaceless
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          build-previews/fast_scene_test
+          python tests/ppm_to_png.py
+          test -s build-previews/01-izometrikus-35fok.png
+          test -s build-previews/18-barlang-teljes-teto-nagy-tavolsag.png
+          test -s build-previews/20-barlang-belso-teto-nelkul.png
+      - name: Save scene screenshots for individual visual review - NOT final artwork
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TAKS_World_3D_assembled_raster_review
+          path: build-previews/*.png
+          retention-days: 14
+          if-no-files-found: warn
