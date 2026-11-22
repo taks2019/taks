@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="hu"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Craft the World Editor • Magyarító Műhely 0.1</title>
+<style>
+:root{--bg:#101b19;--panel:#1c2925;--panel2:#22332b;--text:#f1e4c5;--muted:#b9bbab;--gold:#d6ac55;--edge:#6b5639;--red:#e2635d;--green:#60c77c;--yellow:#e5b94d}
+*{box-sizing:border-box}html,body{height:100%;margin:0}body{font-family:Segoe UI,Tahoma,Arial,sans-serif;color:var(--text);background:radial-gradient(ellipse at 50% 0%,#374337 0,#162620 55%,#0c1615 100%)}
+button,input,textarea,select{font:inherit}button{cursor:pointer;background:linear-gradient(#534634,#2e2b21);border:1px solid #a0814c;color:#f8edcd;border-radius:5px;padding:8px 12px}button:hover{filter:brightness(1.17)}button:disabled{opacity:.38;cursor:not-allowed}.accent{background:linear-gradient(#af8247,#75512f);border-color:#d7ad6b}.danger{border-color:#ad5447}
+input,textarea,select{background:#111d1a;color:#f2e8d1;border:1px solid #756143;border-radius:5px;padding:8px}textarea{width:100%;resize:vertical;line-height:1.5}input[type=checkbox]{accent-color:#73c983;cursor:pointer}
+header{padding:12px 18px 10px;background:linear-gradient(160deg,rgba(53,63,42,.9),rgba(16,28,23,.96));border-bottom:3px ridge #9d7a46;box-shadow:0 10px 25px #080f0db8}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.logo{display:flex;align-items:center;gap:12px}.emblem{background:linear-gradient(135deg,#786344,#302b22);border:2px solid #b58b4e;border-radius:8px;font-size:31px;width:56px;height:56px;display:grid;place-items:center}.brand{font-family:Georgia,serif;letter-spacing:.05em;color:#ffe2a0;font-size:25px;font-weight:bold}.subtitle{font-family:Segoe UI,sans-serif;letter-spacing:0;color:#d7c4a1;font-size:12px;font-weight:normal;margin-top:5px}
+.toolbar{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.toolbar button{font-size:12px}#status{font-size:12px;color:#c0d7be;padding:7px 0 0;min-height:23px}
+#layout{display:grid;grid-template-columns:minmax(225px,23%) minmax(380px,1fr) minmax(265px,26%);gap:10px;padding:10px;min-height:calc(100vh - 148px)}
+.panel{background:linear-gradient(145deg,#26392e,#1a2823 74%);border:2px solid #665337;border-radius:8px;min-width:0;overflow:hidden;box-shadow:0 8px 19px #080d0bcf}.panelHead{font-family:Georgia,serif;background:linear-gradient(#564631,#362e24);padding:12px;border-bottom:1px solid #b08b50;font-weight:bold;color:#f5d69e}.panelBody{padding:12px}.treebox{max-height:calc(100vh - 275px);overflow:auto}.fileNode{width:100%;text-align:left;background:#1b2a24;border:1px solid #4b563e;margin:3px 0;padding:8px;font-size:12px;white-space:normal;overflow-wrap:anywhere}.fileNode.active{background:#4e482f;border-color:#d8b66c}.fileNode small{display:block;color:#acb7a6;margin-top:4px}
+.metrics{display:flex;align-items:center;justify-content:space-between;gap:7px;margin-bottom:9px}.pct{font-size:27px;font-weight:bold}.bar{height:11px;border-radius:12px;background:#0e1815;overflow:hidden;border:1px solid #5c533c}.fill{height:100%;transition:width .25s}.red{color:var(--red)}.yellow{color:var(--yellow)}.green{color:var(--green)}.fill.red{background:var(--red)}.fill.yellow{background:var(--yellow)}.fill.green{background:var(--green)}
+.note{font-size:12px;color:#c4c5b4;line-height:1.6}.tiny{font-size:11px;color:#aab7ab}.margintop{margin-top:12px}.searchline{display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:9px}.searchline input{width:100%}.filters{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}.filter.active{background:#82683e}.row{background:#14231e;border:1px solid #5c6345;border-radius:6px;margin:9px 0;padding:10px}.rowTop{display:flex;justify-content:space-between;gap:6px;align-items:center;font-size:11px;color:#d5d1b5;margin-bottom:8px}.rowKey{font-family:Consolas,monospace;color:#b9c7ba;overflow-wrap:anywhere}.source{white-space:pre-wrap;overflow-wrap:anywhere;background:#22342c;border:1px solid #405446;padding:9px;border-radius:5px;margin-bottom:8px;font-size:13px}.label{font-size:11px;color:#d7bf8e;margin:4px 0 5px}.row textarea{min-height:80px}.rowWarn{font-size:11px;color:#ef8e6b;white-space:pre-wrap;margin-top:5px}.rowFooter{display:flex;justify-content:space-between;gap:9px;align-items:center;margin-top:7px;flex-wrap:wrap}.check{font-size:12px;display:flex;align-items:center;gap:5px}.preview{background:linear-gradient(150deg,#3e3d2e,#1b2925 45%,#17221e);min-height:250px;border:5px ridge #806b49;border-radius:12px;display:flex;align-items:center;justify-content:center;padding:18px;position:relative;text-align:center;overflow:hidden}.preview.hasBg{background-size:cover;background-position:center}.preview:before{content:'';position:absolute;inset:0;background:linear-gradient(#1c25151c,#09170bac);pointer-events:none}.previewText{position:relative;max-height:310px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:#19241cbb;padding:12px;border:1px solid #ab9356;border-radius:5px;text-shadow:1px 2px #060b08;font-family:Georgia,serif;font-size:20px;color:#fff0bc}
+.assets{max-height:230px;overflow:auto}.assetItem{display:flex;justify-content:space-between;align-items:center;gap:5px;font-size:11px;padding:6px;border-bottom:1px solid #47553a}.assetItem button{padding:3px 6px;font-size:10px}.assetItem strong{overflow-wrap:anywhere}.miniText{font-size:11px;color:#acbba8}.foot{padding:6px 14px;color:#999e8c;font-size:11px;text-align:center}
+#pagination{display:flex;justify-content:center;align-items:center;gap:10px;padding:10px}.strip{border:1px solid #594e38;background:#1a271f;border-radius:5px;padding:8px;font-size:12px}.warning{background:#492b25;border:1px solid #cc6f5b;color:#ffe2d3;padding:10px;border-radius:5px;font-size:12px;margin-top:9px}.success{background:#21412b;border:1px solid #6fba71;padding:9px;border-radius:5px}
+@media(max-width:1050px){#layout{grid-template-columns:245px minmax(340px,1fr)}#previewPanel{grid-column:1/-1}}@media(max-width:680px){#layout{display:flex;flex-direction:column}.treebox{max-height:240px}.brand{font-size:19px}.panel{width:100%}}
+</style></head>
+<body>
+<header><div class="top"><div class="logo"><div class="emblem">⚒️</div><div><div class="brand">CRAFT THE WORLD</div><div class="subtitle">MAGYARÍTÓ MŰHELY • offline HTML • 0.1-es kiadás • Stellaris Editor elrendezés</div></div></div><div id="overall" class="strip">0 / 0 ellenőrzött</div></div>
+<div class="toolbar">
+<button id="downloadPkg" class="accent">📦 Offline program ZIP</button>
+<button id="downloadApp" class="accent">⬇️ HTML-program letöltése</button>
+<button class="accent" id="addFiles">📂 Angol CSV/TXT betöltése</button>
+<button id="addFolder">📁 Mappa betöltése</button>
+<button id="addAssets">🖼 Képek és fontok</button>
+<button id="update">🔄 Verziófrissítés</button>
+<button id="exportFile" class="accent">💾 Aktuális fájl export</button>
+<button id="exportAll">📦 Teljes módosító ZIP</button>
+<button id="backup">🗃 Fordítások mentése (JSON)</button>
+<button id="restore">♻ Mentés betöltése</button>
+<button id="reset" class="danger" title="Csak megerősítés után">Projekt ürítése</button>
+</div><input type="file" id="filesInput" multiple accept=".csv,.txt,.tsv" hidden><input type="file" id="folderInput" webkitdirectory directory multiple hidden><input type="file" id="assetInput" accept="image/*,.png,.webp,.jpg,.jpeg,.ttf,.otf,.woff,.woff2" multiple hidden><input type="file" id="versionInput" multiple accept=".csv,.txt,.tsv" hidden><input type="file" id="backupInput" accept=".json" hidden>
+<div id="status" role="status">Töltsd be a játék kicsomagolt angol CSV/TXT fájljait. Az eredeti fájlokat a böngésző nem módosítja.</div>
+</header>
+<div id="layout">
+<aside class="panel"><div class="panelHead">📁 Fájlok és haladás</div><div class="panelBody">
+<div class="metrics"><span class="tiny">Ellenőrzött készültség</span><span class="pct red" id="totalPct">0%</span></div><div class="bar"><div class="fill red" id="totalBar"></div></div>
+<div class="margintop tiny" id="counts">0 kitöltött • 0 ellenőrzött</div>
+<div class="treebox margintop" id="tree"><div class="note">Még nincs betöltött angol szövegfájl.</div></div>
+<div class="note margintop">Színjelzés: <span class="red">0% piros</span>, <span class="yellow">1–99% sárga</span>, <span class="green">100% zöld</span>. A százalék csak valóban ellenőrzött sorokat számol.</div>
+</div></aside>
+<main class="panel"><div class="panelHead" id="editorTitle">✍ Angol → magyar fordítás</div><div class="panelBody">
+<div class="searchline"><input id="search" placeholder="Keresés kulcsban, angol vagy magyar szövegben…"><button id="clear">✕</button></div>
+<div class="filters"><button class="filter active" data-filter="all">Mind</button><button class="filter" data-filter="todo">Hiányzó</button><button class="filter" data-filter="draft">Ellenőrizendő</button><button class="filter" data-filter="done">Kész</button><button class="filter" data-filter="error">Kódhiba</button></div>
+<div id="fileMeta" class="note">Az angol eredeti változatlan marad. A magyar fordítás külön mezőben szerkeszthető.</div>
+<div id="entries"><div class="note margintop">Válassz fájlt a bal oldali listából.</div></div>
+<div id="pagination"></div>
+</div></main>
+<aside class="panel" id="previewPanel"><div class="panelHead">🎮 Játékbeli szövegelőnézet</div><div class="panelBody">
+<div class="preview" id="preview"><div class="previewText" id="previewText">Válassz fordítandó sort a megjelenítéshez.</div></div>
+<div class="note margintop">Előnézet: a szöveg a szerkesztés során azonnal frissül. A betöltött háttérkép és font használható hozzá.</div>
+<div class="margintop"><button id="imageBg">Háttér kiválasztása</button> <button id="fontApply">Betűtípus kiválasztása</button></div>
+<div class="panelHead margintop">🖼 Képek és betűtípusok</div>
+<div id="assets" class="assets"><div class="miniText">Még nincs kép vagy font.</div></div>
+<div class="panelHead margintop">🧩 Kódvédelem és verziók</div>
+<div class="note">Védett jelölések: például <code>{0}</code>, <code>%s</code>, <code>%d</code>, <code>[name]</code>, <code>&lt;tag&gt;</code> és <code>\n</code>. Eltérésnél nem jelölhető késznek a fordítás.</div>
+<div id="updateReport" class="note margintop"></div>
+</div></aside>
+</div><div class="foot">Craft the World Editor • offline böngészős segédprogram • a betöltött adatok kizárólag a készüléken kezelődnek</div>
+<script>
+(function(){
+'use strict';
+var files=[],assets=[],active='',filter='all',query='',page=0,perPage=35,chosen=null,previewText='',storageOK=true,upReport='',storeKey='craft_the_world_editor_work_v1';
+var byId=function(id){return document.getElementById(id)};
+function msg(t,isError){byId('status').textContent=t;byId('status').style.color=isError?'#ff9a83':'#c0d7be'}
+function cl(x){return x===0?'red':x===100?'green':'yellow'}
+function pct(done,total){return total?Math.round(done*1000/total)/10:0}
+function shown(n){return Number(n).toLocaleString('hu-HU')}
+function bytes(v){return v<1024?v+' B':v<1048576?(v/1024).toFixed(1)+' KB':(v/1048576).toFixed(1)+' MB'}
+function escapeHTML(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+function baseName(path){return String(path).split('/').pop()}
+function pathOf(f){return (f.webkitRelativePath||f.name||'névtelen').replace(/\\/g,'/')}
+function isText(n){return /\.(csv|txt|tsv)$/i.test(n)}
+function englishPath(path){var a=path.toLowerCase();return !/(?:^|[/_. -])(german|deutsch|french|francais|spanish|espanol|italian|russian|russki|polish|polski|chinese|japanese|korean|portuguese|turkish|hungarian|magyar|czech|ukrainian|ukraine|german|fr|de|ru|es|it|pl|zh|ja|ko|pt|tr|hu|cs)(?:[/_. -]|$)/i.test(a)}
+function tokens(t){var m=String(t||'').match(/%(?:\d+\$)?[-+#0 ]*(?:\d+)?(?:\.\d+)?[sdifuxX]|(?<!\{)\{\d+(?:[^{}]*)?\}|\[[A-Za-z_0-9:.]+\]|<\/?[A-Za-z][^>]*>|\$[A-Za-z0-9_.]+\$|\\[nrt]/g);return (m||[]).sort()}
+function codeError(r){var a=tokens(r.source),b=tokens(r.hu);return JSON.stringify(a)===JSON.stringify(b)?'':'Vezérlőkód-eltérés: '+a.join(' ')+' ≠ '+b.join(' ')}
+function isDone(r){return !!(r.checked&&r.hu.trim()&&!codeError(r))}
+function state(r){return !r.hu.trim()?'todo':codeError(r)?'error':isDone(r)?'done':'draft'}
+function stats(f){var d=0,filled=0;f.rows.forEach(function(r){if(r.hu.trim())filled++;if(isDone(r))d++});return {done:d,filled:filled,total:f.rows.length,percent:pct(d,f.rows.length)}}
+function allStats(){var s={done:0,filled:0,total:0};files.forEach(function(f){var t=stats(f);s.done+=t.done;s.filled+=t.filled;s.total+=t.total});s.percent=pct(s.done,s.total);return s}
+function save(){try{var data=files.map(function(f){return {path:f.path,format:f.format,delim:f.delim,bom:f.bom,newline:f.newline,ending:f.ending,header:f.header,keyCol:f.keyCol,textCol:f.textCol,langCol:f.langCol,rawRows:f.rawRows,rawLines:f.rawLines,rows:f.rows}});localStorage.setItem(storeKey,JSON.stringify(data));storageOK=true}catch(e){storageOK=false;msg('A böngésző tárhelye betelt vagy tiltott. A „Fordítások mentése (JSON)” gombbal készíts mentést!',true)}}
+function loadSaved(){try{var d=JSON.parse(localStorage.getItem(storeKey)||'null');if(Array.isArray(d)){files=d;active=files[0]?files[0].path:'';msg('Korábbi helyi fordítási állapot visszatöltve.')}}catch(e){msg('A korábbi mentés nem volt olvasható; importáld a JSON-mentést.',true)}}
+function chooseDelim(text){var first=String(text).split(/\r\n|\n|\r/).find(function(x){return x.trim()})||'';var cnt={';':0,',':0,'\t':0};var inQ=false;for(var i=0;i<first.length;i++){var c=first[i];if(c==='"'){if(first[i+1]==='"'){i++;continue}inQ=!inQ;continue}if(!inQ&&cnt[c]!==undefined)cnt[c]++}return Object.keys(cnt).sort(function(a,b){return cnt[b]-cnt[a]})[0]}
+function parseCsv(text,d){var rows=[],row=[],field='',q=false;for(var i=0;i<text.length;i++){var c=text[i];if(c==='"'){if(q&&text[i+1]==='"'){field+='"';i++}else q=!q}else if(!q&&c===d){row.push(field);field=''}else if(!q&&(c==='\n'||c==='\r')){if(c==='\r'&&text[i+1]==='\n')i++;row.push(field);rows.push(row);row=[];field=''}else field+=c}if(field!==''||row.length){row.push(field);rows.push(row)}return rows}
+function csvCell(x,d){x=String(x==null?'':x);return /[\r\n"]/.test(x)||x.indexOf(d)>=0?'"'+x.replace(/"/g,'""')+'"':x}
+function joinCsv(rows,d,nl,ending){return rows.map(function(r){return r.map(function(x){return csvCell(x,d)}).join(d)}).join(nl)+(ending?nl:'')}
+function findCol(header,regexp){for(var j=0;j<header.length;j++)if(regexp.test(String(header[j]).toLowerCase().trim()))return j;return -1}
+function sourceColumn(header,hasHeader){if(hasHeader){var c=findCol(header,/^(en|english|en_us|en-us|source|original|text_en|eng|value|text|string|translation|name_en)$/);if(c>=0)return c}return Math.max(0,header.length-1)}
+function txtLineInfo(s){var m=s.match(/^(\s*[A-Za-z][\w.:\-\/ ]{0,100}?\s*)(=|:)(\s*)([\s\S]*)$/);if(m)return {prefix:m[1]+m[2]+m[3],value:m[4],key:m[1].trim()};return {prefix:'',value:s,key:''}}
+function parseFile(path,raw){
+ var bom=raw.charCodeAt(0)===65279,txt=bom?raw.slice(1):raw;
+ var newline=txt.indexOf('\r\n')>=0?'\r\n':txt.indexOf('\r')>=0?'\r':'\n';
+ var ending=/(\r\n|\r|\n)$/.test(txt),ext=path.split('.').pop().toLowerCase(),f={path:path,format:ext==='csv'||ext==='tsv'?'csv':'txt',bom:bom,newline:newline,ending:ending,rawOriginal:raw,rows:[],rawRows:[],rawLines:[],header:false,delim:ext==='tsv'?'\t':',',keyCol:0,textCol:1,langCol:-1};
+ if(f.format==='csv'){
+ f.delim=ext==='tsv'?'\t':chooseDelim(txt);if(!f.delim)f.delim=',';
+ var table=parseCsv(txt,f.delim);f.rawRows=table;
+ var header=table[0]||[];f.header=header.some(function(x){return /^(id|key|token|name|english|en|en_us|source|value|text|translation|language|locale|lang)$/i.test(String(x).trim())});
+ f.keyCol=f.header?findCol(header,/^(id|key|token|name|string_id|stringid|code)$/):-1;
+ f.textCol=sourceColumn(header,f.header);
+ f.langCol=f.header?findCol(header,/^(language|lang|locale)$/):-1;
+ var start=f.header?1:0;
+ for(var i=start;i<table.length;i++){var cols=table[i]||[];if(!cols.length||cols.every(function(x){return !String(x).trim()}))continue;
+ if(f.langCol>=0&&cols[f.langCol]&&!/^(en|english|en_us|en-gb|en_uk)$/i.test(String(cols[f.langCol]).trim()))continue;
+ var value=String(cols[f.textCol]||'');if(!value.trim())continue;
+ var key=f.keyCol>=0?String(cols[f.keyCol]||''):'';
+ f.rows.push({idx:i,key:key||'#'+(i+1),source:value,hu:'',checked:false})}
+ }else{
+ f.rawLines=txt.split(/\r\n|\n|\r/);if(ending)f.rawLines.pop();
+ f.rawLines.forEach(function(line,i){var info=txtLineInfo(line);if(/^\s*(#|;|\/\/)/.test(line)||!info.value.trim())return;f.rows.push({idx:i,key:info.key||'#'+(i+1),source:info.value,hu:'',checked:false,prefix:info.prefix})})
+ }return f;
+}
+function mergeRows(oldF,newF){var byKey=new Map(),bySource=new Map(),used=new Set();oldF.rows.forEach(function(r){var k=String(r.key);if(!byKey.has(k))byKey.set(k,[]);byKey.get(k).push(r);if(!bySource.has(r.source))bySource.set(r.source,[]);bySource.get(r.source).push(r)});var report={kept:0,changed:0,added:0,removed:0};newF.rows.forEach(function(r){var candidates=byKey.get(String(r.key))||[];var old=candidates.find(function(x){return !used.has(x)&&x.source===r.source})||candidates.find(function(x){return !used.has(x)});
+ if(!old){var s=bySource.get(r.source)||[];old=s.find(function(x){return !used.has(x)})}
+ if(old){used.add(old);r.hu=old.hu;r.checked=old.checked&&old.source===r.source;if(old.source!==r.source){r.checked=false;report.changed++}else report.kept++}else report.added++});report.removed=oldF.rows.length-used.size;return report}
+function applyFiles(incoming,version){if(!incoming.length){msg('Nem található betölthető angol CSV/TXT fájl.',true);return}var added=0,totals={kept:0,changed:0,added:0,removed:0};
+ incoming.forEach(function(f){var ix=files.findIndex(function(x){return x.path===f.path});if(ix>=0){var rep=mergeRows(files[ix],f);Object.keys(totals).forEach(function(k){totals[k]+=rep[k]});files[ix]=f}else{totals.added+=f.rows.length;files.push(f)}added++});
+ if(!active||!files.some(function(x){return x.path===active}))active=files[0].path;
+ if(version){upReport='🔄 Frissítés: '+totals.kept+' átvitt • '+totals.changed+' módosult angol • '+totals.added+' új • '+totals.removed+' eltűnt sor. A módosult szövegek ellenőrzést kérnek.';byId('updateReport').textContent=upReport}
+ page=0;save();render();msg((version?'Verziófrissítés':'Fájlbetöltés')+' kész: '+added+' angol fájl. '+(version?upReport:'A fordítások mentése automatikus.'))}
+async function readTextFile(f){var buffer=await f.arrayBuffer(),arr=new Uint8Array(buffer),encoding='utf-8';if(arr.length>1&&arr[0]===255&&arr[1]===254)encoding='utf-16le';return new TextDecoder(encoding).decode(arr)}
+async function importTexts(input,version){var list=Array.from(input.files||[]).filter(function(f){return isText(pathOf(f))&&englishPath(pathOf(f))});if(!list.length){msg('Nem található angol CSV/TXT a kiválasztott fájlok között. Egyéb nyelveket nem töltök be.',true);input.value='';return}
+ var res=[],fail=[];for(var i=0;i<list.length;i++){try{var t=await readTextFile(list[i]);res.push(parseFile(pathOf(list[i]),t))}catch(e){fail.push(list[i].name)}}
+ applyFiles(res,version);if(fail.length)msg('Nem sikerült olvasni: '+fail.join(', '),true);input.value=''}
+function selectedFile(){return files.find(function(f){return f.path===active})||null}
+function exportText(f){if(!f.rows.some(function(r){return !!r.hu.trim()}))return f.rawOriginal||'';var out;if(f.format==='csv'){var rows=f.rawRows.map(function(r){return r.slice()});f.rows.forEach(function(r){if(r.hu.trim())rows[r.idx][f.textCol]=r.hu});out=joinCsv(rows,f.delim,f.newline,f.ending)}else{var lines=f.rawLines.slice();f.rows.forEach(function(r){if(r.hu.trim())lines[r.idx]=(r.prefix||'')+r.hu});out=lines.join(f.newline)+(f.ending?f.newline:'')}
+ return (f.bom?'\uFEFF':'')+out}
+function dl(data,name,type){var url=URL.createObjectURL(new Blob([data],{type:type||'application/octet-stream'}));var a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},2000)}
+function totalRender(){var s=allStats(),p=s.percent,c=cl(p);byId('totalPct').textContent=p.toFixed(1)+'%';byId('totalPct').className='pct '+c;byId('totalBar').style.width=p+'%';byId('totalBar').className='fill '+c;byId('counts').textContent=shown(s.filled)+' kitöltött • '+shown(s.done)+' ellenőrzött • '+shown(s.total)+' összes';byId('overall').textContent=shown(s.done)+' / '+shown(s.total)+' ellenőrzött ('+p.toFixed(1)+'%)'}
+function treeRender(){if(!files.length){byId('tree').innerHTML='<div class="note">Még nincs betöltött angol fájl.</div>';return}byId('tree').innerHTML=files.map(function(f,i){var t=stats(f),c=cl(t.percent);return '<button class="fileNode '+(f.path===active?'active':'')+'" data-index="'+i+'">📜 '+escapeHTML(f.path)+'<small><span class="'+c+'">'+t.percent.toFixed(1)+'%</span> • '+t.done+'/'+t.total+' kész • '+escapeHTML(f.format.toUpperCase())+'</small></button>'}).join('');byId('tree').querySelectorAll('.fileNode').forEach(function(btn){btn.onclick=function(){active=files[+btn.dataset.index].path;page=0;chosen=null;render()}})}
+function selectedList(f){if(!f)return[];return f.rows.filter(function(r){var q=query.toLocaleLowerCase('hu');if(q&&!(r.key+' '+r.source+' '+r.hu).toLocaleLowerCase('hu').includes(q))return false;var s=state(r);return filter==='all'||filter===s})}
+function sourceStatus(r){var s=state(r);return s==='done'?'<span class="green">✓ KÉSZ</span>':s==='error'?'<span class="red">! KÓDHIBA</span>':s==='draft'?'<span class="yellow">ELLENŐRIZENDŐ</span>':'<span class="red">HIÁNYZIK</span>'}
+function editorRender(){var f=selectedFile(),box=byId('entries');if(!f){box.innerHTML='<div class="note margintop">Tölts be angol CSV/TXT fájlokat.</div>';byId('fileMeta').textContent='Fájl nincs kiválasztva.';byId('editorTitle').textContent='✍ Angol → magyar fordítás';byId('pagination').innerHTML='';return}
+ byId('editorTitle').textContent='✍ '+f.path;byId('fileMeta').textContent='Típus: '+f.format.toUpperCase()+' • Fordítandó sor: '+f.rows.length+(f.format==='csv'?' • Elválasztó: '+(f.delim==='\t'?'TAB':f.delim)+' • Szövegoszlop: '+(f.textCol+1):'')+' • A fájl minden szerkezeti sora megmarad.';
+ var list=selectedList(f),totalPages=Math.max(1,Math.ceil(list.length/perPage));page=Math.min(page,totalPages-1);var slice=list.slice(page*perPage,(page+1)*perPage);
+ box.innerHTML=slice.map(function(r){var i=f.rows.indexOf(r),err=codeError(r);return '<div class="row" data-r="'+i+'"><div class="rowTop"><span class="rowKey">'+escapeHTML(r.key)+' <span class="tiny">#'+(r.idx+1)+'</span></span>'+sourceStatus(r)+'</div><div class="label">Angol eredeti</div><div class="source">'+escapeHTML(r.source)+'</div><div class="label">Magyar fordítás</div><textarea class="hu" data-i="'+i+'" placeholder="Írd ide a természetes magyar fordítást…">'+escapeHTML(r.hu)+'</textarea><div class="rowWarn">'+escapeHTML(err)+'</div><div class="rowFooter"><label class="check"><input type="checkbox" class="checked" data-i="'+i+'" '+(isDone(r)?'checked':'')+'> Ellenőrizve / kész</label><button class="showPreview" data-i="'+i+'">🎮 Előnézet</button></div></div>'}).join('')||'<div class="note margintop">Nincs találat a kiválasztott szűrőben.</div>';
+ byId('pagination').innerHTML='<button id="prevPage" '+(page===0?'disabled':'')+'>◀</button><span class="tiny">'+(page+1)+' / '+totalPages+' oldal • '+shown(list.length)+' sor</span><button id="nextPage" '+(page>=totalPages-1?'disabled':'')+'>▶</button>';
+ byId('prevPage').onclick=function(){page--;editorRender()};byId('nextPage').onclick=function(){page++;editorRender()};
+ box.querySelectorAll('.hu').forEach(function(area){area.onfocus=function(){chosen={path:f.path,index:+area.dataset.i};updatePreview()};area.oninput=function(){var r=f.rows[+area.dataset.i];r.hu=area.value;r.checked=false;save();totalRender();treeRender();var row=area.closest('.row');row.querySelector('.rowWarn').textContent=codeError(r);row.querySelector('.rowTop').lastElementChild.outerHTML=sourceStatus(r);row.querySelector('.checked').checked=false;if(chosen&&chosen.index===+area.dataset.i)updatePreview()}})
+ box.querySelectorAll('.checked').forEach(function(c){c.onchange=function(){var r=f.rows[+c.dataset.i];if(c.checked&&(!r.hu.trim()||codeError(r))){c.checked=false;msg(!r.hu.trim()?'Üres fordítás nem lehet kész.':'Vezérlőkód-eltérés miatt nem jelölhető késznek.',true);return}r.checked=c.checked;save();totalRender();treeRender();c.closest('.row').querySelector('.rowTop').lastElementChild.outerHTML=sourceStatus(r)}})
+ box.querySelectorAll('.showPreview').forEach(function(b){b.onclick=function(){chosen={path:f.path,index:+b.dataset.i};updatePreview();if(window.innerWidth<1050)byId('previewPanel').scrollIntoView({behavior:'smooth'})}})
+}
+function updatePreview(){var f=files.find(function(f){return chosen&&f.path===chosen.path});var r=f&&f.rows[chosen.index];var text=r?(r.hu||r.source):'Válassz fordítandó sort a megjelenítéshez.';previewText=text;byId('previewText').textContent=text.replace(/\\n/g,'\n')}
+function assetRender(){byId('assets').innerHTML=assets.length?assets.map(function(a,i){return '<div class="assetItem"><strong>'+escapeHTML(a.path)+'</strong><span class="tiny">'+escapeHTML(bytes(a.size))+'</span><button data-i="'+i+'" class="assetPreview">'+(a.type==='image'?'Háttér':'Font')+'</button></div>'}).join(''):'<div class="miniText">Még nincs kép vagy font.</div>';byId('assets').querySelectorAll('.assetPreview').forEach(function(b){b.onclick=function(){useAsset(+b.dataset.i)}})}
+function useAsset(i){var a=assets[i];if(!a)return;if(a.type==='image'){byId('preview').style.backgroundImage='url("'+a.url+'")';byId('preview').classList.add('hasBg');msg('Háttér aktív: '+a.path)}else{var name='CustomCraftFont'+i;try{var face=new FontFace(name,'url("'+a.url+'")');face.load().then(function(loaded){document.fonts.add(loaded);byId('previewText').style.fontFamily='"'+name+'",serif';msg('Betűtípus betöltve: '+a.path)}).catch(function(){msg('A betűtípus nem tölthető be a böngészőben.',true)})}catch(e){msg('A böngésző nem támogatja ezt a fontformátumot.',true)}}}
+async function addAssets(flist){var count=0;for(var file of flist){var path=pathOf(file),isImg=/\.(png|webp|jpe?g|gif|bmp)$/i.test(path),isFont=/\.(ttf|otf|woff2?)$/i.test(path);if(!isImg&&!isFont)continue;var x=assets.findIndex(function(a){return a.path===path});if(x>=0){URL.revokeObjectURL(assets[x].url);assets.splice(x,1)}assets.push({path:path,url:URL.createObjectURL(file),blob:file,size:file.size,type:isImg?'image':'font'});count++}assetRender();msg(count+' grafikai/fontelemet felvettem. A ZIP export tartalmazza a cseréket.')}
+function crctable(){var t=[];for(var n=0;n<256;n++){var c=n;for(var k=0;k<8;k++)c=c&1?0xedb88320^(c>>>1):c>>>1;t.push(c>>>0)}return t}var crcTab=crctable();function crc32(a){var c=-1;for(var i=0;i<a.length;i++)c=(c>>>8)^crcTab[(c^a[i])&255];return(c^-1)>>>0}
+function w16(a,v){a.push(v&255,(v>>>8)&255)}function w32(a,v){a.push(v&255,(v>>>8)&255,(v>>>16)&255,(v>>>24)&255)}
+async function zipStore(items){var enc=new TextEncoder(),local=[],central=[],offset=0;
+ for(var k=0;k<items.length;k++){var item=items[k],name=enc.encode(item.path.replace(/^\/+/,'').replace(/\\/g,'/')),data=item.data instanceof Uint8Array?item.data:new Uint8Array(await item.data.arrayBuffer()),crc=crc32(data);if(name.length>65535||data.length>=4294967295)throw Error('Túl nagy fájl a beépített ZIP készítőhöz.');
+ var l=[];w32(l,0x04034b50);w16(l,20);w16(l,0x0800);w16(l,0);w16(l,0);w16(l,0);w32(l,crc);w32(l,data.length);w32(l,data.length);w16(l,name.length);w16(l,0);l.push.apply(l,Array.from(name));
+ local.push(new Uint8Array(l),data);
+ var c=[];w32(c,0x02014b50);w16(c,20);w16(c,20);w16(c,0x0800);w16(c,0);w16(c,0);w16(c,0);w32(c,crc);w32(c,data.length);w32(c,data.length);w16(c,name.length);w16(c,0);w16(c,0);w16(c,0);w16(c,0);w32(c,0);w32(c,offset);c.push.apply(c,Array.from(name));central.push(new Uint8Array(c));offset+=l.length+data.length}
+ var centralStart=offset;central.forEach(function(c){offset+=c.length});var end=[];w32(end,0x06054b50);w16(end,0);w16(end,0);w16(end,items.length);w16(end,items.length);w32(end,offset-centralStart);w32(end,centralStart);w16(end,0);
+ return new Blob(local.concat(central,[new Uint8Array(end)]),{type:'application/zip'})}
+function resetProject(){if(!confirm('Biztosan törlöd a betöltött projektet és a helyi fordításokat? Előtte készíts JSON-mentést!'))return;files=[];active='';chosen=null;assets.forEach(function(a){URL.revokeObjectURL(a.url)});assets=[];localStorage.removeItem(storeKey);render();assetRender();msg('Üres projekt. A korábbi fájlok a lemezen változatlanok.')}
+function render(){totalRender();treeRender();editorRender();updatePreview()}
+function backupData(){var data={app:'Craft the World Editor',version:1,created:new Date().toISOString(),files:files};dl(JSON.stringify(data,null,2),'Craft_the_World_forditas_mentes.json','application/json;charset=utf-8')}
+async function restoreData(f){try{var x=JSON.parse(await f.text());if(!x||!Array.isArray(x.files))throw Error('Hibás állomány');if(files.length&&!confirm('A JSON-mentés betöltése helyettesíti a jelenlegi fordítási adatokat. Folytatod?'))return;files=x.files;active=files[0]?files[0].path:'';chosen=null;save();render();msg('A JSON-mentés sikeresen visszatöltve: '+files.length+' fájl.')}catch(e){msg('Nem megfelelő JSON-mentés: '+e.message,true)}}
+byId('downloadPkg').onclick=async function(){var raw='<!DOCTYPE html>\n'+document.documentElement.outerHTML;var enc=new TextEncoder();var guide='CRAFT THE WORLD EDITOR - Offline magyarító szerkesztő\r\n\r\nNyisd meg a Craft_the_World_Editor.html fájlt Chrome vagy Edge böngészőben.\r\nAngol CSV/TXT állományokat tölt be, és helyben kezeli a magyar fordításokat.\r\nA játék eredeti fájljait nem módosítja közvetlenül; külön exportálható fordítási ZIP.\r\nA képek és fontok betöltése az aktuális munkamenetre érvényes.\r\nA teljes játékarchívum formátumait még ellenőrizni kell.\r\n';try{var z=await zipStore([{path:'Craft_the_World_Editor.html',data:enc.encode(raw)},{path:'HASZNALAT.txt',data:enc.encode(guide)}]);dl(z,'Craft_the_World_Editor_OFFLINE.zip','application/zip');msg('Offline program ZIP elkészült, kattints a letöltésre.')}catch(e){msg('Nem sikerült összeállítani a program ZIP-et: '+e.message,true)}};
+byId('downloadApp').onclick=function(){dl('<!DOCTYPE html>\n'+document.documentElement.outerHTML,'Craft_the_World_Editor.html','text/html;charset=utf-8');msg('A program HTML-fájlja letöltésre kész. Offline is megnyitható.')} ;
+byId('addFiles').onclick=function(){byId('filesInput').click()};byId('filesInput').onchange=function(){importTexts(this,false)};
+byId('addFolder').onclick=function(){byId('folderInput').click()};byId('folderInput').onchange=function(){var arr=Array.from(this.files||[]);var text=arr.filter(function(f){return isText(pathOf(f))});if(text.length)importTexts(this,false);var media=arr.filter(function(f){return /\.(png|webp|jpe?g|ttf|otf|woff2?)$/i.test(f.name)});if(media.length)addAssets(media)};
+byId('addAssets').onclick=function(){byId('assetInput').click()};byId('assetInput').onchange=function(){addAssets(Array.from(this.files||[]));this.value=''};
+byId('update').onclick=function(){byId('versionInput').click()};byId('versionInput').onchange=function(){importTexts(this,true)};
+byId('exportFile').onclick=function(){var f=selectedFile();if(!f){msg('Előbb válassz szövegfájlt.',true);return}dl(exportText(f),baseName(f.path),'text/plain;charset=utf-8');msg('Export elkészült: '+f.path)};
+byId('exportAll').onclick=async function(){if(!files.length&&!assets.length){msg('Nincs exportálható fájl.',true);return}var items=[],enc=new TextEncoder();files.forEach(function(f){items.push({path:'localization/'+f.path,data:enc.encode(exportText(f))})});assets.forEach(function(a){items.push({path:'assets/'+a.path,data:a.blob})});items.push({path:'FORDITAS_ELLENORZES.json',data:enc.encode(JSON.stringify({summary:allStats(),generated:new Date().toISOString(),files:files.map(function(f){return {path:f.path,statistics:stats(f)}})},null,2))});
+ try{var z=await zipStore(items);dl(z,'Craft_the_World_MAGYARITAS_UPDATE.zip','application/zip');msg('Teljes ZIP export kész: '+items.length+' fájl, '+bytes(z.size)+'. A ZIP csak a szerkesztett állományokat tartalmazza.')}catch(e){msg('ZIP-hiba: '+e.message,true)}};
+byId('backup').onclick=backupData;byId('restore').onclick=function(){byId('backupInput').click()};byId('backupInput').onchange=function(){if(this.files[0])restoreData(this.files[0]);this.value=''};
+byId('reset').onclick=resetProject;
+byId('search').oninput=function(){query=this.value.trim();page=0;editorRender()};byId('clear').onclick=function(){byId('search').value='';query='';page=0;editorRender()};
+document.querySelectorAll('.filter').forEach(function(b){b.onclick=function(){filter=this.dataset.filter;page=0;document.querySelectorAll('.filter').forEach(function(n){n.classList.remove('active')});this.classList.add('active');editorRender()}});
+byId('imageBg').onclick=function(){var choices=assets.map(function(a,i){return a.type==='image'?i:null}).filter(function(x){return x!==null});if(!choices.length){msg('Előbb tölts be háttérképet a „Képek és fontok” gombbal.',true);return}var ix=choices.find(function(i){return assets[i].url!==byId('preview').style.backgroundImage});useAsset(ix==null?choices[0]:ix)};
+byId('fontApply').onclick=function(){var ix=assets.findIndex(function(a){return a.type==='font'});if(ix<0){msg('Előbb tölts be .ttf/.otf/.woff betűtípust.',true);return}useAsset(ix)};
+loadSaved();render();assetRender();
+})();
+</script>
+</body></html>
