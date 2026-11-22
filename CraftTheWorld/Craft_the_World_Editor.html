@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="hu"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Craft the World Editor • Magyarító Műhely 0.2</title>
+<title>Craft the World Editor • Magyarító Műhely 0.3</title>
 <style>
 :root{--bg:#101b19;--panel:#1c2925;--panel2:#22332b;--text:#f1e4c5;--muted:#b9bbab;--gold:#d6ac55;--edge:#6b5639;--red:#e2635d;--green:#60c77c;--yellow:#e5b94d}
 *{box-sizing:border-box}html,body{height:100%;margin:0}body{font-family:Segoe UI,Tahoma,Arial,sans-serif;color:var(--text);background:radial-gradient(ellipse at 50% 0%,#374337 0,#162620 55%,#0c1615 100%)}
@@ -46,7 +46,7 @@ display:flex;flex-direction:column;justify-content:center;gap:2px}
   <div class="fixedKpi"><span class="fixedLabel">MAGYAR KITÖLTVE</span><span id="fixedFilledPct" class="fixedValue red">0,0%</span><span id="fixedFilledCount" class="fixedSmall">0 / 0 kitöltött</span></div>
   <div class="fixedKpi"><span class="fixedLabel" title="Az aktuálisan megnyitott szövegfájl">AKTUÁLIS FÁJL KÉSZÜLTSÉGE</span><span id="fixedFilePct" class="fixedValue red">0,0%</span><span id="fixedFileInfo" class="fixedSmall fixedPath">Nincs kiválasztott fájl</span></div>
 </div>
-<header><div class="top"><div class="logo"><div class="emblem">⚒️</div><div><div class="brand">CRAFT THE WORLD</div><div class="subtitle">MAGYARÍTÓ MŰHELY • offline HTML • 0.2 • rögzített készültségsáv • Stellaris Editor elrendezés</div></div></div><div id="overall" class="strip">0 / 0 ellenőrzött</div></div>
+<header><div class="top"><div class="logo"><div class="emblem">⚒️</div><div><div class="brand">CRAFT THE WORLD</div><div class="subtitle">MAGYARÍTÓ MŰHELY • offline HTML • 0.3 • CSV-fordítás helyreállítva • Stellaris Editor elrendezés</div></div></div><div id="overall" class="strip">0 / 0 ellenőrzött</div></div>
 <div class="toolbar">
 <button id="downloadPkg" class="accent">📦 Offline program ZIP</button>
 <button id="downloadApp" class="accent">⬇️ HTML-program letöltése</button>
@@ -126,8 +126,27 @@ function isDone(r){return !!(r.checked&&r.hu.trim()&&!codeError(r))}
 function state(r){return !r.hu.trim()?'todo':codeError(r)?'error':isDone(r)?'done':'draft'}
 function stats(f){var d=0,filled=0;f.rows.forEach(function(r){if(r.hu.trim())filled++;if(isDone(r))d++});return {done:d,filled:filled,total:f.rows.length,percent:pct(d,f.rows.length)}}
 function allStats(){var s={done:0,filled:0,total:0};files.forEach(function(f){var t=stats(f);s.done+=t.done;s.filled+=t.filled;s.total+=t.total});s.percent=pct(s.done,s.total);return s}
-function save(){try{var data=files.map(function(f){return {path:f.path,format:f.format,delim:f.delim,bom:f.bom,newline:f.newline,ending:f.ending,header:f.header,keyCol:f.keyCol,textCol:f.textCol,langCol:f.langCol,rawRows:f.rawRows,rawLines:f.rawLines,rows:f.rows}});localStorage.setItem(storeKey,JSON.stringify(data));storageOK=true}catch(e){storageOK=false;msg('A böngésző tárhelye betelt vagy tiltott. A „Fordítások mentése (JSON)” gombbal készíts mentést!',true)}}
-function loadSaved(){try{var d=JSON.parse(localStorage.getItem(storeKey)||'null');if(Array.isArray(d)){files=d;active=files[0]?files[0].path:'';msg('Korábbi helyi fordítási állapot visszatöltve.')}}catch(e){msg('A korábbi mentés nem volt olvasható; importáld a JSON-mentést.',true)}}
+function save(){try{var data=files.map(function(f){return {path:f.path,format:f.format,delim:f.delim,bom:f.bom,newline:f.newline,ending:f.ending,header:f.header,keyCol:f.keyCol,textCol:f.textCol,targetCol:f.targetCol,langCol:f.langCol,rawRows:f.rawRows,rawLines:f.rawLines,rows:f.rows}});localStorage.setItem(storeKey,JSON.stringify(data));storageOK=true}catch(e){storageOK=false;msg('A böngésző tárhelye betelt vagy tiltott. A „Fordítások mentése (JSON)” gombbal készíts mentést!',true)}}
+function loadSaved(){
+ try{
+  var data=JSON.parse(localStorage.getItem(storeKey)||'null');
+  if(Array.isArray(data)){
+   var repaired=0;
+   files=data.map(function(f){
+    if(!f||f.format!=='csv'||!Array.isArray(f.rawRows)||!f.rawRows.length)return f;
+    var copy=Object.assign({},f,{rows:(f.rows||[]).map(r=>Object.assign({},r))});
+    var fixed=normalizeCraftFile(copy,f);
+    if(fixed.textCol!==f.textCol||fixed.targetCol!==f.targetCol)repaired++;
+    return fixed
+   });
+   active=files[0]?files[0].path:'';
+   if(repaired){
+    try{localStorage.setItem(storeKey+'_biztonsagi_mentes_v02',JSON.stringify(data))}catch(_){}
+    save();msg('A régi CSV-k helyreállítva: '+repaired+' fájl. A korábbi állapot biztonsági mentésben megmaradt.')
+   }else msg('Korábbi helyi fordítási állapot visszatöltve.')
+  }
+ }catch(e){msg('Helyi mentés nem olvasható. A JSON-mentésből visszatölthető.',true)}
+}
 function chooseDelim(text){var first=String(text).split(/\r\n|\n|\r/).find(function(x){return x.trim()})||'';var cnt={';':0,',':0,'\t':0};var inQ=false;for(var i=0;i<first.length;i++){var c=first[i];if(c==='"'){if(first[i+1]==='"'){i++;continue}inQ=!inQ;continue}if(!inQ&&cnt[c]!==undefined)cnt[c]++}return Object.keys(cnt).sort(function(a,b){return cnt[b]-cnt[a]})[0]}
 function parseCsv(text,d){var rows=[],row=[],field='',q=false;for(var i=0;i<text.length;i++){var c=text[i];if(c==='"'){if(q&&text[i+1]==='"'){field+='"';i++}else q=!q}else if(!q&&c===d){row.push(field);field=''}else if(!q&&(c==='\n'||c==='\r')){if(c==='\r'&&text[i+1]==='\n')i++;row.push(field);rows.push(row);row=[];field=''}else field+=c}if(field!==''||row.length){row.push(field);rows.push(row)}return rows}
 function csvCell(x,d){x=String(x==null?'':x);return /[\r\n"]/.test(x)||x.indexOf(d)>=0?'"'+x.replace(/"/g,'""')+'"':x}
@@ -179,9 +198,59 @@ function parseFile(path,raw){
  }
  return f;
 }
+
+function huScore(s){s=String(s||'');if(hasNonLatinScript(s))return -100;
+ var accents=(s.match(/[áéíóöőúüűÁÉÍÓÖŐÚÜŰ]/g)||[]).length;
+ var words=s.toLowerCase().match(/[a-záéíóöőúüű]+/g)||[];
+ var dict=new Set('egy az és hogy nem van vagy aki ami ebben ezen azok ezek sok meg kell lehet lesz volt vannak belőle belül felett alatt miatt közeli közelében harcos lények őrző őrült csatabárd ellenség elhagyatott erőforrások készítés kiválasztás építés bal jobb magyar szöveg fordítás'.split(' '));
+ return accents*3+words.filter(w=>dict.has(w)).length*2
+}
+function craftCols(f){
+ var t=f.rawRows;if(!Array.isArray(t)||!t.length)return null;
+ var header=t[0]||[],hasHeader=!!f.header||header.some(x=>/^(key|id|code|token|name|english|en|en_us|english_text|text_en|source|original|hungarian|hu|magyar|translated|translation|language|lang|locale)$/i.test(String(x||'').trim()));
+ var start=hasHeader?1:0,find=re=>hasHeader?findCol(header,re):-1;
+ var en=find(/^(english|eng|en|en[-_]?(us|gb|uk)|english_text|text_en|source_en|original_english)$/i);
+ var hu=find(/^(hungarian|hu|hu[-_]?(hu)|magyar|translation_hu|target_hu|text_hu|translated_hu|magyar_forditas)$/i);
+ var key=find(/^(key|id|code|token|string_id|stringid|identifier)$/i);
+ var lang=find(/^(language|language_code|lang|locale|locale_code)$/i);
+ if(en<0&&lang<0){
+  var width=Math.max.apply(null,t.slice(0,35).map(x=>x.length));
+  if(width>=3){
+   var best=-1,scoreBest=0;
+   for(var j=1;j<width;j++){var score=0;for(var i=start;i<Math.min(t.length,start+150);i++)score+=Math.max(0,huScore((t[i]||[])[j]));
+    if(score>scoreBest){scoreBest=score;best=j}}
+   if(best>=2&&scoreBest>=3){hu=best;en=best-1;if(key<0)key=0}
+  }
+ }
+ if(en<0&&hu>=2)en=1;
+ if(en<0&&lang<0&&hasHeader){var c=find(/^(source|original|text|value|name_en|label_en)$/i);if(c>=0&&c!==hu)en=c}
+ return {en,hu,key,lang,hasHeader,start}
+}
+function normalizeCraftFile(f,oldF){
+ if(!f||f.format!=='csv'||!Array.isArray(f.rawRows)||!f.rawRows.length||languagePathKind(f.path)==='foreign')return f;
+ var d=craftCols(f);if(!d)return f;
+ if(d.en>=0&&d.en!==d.hu){
+  var prior=new Map((oldF&&oldF.rows||[]).map(r=>[r.idx,r])),rows=[];
+  for(var i=d.start;i<f.rawRows.length;i++){
+   var cols=f.rawRows[i]||[];if(!cols.length||cols.every(x=>!String(x||'').trim()))continue;
+   if(d.lang>=0&&cols[d.lang]&&!normalizeLang(cols[d.lang]))continue;
+   var en=String(cols[d.en]||'');if(!en.trim()||hasNonLatinScript(en))continue;
+   var hu=d.hu>=0?String(cols[d.hu]||''):'';
+   if(hasNonLatinScript(hu))hu='';
+   var p=prior.get(i);if(p&&String(p.hu||'').trim())hu=p.hu;
+   var key=d.key>=0?String(cols[d.key]||''):'#'+(i+1);
+   rows.push({idx:i,key:key||'#'+(i+1),source:en,hu,checked:!!(p&&p.checked&&p.source===en&&p.hu===hu)})
+  }
+  if(rows.length){f.rows=rows;f.header=d.hasHeader;f.keyCol=d.key;f.langCol=d.lang;f.textCol=d.en;f.targetCol=d.hu;f.language='english';return f}
+ }
+ if(oldF&&oldF.rows){var map=new Map(oldF.rows.map(r=>[r.idx,r]));
+  f.rows.forEach(r=>{var p=map.get(r.idx);if(p&&p.source===r.source){if(p.hu)r.hu=p.hu;if(p.checked&&p.hu===r.hu)r.checked=true}})}
+ return f
+}
+
 function mergeRows(oldF,newF){var byKey=new Map(),bySource=new Map(),used=new Set();oldF.rows.forEach(function(r){var k=String(r.key);if(!byKey.has(k))byKey.set(k,[]);byKey.get(k).push(r);if(!bySource.has(r.source))bySource.set(r.source,[]);bySource.get(r.source).push(r)});var report={kept:0,changed:0,added:0,removed:0};newF.rows.forEach(function(r){var candidates=byKey.get(String(r.key))||[];var old=candidates.find(function(x){return !used.has(x)&&x.source===r.source})||candidates.find(function(x){return !used.has(x)});
  if(!old){var s=bySource.get(r.source)||[];old=s.find(function(x){return !used.has(x)})}
- if(old){used.add(old);r.hu=old.hu;r.checked=old.checked&&old.source===r.source;if(old.source!==r.source){r.checked=false;report.changed++}else report.kept++}else report.added++});report.removed=oldF.rows.length-used.size;return report}
+ if(old){used.add(old);if(String(old.hu||'').trim())r.hu=old.hu;r.checked=!!(old.checked&&old.source===r.source&&old.hu===r.hu);if(old.source!==r.source){r.checked=false;report.changed++}else report.kept++}else report.added++});report.removed=oldF.rows.length-used.size;return report}
 function applyFiles(incoming,version){if(!incoming.length){msg('Nem található betölthető angol CSV/TXT fájl.',true);return}var added=0,totals={kept:0,changed:0,added:0,removed:0};
  incoming.forEach(function(f){var ix=files.findIndex(function(x){return x.path===f.path});if(ix>=0){var rep=mergeRows(files[ix],f);Object.keys(totals).forEach(function(k){totals[k]+=rep[k]});files[ix]=f}else{totals.added+=f.rows.length;files.push(f)}added++});
  if(!active||!files.some(function(x){return x.path===active}))active=files[0].path;
@@ -189,12 +258,25 @@ function applyFiles(incoming,version){if(!incoming.length){msg('Nem található 
  page=0;save();render();msg((version?'Verziófrissítés':'Fájlbetöltés')+' kész: '+added+' angol fájl. '+(version?upReport:'A fordítások mentése automatikus.'))}
 async function readTextFile(f){var buffer=await f.arrayBuffer(),arr=new Uint8Array(buffer),encoding='utf-8';if(arr.length>1&&arr[0]===255&&arr[1]===254)encoding='utf-16le';return new TextDecoder(encoding).decode(arr)}
 async function importTexts(input,version){var list=Array.from(input.files||[]).filter(function(f){return isText(pathOf(f))&&englishPath(pathOf(f))});if(!list.length){msg('Nem található angol CSV/TXT fájl. A kínai és más nyelvű fájlokat kihagytam.',true);input.value='';return}
- var res=[],fail=[],skipped=0;for(var i=0;i<list.length;i++){try{var t=await readTextFile(list[i]),parsed=parseFile(pathOf(list[i]),t);if(parsed.language==='english'&&parsed.rows.length)res.push(parsed);else skipped++}catch(e){fail.push(list[i].name)}}
+ var res=[],fail=[],skipped=0;for(var i=0;i<list.length;i++){try{var t=await readTextFile(list[i]),parsed=normalizeCraftFile(parseFile(pathOf(list[i]),t));if(parsed.language==='english'&&parsed.rows.length)res.push(parsed);else skipped++}catch(e){fail.push(list[i].name)}}
  if(!res.length){msg('Nem találtam biztosan angol nyelvű szövegfájlt. A kínai és nem azonosítható fájlokat nem töltöttem be.',true);input.value='';return}
  applyFiles(res,version);if(skipped)msg('Csak angol fájlok betöltve: '+res.length+'. Kihagyott kínai/egyéb vagy nem azonosítható fájl: '+skipped+'.',false);if(fail.length)msg('Nem sikerült olvasni: '+fail.join(', '),true);input.value=''}
 function selectedFile(){return files.find(function(f){return f.path===active})||null}
-function exportText(f){if(!f.rows.some(function(r){return !!r.hu.trim()}))return f.rawOriginal||'';var out;if(f.format==='csv'){var rows=f.rawRows.map(function(r){return r.slice()});f.rows.forEach(function(r){if(r.hu.trim())rows[r.idx][f.textCol]=r.hu});out=joinCsv(rows,f.delim,f.newline,f.ending)}else{var lines=f.rawLines.slice();f.rows.forEach(function(r){if(r.hu.trim())lines[r.idx]=(r.prefix||'')+r.hu});out=lines.join(f.newline)+(f.ending?f.newline:'')}
- return (f.bom?'\uFEFF':'')+out}
+function exportText(f){
+ if(!f.rows.some(r=>!!String(r.hu||'').trim())&&f.rawOriginal)return f.rawOriginal;
+ var out;
+ if(f.format==='csv'){
+  var rows=f.rawRows.map(r=>r.slice());
+  var dest=Number.isInteger(f.targetCol)&&f.targetCol>=0?f.targetCol:f.textCol;
+  f.rows.forEach(r=>{if(String(r.hu||'').trim()&&rows[r.idx])rows[r.idx][dest]=r.hu});
+  out=joinCsv(rows,f.delim,f.newline,f.ending)
+ }else{
+  var lines=f.rawLines.slice();
+  f.rows.forEach(r=>{if(String(r.hu||'').trim())lines[r.idx]=(r.prefix||'')+r.hu});
+  out=lines.join(f.newline)+(f.ending?f.newline:'')
+ }
+ return (f.bom?'\uFEFF':'')+out
+}
 function dl(data,name,type){var url=URL.createObjectURL(new Blob([data],{type:type||'application/octet-stream'}));var a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},2000)}
 function totalRender(){
  var s=allStats(),p=s.percent,c=s.total&&s.done===s.total?'green':s.done?'yellow':'red';
@@ -225,7 +307,7 @@ function treeRender(){if(!files.length){byId('tree').innerHTML='<div class="note
 function selectedList(f){if(!f)return[];return f.rows.filter(function(r){var q=query.toLocaleLowerCase('hu');if(q&&!(r.key+' '+r.source+' '+r.hu).toLocaleLowerCase('hu').includes(q))return false;var s=state(r);return filter==='all'||filter===s})}
 function sourceStatus(r){var s=state(r);return s==='done'?'<span class="green">✓ KÉSZ</span>':s==='error'?'<span class="red">! KÓDHIBA</span>':s==='draft'?'<span class="yellow">ELLENŐRIZENDŐ</span>':'<span class="red">HIÁNYZIK</span>'}
 function editorRender(){var f=selectedFile(),box=byId('entries');if(!f){box.innerHTML='<div class="note margintop">Tölts be angol CSV/TXT fájlokat.</div>';byId('fileMeta').textContent='Fájl nincs kiválasztva.';byId('editorTitle').textContent='✍ Angol → magyar fordítás';byId('pagination').innerHTML='';return}
- byId('editorTitle').textContent='✍ '+f.path;byId('fileMeta').textContent='Típus: '+f.format.toUpperCase()+' • Fordítandó sor: '+f.rows.length+(f.format==='csv'?' • Elválasztó: '+(f.delim==='\t'?'TAB':f.delim)+' • Szövegoszlop: '+(f.textCol+1):'')+' • A fájl minden szerkezeti sora megmarad.';
+ byId('editorTitle').textContent='✍ '+f.path;byId('fileMeta').textContent='Típus: '+f.format.toUpperCase()+' • Fordítandó sor: '+f.rows.length+(f.format==='csv'?' • Elválasztó: '+(f.delim==='\t'?'TAB':f.delim)+' • Angol oszlop: '+(f.textCol+1)+(f.targetCol>=0?' • Magyar oszlop: '+(f.targetCol+1):''):'')+' • A fájl minden szerkezeti sora megmarad.';
  var list=selectedList(f),totalPages=Math.max(1,Math.ceil(list.length/perPage));page=Math.min(page,totalPages-1);var slice=list.slice(page*perPage,(page+1)*perPage);
  box.innerHTML=slice.map(function(r){var i=f.rows.indexOf(r),err=codeError(r);return '<div class="row" data-r="'+i+'"><div class="rowTop"><span class="rowKey">'+escapeHTML(r.key)+' <span class="tiny">#'+(r.idx+1)+'</span></span>'+sourceStatus(r)+'</div><div class="label">Angol eredeti</div><div class="source">'+escapeHTML(r.source)+'</div><div class="label">Magyar fordítás</div><textarea class="hu" data-i="'+i+'" placeholder="Írd ide a természetes magyar fordítást…">'+escapeHTML(r.hu)+'</textarea><div class="rowWarn">'+escapeHTML(err)+'</div><div class="rowFooter"><label class="check"><input type="checkbox" class="checked" data-i="'+i+'" '+(isDone(r)?'checked':'')+'> Ellenőrizve / kész</label><button class="showPreview" data-i="'+i+'">🎮 Előnézet</button></div></div>'}).join('')||'<div class="note margintop">Nincs találat a kiválasztott szűrőben.</div>';
  byId('pagination').innerHTML='<button id="prevPage" '+(page===0?'disabled':'')+'>◀</button><span class="tiny">'+(page+1)+' / '+totalPages+' oldal • '+shown(list.length)+' sor</span><button id="nextPage" '+(page>=totalPages-1?'disabled':'')+'>▶</button>';
