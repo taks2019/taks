@@ -1,0 +1,89 @@
+name: TAKS World · 3D APK · csak jóváhagyott grafika
+on:
+  push:
+    branches:
+      - codex/taks-world-approved-only-3d-apk-2026-11-22
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'assets/visual_approvals.json'
+      - 'app/**'
+      - 'engine/**'
+      - 'scripts/check_visual_approvals.py'
+      - 'scripts/verify_approved_apk.py'
+      - 'tests/test_approved_apk.py'
+      - '.github/workflows/approved-only-3d-apk.yml'
+permissions:
+  contents: read
+jobs:
+  engine-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify fail-closed APK approval rules
+        run: python3 -m unittest discover -s tests -p test_approved_apk.py -v
+      - name: Compile TAKS Engine and run cause-and-effect tests
+        run: |
+          cmake -S engine -B build-causal -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-causal --parallel 2
+          ctest --test-dir build-causal --output-on-failure
+  owner-art-approval:
+    runs-on: ubuntu-latest
+    outputs:
+      approved: ${{ steps.inspect.outputs.approved }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect every visual source asset without inferring approval
+        id: inspect
+        shell: bash
+        run: |
+          if python3 scripts/check_visual_approvals.py --json-report visual-approval-report.json; then
+            echo "approved=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "approved=false" >> "$GITHUB_OUTPUT"
+            echo '::notice::APK creation deferred. At least one visual is not owner-approved.'
+          fi
+      - name: Publish owner approval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-Visual-Approval-Report
+          path: visual-approval-report.json
+          if-no-files-found: error
+  build-approved-apk:
+    needs: [engine-tests, owner-art-approval]
+    if: needs.owner-art-approval.outputs.approved == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0 ndk;27.2.12479018 cmake;3.22.1'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Re-check approved graphics immediately before packaging
+        run: python3 scripts/check_visual_approvals.py
+      - name: Build native Android 3D game with the current project assets only
+        run: gradle --no-daemon :app:assembleDebug --stacktrace
+      - name: Audit actual APK binaries and SHA-256 pinned packaged visuals
+        run: |
+          python3 scripts/verify_approved_apk.py \
+            app/build/outputs/apk/debug/app-debug.apk \
+            --manifest assets/visual_approvals.json \
+            --report approved-apk-audit.json
+      - name: Upload installable APK only after exact approval audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: TAKS-World-3D-Owner-Approved-APK
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            approved-apk-audit.json
+          if-no-files-found: error
