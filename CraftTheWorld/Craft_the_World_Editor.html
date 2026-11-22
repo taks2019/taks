@@ -73,7 +73,25 @@ function escapeHTML(x){return String(x==null?'':x).replace(/&/g,'&amp;').replace
 function baseName(path){return String(path).split('/').pop()}
 function pathOf(f){return (f.webkitRelativePath||f.name||'névtelen').replace(/\\/g,'/')}
 function isText(n){return /\.(csv|txt|tsv)$/i.test(n)}
-function englishPath(path){var a=path.toLowerCase();return !/(?:^|[/_. -])(german|deutsch|french|francais|spanish|espanol|italian|russian|russki|polish|polski|chinese|japanese|korean|portuguese|turkish|hungarian|magyar|czech|ukrainian|ukraine|german|fr|de|ru|es|it|pl|zh|ja|ko|pt|tr|hu|cs)(?:[/_. -]|$)/i.test(a)}
+function languagePathKind(path){
+ var p=String(path||'').toLowerCase().replace(/\\/g,'/');
+ var tokens=p.replace(/[^a-z0-9]+/g,' ').trim().split(/\s+/);
+ var foreign=new Set('chinese zh zhcn zhtw zhhans zhhant chs cht cn tw hans hant chinesesimplified chinesetraditional simplifiedchinese traditionalchinese japanese japan ja jp korean ko kr russian ru ukrainian uk german deutsch de french francais fr spanish espanol es italian it polish polski pl portuguese pt brazilian br turkish tr hungarian magyar hu czech cs dutch nl swedish sv norwegian no danish da finnish fi greek el arabic ar thai th vietnamese vi'.split(' '));
+ if(tokens.some(function(t){return foreign.has(t)}))return 'foreign';
+ var english=new Set('english eng en enus engb enuk enau enca'.split(' '));
+ if(tokens.some(function(t){return english.has(t)}))return 'english';
+ return 'unknown';
+}
+function englishPath(path){return languagePathKind(path)!=='foreign'}
+function normalizeLang(v){var s=String(v||'').trim().toLowerCase().replace(/_/g,'-');return /^(en|eng|english)(?:-|$)/.test(s)}
+function hasNonLatinScript(s){return /[\u2E80-\u2EFF\u3000-\u30FF\u3100-\u312F\u3130-\u318F\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\u0400-\u052F\u0600-\u06FF]/.test(String(s||''))}
+function looksEnglish(s){
+ var t=String(s||'');if(hasNonLatinScript(t))return false;
+ var words=t.toLowerCase().match(/[a-z]+/g)||[];if(!words.length)return false;
+ var common=new Set('the a an and or but if then to of in on at by for from with without is are was were be been being this that these those it its you your we our they their he she his her can cannot will would should do does did not no yes please new game start exit load save continue options settings menu back cancel accept craft world dwarf dwarves item items resource resources wood stone iron gold food health skill skills quest quests build building upgrade research inventory weapon armor tool tools click press hold move attack mine collect gather open close next previous day night water fire earth dirt grass wall floor pickaxe axe shovel sword bow arrow'.split(' '));
+ var hits=words.filter(function(w){return common.has(w)}).length;
+ return hits>0 && (hits/words.length>=0.08 || words.length<=3);
+}
 function tokens(t){var m=String(t||'').match(/%(?:\d+\$)?[-+#0 ]*(?:\d+)?(?:\.\d+)?[sdifuxX]|(?<!\{)\{\d+(?:[^{}]*)?\}|\[[A-Za-z_0-9:.]+\]|<\/?[A-Za-z][^>]*>|\$[A-Za-z0-9_.]+\$|\\[nrt]/g);return (m||[]).sort()}
 function codeError(r){var a=tokens(r.source),b=tokens(r.hu);return JSON.stringify(a)===JSON.stringify(b)?'':'Vezérlőkód-eltérés: '+a.join(' ')+' ≠ '+b.join(' ')}
 function isDone(r){return !!(r.checked&&r.hu.trim()&&!codeError(r))}
@@ -92,24 +110,46 @@ function txtLineInfo(s){var m=s.match(/^(\s*[A-Za-z][\w.:\-\/ ]{0,100}?\s*)(=|:)
 function parseFile(path,raw){
  var bom=raw.charCodeAt(0)===65279,txt=bom?raw.slice(1):raw;
  var newline=txt.indexOf('\r\n')>=0?'\r\n':txt.indexOf('\r')>=0?'\r':'\n';
- var ending=/(\r\n|\r|\n)$/.test(txt),ext=path.split('.').pop().toLowerCase(),f={path:path,format:ext==='csv'||ext==='tsv'?'csv':'txt',bom:bom,newline:newline,ending:ending,rawOriginal:raw,rows:[],rawRows:[],rawLines:[],header:false,delim:ext==='tsv'?'\t':',',keyCol:0,textCol:1,langCol:-1};
+ var ending=/(\r\n|\r|\n)$/.test(txt),ext=path.split('.').pop().toLowerCase(),pathKind=languagePathKind(path);
+ var f={path:path,format:ext==='csv'||ext==='tsv'?'csv':'txt',bom:bom,newline:newline,ending:ending,rawOriginal:raw,rows:[],rawRows:[],rawLines:[],header:false,delim:ext==='tsv'?'\t':',',keyCol:0,textCol:1,langCol:-1,language:'unknown',languageReason:''};
+ if(pathKind==='foreign'){f.language='foreign';f.languageReason='A fájl útvonala nem angol nyelvet jelöl.';return f}
  if(f.format==='csv'){
- f.delim=ext==='tsv'?'\t':chooseDelim(txt);if(!f.delim)f.delim=',';
- var table=parseCsv(txt,f.delim);f.rawRows=table;
- var header=table[0]||[];f.header=header.some(function(x){return /^(id|key|token|name|english|en|en_us|source|value|text|translation|language|locale|lang)$/i.test(String(x).trim())});
- f.keyCol=f.header?findCol(header,/^(id|key|token|name|string_id|stringid|code)$/):-1;
- f.textCol=sourceColumn(header,f.header);
- f.langCol=f.header?findCol(header,/^(language|lang|locale)$/):-1;
- var start=f.header?1:0;
- for(var i=start;i<table.length;i++){var cols=table[i]||[];if(!cols.length||cols.every(function(x){return !String(x).trim()}))continue;
- if(f.langCol>=0&&cols[f.langCol]&&!/^(en|english|en_us|en-gb|en_uk)$/i.test(String(cols[f.langCol]).trim()))continue;
- var value=String(cols[f.textCol]||'');if(!value.trim())continue;
- var key=f.keyCol>=0?String(cols[f.keyCol]||''):'';
- f.rows.push({idx:i,key:key||'#'+(i+1),source:value,hu:'',checked:false})}
+  f.delim=ext==='tsv'?'\t':chooseDelim(txt);if(!f.delim)f.delim=',';
+  var table=parseCsv(txt,f.delim);f.rawRows=table;
+  var header=table[0]||[];
+  f.header=header.some(function(x){return /^(id|key|token|name|english(?:\\s*\\(.*\\))?|eng|en(?:[-_ ]?(us|gb|uk|au|ca))?|source|value|text|translation|language|language_code|lang|lang_code|locale|locale_code)$/i.test(String(x).trim())});
+  f.keyCol=f.header?findCol(header,/^(id|key|token|name|string_id|stringid|code)$/):-1;
+  f.langCol=f.header?findCol(header,/^(language|language_code|lang|lang_code|locale|locale_code)$/):-1;
+  var englishCol=f.header?findCol(header,/^(english(?:\\s*\\(.*\\))?|eng|en(?:[-_ ]?(us|gb|uk|au|ca))?|en_us|en_gb|text_en|source_en)$/):-1;
+  var foreignCol=f.header?findCol(header,/^(chinese(?:\\s*\\(.*\\))?|zh|zh[-_]?(cn|tw|hans|hant)|chs|cht|japanese|ja|korean|ko|german|de|french|fr|spanish|es|russian|ru)$/):-1;
+  f.textCol=englishCol>=0?englishCol:sourceColumn(header,f.header);
+  var startRow=f.header?1:0,langRows=false;
+  if(f.langCol>=0){langRows=table.slice(startRow).some(function(cols){return cols[f.langCol]&&normalizeLang(cols[f.langCol])});}
+  if(f.langCol>=0&&!langRows&&!(pathKind==='english'||englishCol>=0)){f.language='foreign';f.languageReason='Nem található angol nyelvű sor.';return f}
+  if(englishCol>=0||langRows||pathKind==='english')f.language='english';
+  for(var i=startRow;i<table.length;i++){
+   var cols=table[i]||[];if(!cols.length||cols.every(function(x){return !String(x).trim()}))continue;
+   if(f.langCol>=0&&cols[f.langCol]&&!normalizeLang(cols[f.langCol]))continue;
+   if(englishCol<0&&foreignCol>=0&&pathKind!=='english'&&f.langCol<0){f.language='foreign';f.languageReason='A táblázatban nem található angol szövegoszlop.';f.rows=[];return f}
+   var value=String(cols[f.textCol]||'');if(!value.trim())continue;
+   if(hasNonLatinScript(value))continue;
+   if(pathKind==='unknown'&&englishCol<0&&f.langCol<0&&!looksEnglish(value))continue;
+   var key=f.keyCol>=0?String(cols[f.keyCol]||''):'';
+   f.rows.push({idx:i,key:key||'#'+(i+1),source:value,hu:'',checked:false})
+  }
+  if(f.language!=='english'&&f.rows.length&&pathKind==='unknown'){
+   var englishHits=f.rows.filter(function(r){return looksEnglish(r.source)}).length;
+   if(englishHits===f.rows.length)f.language='english';
+  }
+  if(f.language!=='english'){f.language='foreign';f.languageReason='A fájl nyelve nem azonosítható biztosan angolként.';f.rows=[]}
  }else{
- f.rawLines=txt.split(/\r\n|\n|\r/);if(ending)f.rawLines.pop();
- f.rawLines.forEach(function(line,i){var info=txtLineInfo(line);if(/^\s*(#|;|\/\/)/.test(line)||!info.value.trim())return;f.rows.push({idx:i,key:info.key||'#'+(i+1),source:info.value,hu:'',checked:false,prefix:info.prefix})})
- }return f;
+  f.rawLines=txt.split(/\r\n|\n|\r/);if(ending)f.rawLines.pop();
+  f.rawLines.forEach(function(line,i){var info=txtLineInfo(line);if(/^\s*(#|;)/.test(line)||line.trim().startsWith('//')||!info.value.trim())return;f.rows.push({idx:i,key:info.key||'#'+(i+1),source:info.value,hu:'',checked:false,prefix:info.prefix})});
+  var sample=f.rows.slice(0,120).map(function(r){return r.source}).join(' ');
+  if(!hasNonLatinScript(sample)&&(pathKind==='english'||(pathKind==='unknown'&&looksEnglish(sample))))f.language='english';
+  else{f.language='foreign';f.languageReason='A TXT fájl nem azonosítható biztosan angol nyelvűként.';f.rows=[]}
+ }
+ return f;
 }
 function mergeRows(oldF,newF){var byKey=new Map(),bySource=new Map(),used=new Set();oldF.rows.forEach(function(r){var k=String(r.key);if(!byKey.has(k))byKey.set(k,[]);byKey.get(k).push(r);if(!bySource.has(r.source))bySource.set(r.source,[]);bySource.get(r.source).push(r)});var report={kept:0,changed:0,added:0,removed:0};newF.rows.forEach(function(r){var candidates=byKey.get(String(r.key))||[];var old=candidates.find(function(x){return !used.has(x)&&x.source===r.source})||candidates.find(function(x){return !used.has(x)});
  if(!old){var s=bySource.get(r.source)||[];old=s.find(function(x){return !used.has(x)})}
@@ -120,9 +160,10 @@ function applyFiles(incoming,version){if(!incoming.length){msg('Nem található 
  if(version){upReport='🔄 Frissítés: '+totals.kept+' átvitt • '+totals.changed+' módosult angol • '+totals.added+' új • '+totals.removed+' eltűnt sor. A módosult szövegek ellenőrzést kérnek.';byId('updateReport').textContent=upReport}
  page=0;save();render();msg((version?'Verziófrissítés':'Fájlbetöltés')+' kész: '+added+' angol fájl. '+(version?upReport:'A fordítások mentése automatikus.'))}
 async function readTextFile(f){var buffer=await f.arrayBuffer(),arr=new Uint8Array(buffer),encoding='utf-8';if(arr.length>1&&arr[0]===255&&arr[1]===254)encoding='utf-16le';return new TextDecoder(encoding).decode(arr)}
-async function importTexts(input,version){var list=Array.from(input.files||[]).filter(function(f){return isText(pathOf(f))&&englishPath(pathOf(f))});if(!list.length){msg('Nem található angol CSV/TXT a kiválasztott fájlok között. Egyéb nyelveket nem töltök be.',true);input.value='';return}
- var res=[],fail=[];for(var i=0;i<list.length;i++){try{var t=await readTextFile(list[i]);res.push(parseFile(pathOf(list[i]),t))}catch(e){fail.push(list[i].name)}}
- applyFiles(res,version);if(fail.length)msg('Nem sikerült olvasni: '+fail.join(', '),true);input.value=''}
+async function importTexts(input,version){var list=Array.from(input.files||[]).filter(function(f){return isText(pathOf(f))&&englishPath(pathOf(f))});if(!list.length){msg('Nem található angol CSV/TXT fájl. A kínai és más nyelvű fájlokat kihagytam.',true);input.value='';return}
+ var res=[],fail=[],skipped=0;for(var i=0;i<list.length;i++){try{var t=await readTextFile(list[i]),parsed=parseFile(pathOf(list[i]),t);if(parsed.language==='english'&&parsed.rows.length)res.push(parsed);else skipped++}catch(e){fail.push(list[i].name)}}
+ if(!res.length){msg('Nem találtam biztosan angol nyelvű szövegfájlt. A kínai és nem azonosítható fájlokat nem töltöttem be.',true);input.value='';return}
+ applyFiles(res,version);if(skipped)msg('Csak angol fájlok betöltve: '+res.length+'. Kihagyott kínai/egyéb vagy nem azonosítható fájl: '+skipped+'.',false);if(fail.length)msg('Nem sikerült olvasni: '+fail.join(', '),true);input.value=''}
 function selectedFile(){return files.find(function(f){return f.path===active})||null}
 function exportText(f){if(!f.rows.some(function(r){return !!r.hu.trim()}))return f.rawOriginal||'';var out;if(f.format==='csv'){var rows=f.rawRows.map(function(r){return r.slice()});f.rows.forEach(function(r){if(r.hu.trim())rows[r.idx][f.textCol]=r.hu});out=joinCsv(rows,f.delim,f.newline,f.ending)}else{var lines=f.rawLines.slice();f.rows.forEach(function(r){if(r.hu.trim())lines[r.idx]=(r.prefix||'')+r.hu});out=lines.join(f.newline)+(f.ending?f.newline:'')}
  return (f.bom?'\uFEFF':'')+out}
