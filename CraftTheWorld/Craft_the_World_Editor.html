@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="hu"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Craft the World Editor • Magyarító Műhely 0.1</title>
+<title>Craft the World Editor • Magyarító Műhely 0.2</title>
 <style>
 :root{--bg:#101b19;--panel:#1c2925;--panel2:#22332b;--text:#f1e4c5;--muted:#b9bbab;--gold:#d6ac55;--edge:#6b5639;--red:#e2635d;--green:#60c77c;--yellow:#e5b94d}
 *{box-sizing:border-box}html,body{height:100%;margin:0}body{font-family:Segoe UI,Tahoma,Arial,sans-serif;color:var(--text);background:radial-gradient(ellipse at 50% 0%,#374337 0,#162620 55%,#0c1615 100%)}
@@ -16,9 +16,37 @@ header{padding:12px 18px 10px;background:linear-gradient(160deg,rgba(53,63,42,.9
 .assets{max-height:230px;overflow:auto}.assetItem{display:flex;justify-content:space-between;align-items:center;gap:5px;font-size:11px;padding:6px;border-bottom:1px solid #47553a}.assetItem button{padding:3px 6px;font-size:10px}.assetItem strong{overflow-wrap:anywhere}.miniText{font-size:11px;color:#acbba8}.foot{padding:6px 14px;color:#999e8c;font-size:11px;text-align:center}
 #pagination{display:flex;justify-content:center;align-items:center;gap:10px;padding:10px}.strip{border:1px solid #594e38;background:#1a271f;border-radius:5px;padding:8px;font-size:12px}.warning{background:#492b25;border:1px solid #cc6f5b;color:#ffe2d3;padding:10px;border-radius:5px;font-size:12px;margin-top:9px}.success{background:#21412b;border:1px solid #6fba71;padding:9px;border-radius:5px}
 @media(max-width:1050px){#layout{grid-template-columns:245px minmax(340px,1fr)}#previewPanel{grid-column:1/-1}}@media(max-width:680px){#layout{display:flex;flex-direction:column}.treebox{max-height:240px}.brand{font-size:19px}.panel{width:100%}}
+
+/* Folyamatosan látható készültségsáv: görgetés közben is a képernyő tetején marad */
+body{padding-top:73px}
+#fixedProgress{position:fixed;top:0;left:0;right:0;z-index:9999;height:73px;box-sizing:border-box;
+display:grid;grid-template-columns:minmax(155px,1.25fr) minmax(125px,1fr) minmax(125px,1fr) minmax(145px,1.35fr);
+gap:8px;padding:8px 12px;background:linear-gradient(110deg,#2d3c2f,#14241e 60%,#292d22);
+border-bottom:3px ridge #aa864a;box-shadow:0 6px 23px #000c}
+#fixedProgress .fixedKpi{min-width:0;border:1px solid #6d6047;border-radius:6px;background:#16251eea;padding:5px 10px;
+display:flex;flex-direction:column;justify-content:center;gap:2px}
+#fixedProgress .fixedLabel{font-size:10px;letter-spacing:.06em;font-weight:700;color:#c9c7ad;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#fixedProgress .fixedValue{font-size:22px;font-weight:900;line-height:1.18;font-variant-numeric:tabular-nums}
+#fixedProgress .fixedSmall{font-size:11px;color:#e5ddc9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#fixedProgress .fixedTrack{height:5px;background:#0c1711;border-radius:6px;overflow:hidden;margin-top:2px}
+#fixedProgress .fixedTrack>div{height:100%;width:0}
+#fixedProgress .fixedTrack>div.red{background:var(--red)}
+#fixedProgress .fixedTrack>div.yellow{background:var(--yellow)}
+#fixedProgress .fixedTrack>div.green{background:var(--green)}
+#fixedProgress .fixedPath{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;max-width:100%}
+@media(min-width:1051px){#layout>.panel:first-child{position:sticky;top:83px;align-self:start;max-height:calc(100vh - 90px);overflow:auto}}
+@media(max-width:750px){body{padding-top:111px}#fixedProgress{height:111px;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,1fr);gap:5px;padding:5px}
+#fixedProgress .fixedKpi{padding:4px 8px}#fixedProgress .fixedValue{font-size:17px}#fixedProgress .fixedLabel{font-size:9px}
+#fixedProgress .fixedSmall{font-size:10px}#fixedProgress .fixedTrack{display:none}}
 </style></head>
 <body>
-<header><div class="top"><div class="logo"><div class="emblem">⚒️</div><div><div class="brand">CRAFT THE WORLD</div><div class="subtitle">MAGYARÍTÓ MŰHELY • offline HTML • 0.1-es kiadás • Stellaris Editor elrendezés</div></div></div><div id="overall" class="strip">0 / 0 ellenőrzött</div></div>
+<div id="fixedProgress" aria-label="Állandó fordítási készültség">
+  <div class="fixedKpi"><span class="fixedLabel">ÖSSZES ELLENŐRZÖTT KÉSZÜLTSÉG</span><span id="fixedOverallPct" class="fixedValue red">0,0%</span><div class="fixedTrack"><div id="fixedOverallBar" class="red"></div></div></div>
+  <div class="fixedKpi"><span class="fixedLabel">KÉSZ / ÖSSZES SOR</span><span id="fixedDoneCount" class="fixedValue">0 / 0</span><span class="fixedSmall">Ellenőrzött fordítások</span></div>
+  <div class="fixedKpi"><span class="fixedLabel">MAGYAR KITÖLTVE</span><span id="fixedFilledPct" class="fixedValue red">0,0%</span><span id="fixedFilledCount" class="fixedSmall">0 / 0 kitöltött</span></div>
+  <div class="fixedKpi"><span class="fixedLabel" title="Az aktuálisan megnyitott szövegfájl">AKTUÁLIS FÁJL KÉSZÜLTSÉGE</span><span id="fixedFilePct" class="fixedValue red">0,0%</span><span id="fixedFileInfo" class="fixedSmall fixedPath">Nincs kiválasztott fájl</span></div>
+</div>
+<header><div class="top"><div class="logo"><div class="emblem">⚒️</div><div><div class="brand">CRAFT THE WORLD</div><div class="subtitle">MAGYARÍTÓ MŰHELY • offline HTML • 0.2 • rögzített készültségsáv • Stellaris Editor elrendezés</div></div></div><div id="overall" class="strip">0 / 0 ellenőrzött</div></div>
 <div class="toolbar">
 <button id="downloadPkg" class="accent">📦 Offline program ZIP</button>
 <button id="downloadApp" class="accent">⬇️ HTML-program letöltése</button>
@@ -168,8 +196,32 @@ function selectedFile(){return files.find(function(f){return f.path===active})||
 function exportText(f){if(!f.rows.some(function(r){return !!r.hu.trim()}))return f.rawOriginal||'';var out;if(f.format==='csv'){var rows=f.rawRows.map(function(r){return r.slice()});f.rows.forEach(function(r){if(r.hu.trim())rows[r.idx][f.textCol]=r.hu});out=joinCsv(rows,f.delim,f.newline,f.ending)}else{var lines=f.rawLines.slice();f.rows.forEach(function(r){if(r.hu.trim())lines[r.idx]=(r.prefix||'')+r.hu});out=lines.join(f.newline)+(f.ending?f.newline:'')}
  return (f.bom?'\uFEFF':'')+out}
 function dl(data,name,type){var url=URL.createObjectURL(new Blob([data],{type:type||'application/octet-stream'}));var a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},2000)}
-function totalRender(){var s=allStats(),p=s.percent,c=cl(p);byId('totalPct').textContent=p.toFixed(1)+'%';byId('totalPct').className='pct '+c;byId('totalBar').style.width=p+'%';byId('totalBar').className='fill '+c;byId('counts').textContent=shown(s.filled)+' kitöltött • '+shown(s.done)+' ellenőrzött • '+shown(s.total)+' összes';byId('overall').textContent=shown(s.done)+' / '+shown(s.total)+' ellenőrzött ('+p.toFixed(1)+'%)'}
-function treeRender(){if(!files.length){byId('tree').innerHTML='<div class="note">Még nincs betöltött angol fájl.</div>';return}byId('tree').innerHTML=files.map(function(f,i){var t=stats(f),c=cl(t.percent);return '<button class="fileNode '+(f.path===active?'active':'')+'" data-index="'+i+'">📜 '+escapeHTML(f.path)+'<small><span class="'+c+'">'+t.percent.toFixed(1)+'%</span> • '+t.done+'/'+t.total+' kész • '+escapeHTML(f.format.toUpperCase())+'</small></button>'}).join('');byId('tree').querySelectorAll('.fileNode').forEach(function(btn){btn.onclick=function(){active=files[+btn.dataset.index].path;page=0;chosen=null;render()}})}
+function totalRender(){
+ var s=allStats(),p=s.percent,c=s.total&&s.done===s.total?'green':s.done?'yellow':'red';
+ var filledPct=s.total?pct(s.filled,s.total):0;
+ var filledColor=s.total&&s.filled===s.total?'green':s.filled?'yellow':'red';
+ byId('totalPct').textContent=p.toFixed(1)+'%';
+ byId('totalPct').className='pct '+c;
+ byId('totalBar').style.width=p+'%';
+ byId('totalBar').className='fill '+c;
+ byId('counts').textContent=shown(s.filled)+' kitöltött • '+shown(s.done)+' ellenőrzött • '+shown(s.total)+' összes';
+ byId('overall').textContent=shown(s.done)+' / '+shown(s.total)+' ellenőrzött ('+p.toFixed(1)+'%)';
+ byId('fixedOverallPct').textContent=p.toFixed(1)+'%';
+ byId('fixedOverallPct').className='fixedValue '+c;
+ byId('fixedOverallBar').className=c;
+ byId('fixedOverallBar').style.width=p+'%';
+ byId('fixedDoneCount').textContent=shown(s.done)+' / '+shown(s.total);
+ byId('fixedFilledPct').textContent=filledPct.toFixed(1)+'%';
+ byId('fixedFilledPct').className='fixedValue '+filledColor;
+ byId('fixedFilledCount').textContent=shown(s.filled)+' / '+shown(s.total)+' kitöltött';
+ var f=selectedFile(),fs=f?stats(f):null;
+ var fc=fs?(fs.total&&fs.done===fs.total?'green':fs.done?'yellow':'red'):'red';
+ byId('fixedFilePct').textContent=fs?fs.percent.toFixed(1)+'%':'0,0%';
+ byId('fixedFilePct').className='fixedValue '+fc;
+ byId('fixedFileInfo').textContent=f?baseName(f.path)+' • '+shown(fs.done)+' / '+shown(fs.total)+' kész':'Nincs kiválasztott fájl';
+ byId('fixedFileInfo').title=f?f.path:'';
+}
+function treeRender(){if(!files.length){byId('tree').innerHTML='<div class="note">Még nincs betöltött angol fájl.</div>';return}byId('tree').innerHTML=files.map(function(f,i){var t=stats(f),c=t.total&&t.done===t.total?'green':t.done?'yellow':'red';return '<button class="fileNode '+(f.path===active?'active':'')+'" data-index="'+i+'">📜 '+escapeHTML(f.path)+'<small><span class="'+c+'">'+t.percent.toFixed(1)+'%</span> • '+t.done+'/'+t.total+' kész • '+escapeHTML(f.format.toUpperCase())+'</small></button>'}).join('');byId('tree').querySelectorAll('.fileNode').forEach(function(btn){btn.onclick=function(){active=files[+btn.dataset.index].path;page=0;chosen=null;render()}})}
 function selectedList(f){if(!f)return[];return f.rows.filter(function(r){var q=query.toLocaleLowerCase('hu');if(q&&!(r.key+' '+r.source+' '+r.hu).toLocaleLowerCase('hu').includes(q))return false;var s=state(r);return filter==='all'||filter===s})}
 function sourceStatus(r){var s=state(r);return s==='done'?'<span class="green">✓ KÉSZ</span>':s==='error'?'<span class="red">! KÓDHIBA</span>':s==='draft'?'<span class="yellow">ELLENŐRIZENDŐ</span>':'<span class="red">HIÁNYZIK</span>'}
 function editorRender(){var f=selectedFile(),box=byId('entries');if(!f){box.innerHTML='<div class="note margintop">Tölts be angol CSV/TXT fájlokat.</div>';byId('fileMeta').textContent='Fájl nincs kiválasztva.';byId('editorTitle').textContent='✍ Angol → magyar fordítás';byId('pagination').innerHTML='';return}
