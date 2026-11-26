@@ -26,6 +26,8 @@ jobs:
           npm install --prefix viewer-deps --no-save --ignore-scripts @google/model-viewer@4.0.0
           cp viewer-deps/node_modules/@google/model-viewer/dist/model-viewer.min.js app/src/main/assets/
           cp viewer-deps/node_modules/@google/model-viewer/LICENSE app/src/main/assets/model-viewer-LICENSE.txt
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
       - name: Build Android APK
         run: |
           sdkmanager "platforms;android-35" "build-tools;35.0.0"
