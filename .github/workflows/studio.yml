@@ -28,9 +28,10 @@ jobs:
           cp viewer-deps/node_modules/@google/model-viewer/LICENSE app/src/main/assets/model-viewer-LICENSE.txt
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
       - name: Build Android APK
         run: |
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
           gradle --no-daemon :app:assembleDebug
           mkdir -p dist
           cp app/build/outputs/apk/debug/app-debug.apk dist/TAKS_3D_Studio.apk

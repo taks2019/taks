@@ -57,6 +57,7 @@ public class MainActivity extends Activity {
         button(root,"Felhős 3D-generálás · TRELLIS.2",()->new AlertDialog.Builder(this).setTitle("Felhős generálás").setMessage("A képet a Hugging Face szolgáltatása dolgozza fel. Internet, esetleg bejelentkezés és GPU-kvóta szükséges.").setNegativeButton("Mégse",null).setPositiveButton("Megnyitás",(d,w)->cloud()).show());
         button(root,"Modell importálása (GLB)",()->pick(IMPORT,"*/*"));
         button(root,"Modellkönyvtár",()->list());
+        button(root,"TAKS műhely · világ, szabályok, PC",()->startActivity(new Intent(this,StudioActivity.class)));
         button(root,"Használati útmutató",()->new AlertDialog.Builder(this).setTitle("Munkafolyamat").setMessage("1. Felhős 3D-generálás: tölts fel képet, Generate, majd Extract GLB.\n2. Töltsd le a GLB-t.\n3. Importáld a Letöltések mappából.\n4. Forgasd, nagyítsd vagy exportáld.\n\nA 4K opció a felhőszolgáltatástól függ. Az UltraTex és az automatikus csontváz még nincs integrálva.").setPositiveButton("Rendben",null).show());
     }
     private void pick(int code,String mime){
@@ -121,7 +122,8 @@ public class MainActivity extends Activity {
     }
     private void view(File f){
         current=f;start("viewer","3D modell");msg(f.getName());
-        button(root,"Vissza a könyvtárba",()->list());button(root,"GLB exportálása",()->{
+        button(root,"Vissza a könyvtárba",()->list());button(root,"Modell tulajdonságai / anyagai",()->{Intent i=new Intent(this,StudioActivity.class);i.putExtra("model",f.getName());startActivity(i);});
+        button(root,"GLB exportálása",()->{
             Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("model/gltf-binary");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,f.getName());startActivityForResult(i,EXPORT);
         });
         button(root,"Modell törlése",()->new AlertDialog.Builder(this).setMessage("Törlöd a helyi másolatot?").setNegativeButton("Mégse",null).setPositiveButton("Törlés",(d,w)->{if(f.delete())list();else msg("Nem sikerült törölni.");}).show());

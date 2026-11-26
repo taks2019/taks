@@ -14,3 +14,6 @@ GitHub Actions → TAKS Studio Android APK → Artifacts → TAKS_3D_Studio. Deb
 
 TRELLIS.2: https://huggingface.co/spaces/microsoft/TRELLIS.2
 Model viewer: https://github.com/google/model-viewer (Apache-2.0).
+
+## Kibővített műhely
+A Studio külön képernyőjén GLB anyagfaktorok tényleges módosítása (új GLB, megőrzött BIN/textúrák), modell metaadatok, receptek, numerikus szabálypróba, XYZ világterv, projekt ZIP export és HTTPS ComfyUI API kliens található. A PC kapcsolat saját futó HTTPS szervert igényel; API-formátumú workflow JSON kell. A kiválasztott képet a LoadImage node-hoz tudja feltölteni, a promptot sorba állítja, a history kimenetei közül a GLB-ket letölti. A projekt JSON saját, dokumentálatlanul még nem motorintegrált előkészítő formátum. A világterv nem 3D színtér, a szabálypróba nem fizikai motor; nincs automatikus rigging, animációgenerálás, többes modellformátum-konverzió vagy felhős könyvtárszinkron. A forrás és a helyi adatok nem kerülnek automatikusan GitHubra.
