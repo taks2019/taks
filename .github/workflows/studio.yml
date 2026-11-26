@@ -1,0 +1,39 @@
+name: TAKS Studio Android APK
+on:
+  push:
+    branches: [taks-3d-studio-android]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+      - name: Bundle offline 3D viewer
+        run: |
+          npm install --prefix viewer-deps --no-save --ignore-scripts @google/model-viewer@4.0.0
+          cp viewer-deps/node_modules/@google/model-viewer/dist/model-viewer.min.js app/src/main/assets/
+          cp viewer-deps/node_modules/@google/model-viewer/LICENSE app/src/main/assets/model-viewer-LICENSE.txt
+      - name: Build Android APK
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          gradle --no-daemon :app:assembleDebug
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk dist/TAKS_3D_Studio.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TAKS_3D_Studio
+          path: dist/TAKS_3D_Studio.apk
+          retention-days: 7
