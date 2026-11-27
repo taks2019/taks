@@ -20,3 +20,6 @@ A Studio külön képernyőjén GLB anyagfaktorok tényleges módosítása (új 
 
 ## Kezelőfelület
 A kezdőlap natív kártyás dashboard, közvetlen modulnyitással és a legutóbb importált GLB élő, rögzített emelkedési szögű előnézetével. Üres könyvtár esetén importálási felhívás látható. Nem tartalmaz előre gyártott látványképet vagy jóvá nem hagyott terepmodellt. A néző perspektivikus, nem a TAKS Engine ortografikus renderelője. A készülékes megjelenés tesztelendő.
+
+## 3D jelenetszerkesztő
+A GLB-k valódi ortografikus 3D jelenetben rakhatók össze (rögzített 35,264° emelkedés, 360° forgatás, zoom), a pozíció, méret, forgatás és projektmentés működésre tervezve. 64 objektumos korlát, eszközmemória függvényében kevesebb is lehet. Three.js alapú Studio előnézet, nem a játék TAKS Engine renderelője. A meglévő GLB animációk kiválaszthatók és lejátszhatók. Automatikus rigging és új animációgenerálás nincs implementálva. A teljes Biblia fájl nem volt hozzáférhető; a jelenet nem állítja elő automatikusan a Wonderwerk-barlangot.

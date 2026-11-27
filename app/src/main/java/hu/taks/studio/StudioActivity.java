@@ -41,7 +41,7 @@ public class StudioActivity extends Activity {
         else if("material".equals(route))pickModel(f->material(f));
         else if("recipes".equals(route))recipes();
         else if("rules".equals(route))rules();
-        else if("placements".equals(route))placements();
+        else if("placements".equals(route))startActivity(new Intent(this,SceneActivity.class));
         else if("remote".equals(route))remote();
         else if("export".equals(route)){Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/zip").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"TAKS_Project.zip");startActivityForResult(i,EXPORT);}
 
@@ -49,6 +49,7 @@ public class StudioActivity extends Activity {
     private static String read(InputStream in,int limit)throws IOException{try(InputStream x=in){return new String(bytes(x,limit),StandardCharsets.UTF_8);}}
     private static byte[] bytes(InputStream in,int limit)throws IOException{ByteArrayOutputStream b=new ByteArrayOutputStream();transfer(in,b,limit);return b.toByteArray();}
     private static void transfer(InputStream in,OutputStream out,long max)throws IOException{byte[] b=new byte[65536];int n;long sum=0;while((n=in.read(b))!=-1){sum+=n;if(sum>max)throw new IOException("Méretkorlát túllépve");out.write(b,0,n);}}
+    @Override protected void onResume(){super.onResume();if(project!=null&&project.isFile())try{data=new JSONObject(read(new FileInputStream(project),4*1024*1024));}catch(Exception ignored){}}
     private void screen(String key,String title,String desc){
         page=key;root=new LinearLayout(this);root.setOrientation(1);root.setBackgroundColor(0xff101820);
         if(Build.VERSION.SDK_INT>=35)root.setOnApplyWindowInsetsListener((v,i)->{android.graphics.Insets a=i.getInsets(WindowInsets.Type.systemBars());v.setPadding(a.left,a.top,a.right,a.bottom);return i;});
@@ -71,7 +72,8 @@ public class StudioActivity extends Activity {
         btn("PBR anyag · valódi GLB szerkesztés",()->pickModel(f->material(f)));
         btn("Építés és gyártás · alkatrészreceptek",()->recipes());
         btn("Ok és okozat · szabályok és próba",()->rules());
-        btn("Világterv · objektumok XYZ elhelyezése",()->placements());
+        btn("Világterv · valódi 3D jelenet",()->startActivity(new Intent(this,SceneActivity.class)));
+        btn("Objektumok XYZ adatai",()->placements());
         btn("PC / ComfyUI · API kapcsolat",()->remote());
         btn("Projekt exportálása · GLB + JSON ZIP",()->{Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/zip").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"TAKS_Project.zip");startActivityForResult(i,EXPORT);});
         btn("Vissza a Studio főmenübe",()->finish());

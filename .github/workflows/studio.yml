@@ -23,9 +23,12 @@ jobs:
           gradle-version: '8.10.2'
       - name: Bundle offline 3D viewer
         run: |
-          npm install --prefix viewer-deps --no-save --ignore-scripts @google/model-viewer@4.0.0
+          npm install --prefix viewer-deps --no-save --ignore-scripts @google/model-viewer@4.0.0 three@0.172.0 esbuild@0.24.2
           cp viewer-deps/node_modules/@google/model-viewer/dist/model-viewer.min.js app/src/main/assets/
           cp viewer-deps/node_modules/@google/model-viewer/LICENSE app/src/main/assets/model-viewer-LICENSE.txt
+          cp studio-web/scene.js viewer-deps/scene.js
+          node -e "require(\x27./viewer-deps/node_modules/esbuild\x27).buildSync({entryPoints:[\x27viewer-deps/scene.js\x27],bundle:true,format:\x27esm\x27,minify:true,outfile:\x27app/src/main/assets/scene.bundle.js\x27})"
+          cp viewer-deps/node_modules/three/LICENSE app/src/main/assets/three-LICENSE.txt
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
