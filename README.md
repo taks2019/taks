@@ -23,3 +23,6 @@ A kezdőlap natív kártyás dashboard, közvetlen modulnyitással és a legutó
 
 ## 3D jelenetszerkesztő
 A GLB-k valódi ortografikus 3D jelenetben rakhatók össze (rögzített 35,264° emelkedés, 360° forgatás, zoom), a pozíció, méret, forgatás és projektmentés működésre tervezve. 64 objektumos korlát, eszközmemória függvényében kevesebb is lehet. Three.js alapú Studio előnézet, nem a játék TAKS Engine renderelője. A meglévő GLB animációk kiválaszthatók és lejátszhatók. Automatikus rigging és új animációgenerálás nincs implementálva. A teljes Biblia fájl nem volt hozzáférhető; a jelenet nem állítja elő automatikusan a Wonderwerk-barlangot.
+
+## Élő jelenet előnézet
+Meglévő GLB animációk objektumonkénti lejátszása, szüneteltetése és sebessége; állítható napszak-világítás; opcionális, magasságfüggő shaderes szélhajlás nem skinnelt mesh objektumokon. A szél nem valódi növényfizika, összetett többmeshes fa esetén eltérő részek külön hajolhatnak. A környezet és az animáció beállításai a projektben menthetők. A játék motorjához még külön integráció kell. Automatikus riggelés és új mozgás létrehozása továbbra sincs.
