@@ -35,7 +35,7 @@ public class MainActivity extends Activity {
         getWindow().setStatusBarColor(0xff101820); getWindow().setNavigationBarColor(0xff101820);
         home();
     }
-    private void clearWeb(){ if(web!=null){web.stopLoading();web.destroy();web=null;} }
+    private void clearWeb(){ if(web!=null){web.stopLoading();if(web.getParent() instanceof android.view.ViewGroup)((android.view.ViewGroup)web.getParent()).removeView(web);web.destroy();web=null;} }
     private void start(String p,String title){
         clearWeb(); page=p;
         root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(0xff101820);
@@ -43,22 +43,66 @@ public class MainActivity extends Activity {
             android.graphics.Insets b=insets.getInsets(WindowInsets.Type.systemBars());v.setPadding(b.left,b.top,b.right,b.bottom);return insets;
         });
         setContentView(root);
-        TextView h=new TextView(this);h.setText(title);h.setTextColor(0xffe3edf6);h.setTextSize(24);h.setPadding(dp(16),dp(14),dp(16),dp(10));root.addView(h);
+        TextView h=new TextView(this);h.setText(title);h.setTextColor(0xffe3edf6);h.setTextSize(26);h.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);h.setPadding(dp(16),dp(14),dp(16),dp(10));root.addView(h);
         status=new TextView(this);status.setTextColor(0xff9bb9cf);status.setTextSize(14);status.setPadding(dp(16),dp(4),dp(16),dp(10));root.addView(status);
     }
     private void msg(String text){if(status!=null)status.setText(text);}
     private Button button(LinearLayout p,String text,Runnable action){
-        Button b=new Button(this);b.setAllCaps(false);b.setText(text);b.setTextColor(0xffe5f0ff);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff29455b));
+        Button b=new Button(this);b.setAllCaps(false);b.setText(text);b.setTextColor(0xffe5f0ff);b.setBackground(surface(0xff25445b,0xff3e6680,13));
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(52));lp.setMargins(dp(12),dp(4),dp(12),dp(4));p.addView(b,lp);b.setOnClickListener(v->action.run());return b;
     }
+    private android.graphics.drawable.GradientDrawable surface(int color,int stroke,int radius){
+        android.graphics.drawable.GradientDrawable d=new android.graphics.drawable.GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));d.setStroke(dp(1),stroke);return d;
+    }
+    private TextView text(LinearLayout parent,String value,int size,int color,boolean bold){
+        TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);if(bold)t.setTypeface(android.graphics.Typeface.DEFAULT,android.graphics.Typeface.BOLD);parent.addView(t);return t;
+    }
+    private LinearLayout section(LinearLayout parent,String title){
+        TextView t=text(parent,title,12,0xff8fa6bb,true);t.setLetterSpacing(.12f);t.setPadding(dp(4),dp(16),0,dp(8));
+        LinearLayout v=new LinearLayout(this);v.setOrientation(1);parent.addView(v);return v;
+    }
+    private void tiles(LinearLayout parent,String[][] items,Runnable[] actions){
+        int cols=getResources().getConfiguration().screenWidthDp>=580?3:2;
+        for(int i=0;i<items.length;i+=cols){
+            LinearLayout row=new LinearLayout(this);row.setOrientation(0);parent.addView(row);
+            for(int j=0;j<cols;j++){
+                final int k=i+j;LinearLayout card=new LinearLayout(this);card.setOrientation(1);
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,dp(113),1);lp.setMargins(dp(4),dp(4),dp(4),dp(4));row.addView(card,lp);
+                if(k>=items.length)continue;
+                card.setPadding(dp(12),dp(10),dp(10),dp(8));card.setBackground(surface(0xff182735,0xff2b4356,15));card.setClickable(true);card.setFocusable(true);card.setContentDescription(items[k][1]);
+                TextView icon=text(card,items[k][0],21,0xff75c4ef,true);icon.setIncludeFontPadding(false);
+                TextView title=text(card,items[k][1],15,0xffeff7ff,true);title.setPadding(0,dp(5),0,dp(2));title.setMaxLines(2);
+                TextView desc=text(card,items[k][2],12,0xffa9bdce,false);desc.setMaxLines(2);card.setOnClickListener(v->actions[k].run());
+            }
+        }
+    }
+    private void studio(String route){Intent i=new Intent(this,StudioActivity.class);i.putExtra("route",route);startActivity(i);}
+    private void askCloud(){new AlertDialog.Builder(this).setTitle("Felhős generálás").setMessage("A képet a Hugging Face szolgáltatása dolgozza fel. Internet, esetleg bejelentkezés és GPU-kvóta szükséges.").setNegativeButton("Mégse",null).setPositiveButton("Megnyitás",(d,w)->cloud()).show();}
+    private File latest(){File[] entries=library.listFiles((d,n)->n.endsWith(".glb"));if(entries==null||entries.length==0)return null;Arrays.sort(entries,Comparator.comparingLong(File::lastModified).reversed());return entries[0];}
     private void home(){
-        start("home","TAKS 3D Studio");
-        msg("Valódi GLB modellek • Android • TAKS World");
-        button(root,"Felhős 3D-generálás · TRELLIS.2",()->new AlertDialog.Builder(this).setTitle("Felhős generálás").setMessage("A képet a Hugging Face szolgáltatása dolgozza fel. Internet, esetleg bejelentkezés és GPU-kvóta szükséges.").setNegativeButton("Mégse",null).setPositiveButton("Megnyitás",(d,w)->cloud()).show());
-        button(root,"Modell importálása (GLB)",()->pick(IMPORT,"*/*"));
-        button(root,"Modellkönyvtár",()->list());
-        button(root,"TAKS műhely · világ, szabályok, PC",()->startActivity(new Intent(this,StudioActivity.class)));
-        button(root,"Használati útmutató",()->new AlertDialog.Builder(this).setTitle("Munkafolyamat").setMessage("1. Felhős 3D-generálás: tölts fel képet, Generate, majd Extract GLB.\n2. Töltsd le a GLB-t.\n3. Importáld a Letöltések mappából.\n4. Forgasd, nagyítsd vagy exportáld.\n\nA 4K opció a felhőszolgáltatástól függ. Az UltraTex és az automatikus csontváz még nincs integrálva.").setPositiveButton("Rendben",null).show());
+        start("home","TAKS 3D Studio");msg("MODELLGYÁRTÓ MŰHELY  /  ANDROID + PC");
+        ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout body=new LinearLayout(this);body.setOrientation(1);body.setPadding(dp(12),0,dp(12),dp(24));scroll.addView(body);
+        LinearLayout hero=new LinearLayout(this);hero.setOrientation(1);hero.setPadding(dp(12),dp(12),dp(12),dp(8));hero.setBackground(surface(0xff162530,0xff39576a,18));body.addView(hero);
+        text(hero,"3D ELŐNÉZET",12,0xff79c5ec,true);
+        File model=latest();
+        if(model==null){
+            TextView empty=text(hero,"＋",44,0xff7abfe5,false);empty.setGravity(Gravity.CENTER);empty.setHeight(dp(90));
+            TextView caption=text(hero,"Importáld az első valódi 3D modelledet",15,0xffe2eef8,true);caption.setGravity(Gravity.CENTER);
+            TextView detail=text(hero,"GLB 2.0 • forgatás • nagyítás",12,0xff9bb5c7,false);detail.setGravity(Gravity.CENTER);
+            button(hero,"GLB megnyitása",()->pick(IMPORT,"*/*"));
+        }else{
+            TextView filename=text(hero,model.getName(),13,0xffd8e8f4,true);filename.setMaxLines(2);
+            attachViewer(hero,new LinearLayout.LayoutParams(-1,dp(215)),model);
+            button(hero,"Teljes képernyős 3D nézet",()->view(model));
+        }
+        LinearLayout gen=section(body,"01  /  MODELLEK ÉS ANYAGOK");
+        tiles(gen,new String[][]{{"✦","3D generálás","PNG → GLB • felhő"},{"＋","Importálás","GLB fájl megnyitása"},{"▤","Modellkönyvtár","Helyi modellek"},{"◈","PBR anyagok","Szín • fémesség • érdesség"}},new Runnable[]{()->askCloud(),()->pick(IMPORT,"*/*"),()->list(),()->studio("material")});
+        LinearLayout world=section(body,"02  /  VILÁG ÉS SZIMULÁCIÓ");
+        tiles(world,new String[][]{{"♙","Karakterek és tárgyak","Tömeg • kor • állapot"},{"▧","Építés és ipar","Receptek • alkatrészek"},{"↳","Ok és okozat","Szabályok • próba"},{"⌖","Világterv","XYZ • forgatás • méret"}},new Runnable[]{()->studio("asset"),()->studio("recipes"),()->studio("rules"),()->studio("placements")});
+        LinearLayout pc=section(body,"03  /  PC ÉS PROJEKT");
+        tiles(pc,new String[][]{{"▣","PC / ComfyUI","Távoli GPU • API"},{"⇩","Projekt export","GLB + JSON ZIP"},{"⚙","Műhely","Összes szerkesztő"},{"?","Útmutató","Használat és korlátok"}},new Runnable[]{()->studio("remote"),()->studio("export"),()->studio("home"),()->new AlertDialog.Builder(this).setTitle("TAKS 3D Studio").setMessage("Importálj GLB-t vagy használd a felhős generálást. A PBR szerkesztő külön GLB-t készít. A PC kapcsolat HTTPS és API workflow használatát igényli. A csontváz- és animációgenerálás, UltraTex és a valódi 3D világszerkesztő még nincs integrálva.").setPositiveButton("Rendben",null).show()});
+        TextView footer=text(body,"TAKS ENGINE  •  JÁTÉKASSET ELŐKÉSZÍTÉS",11,0xff71899c,true);footer.setPadding(dp(4),dp(18),0,0);
     }
     private void pick(int code,String mime){
         Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType(mime);
@@ -127,7 +171,10 @@ public class MainActivity extends Activity {
             Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);i.setType("model/gltf-binary");i.addCategory(Intent.CATEGORY_OPENABLE);i.putExtra(Intent.EXTRA_TITLE,f.getName());startActivityForResult(i,EXPORT);
         });
         button(root,"Modell törlése",()->new AlertDialog.Builder(this).setMessage("Törlöd a helyi másolatot?").setNegativeButton("Mégse",null).setPositiveButton("Törlés",(d,w)->{if(f.delete())list();else msg("Nem sikerült törölni.");}).show());
-        web=new WebView(this);root.addView(web,new LinearLayout.LayoutParams(-1,0,1));WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setBlockNetworkLoads(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        attachViewer(root,new LinearLayout.LayoutParams(-1,0,1),f);
+    }
+    private void attachViewer(LinearLayout parent,LinearLayout.LayoutParams params,File f){
+        web=new WebView(this);parent.addView(web,params);WebSettings s=web.getSettings();s.setJavaScriptEnabled(true);s.setAllowFileAccess(false);s.setAllowContentAccess(false);s.setBlockNetworkLoads(false);s.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         web.setWebViewClient(new WebViewClient(){
             @Override public boolean shouldOverrideUrlLoading(WebView v,WebResourceRequest req){return true;}
             @Override public WebResourceResponse shouldInterceptRequest(WebView v,WebResourceRequest req){

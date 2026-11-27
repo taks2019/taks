@@ -34,7 +34,17 @@ public class StudioActivity extends Activity {
         super.onCreate(b);project=new File(getFilesDir(),"studio-project.json");models=new File(getFilesDir(),"models");models.mkdirs();
         try{data=new JSONObject(read(new FileInputStream(project),4*1024*1024));}catch(Exception e){data=new JSONObject();}
         try{data.put("schema","taks.asset-project/1");for(String k:new String[]{"assets","recipes","rules","placements"})if(!data.has(k))data.put(k,new JSONArray());}catch(Exception e){throw new IllegalStateException(e);}
-        selected=getIntent().getStringExtra("model");if(selected!=null&&new File(models,selected).isFile())asset(selected);else home();
+        selected=getIntent().getStringExtra("model");
+        if(selected!=null&&new File(models,selected).isFile()){asset(selected);return;}
+        String route=getIntent().getStringExtra("route");home();
+        if("asset".equals(route))pickModel(f->asset(f));
+        else if("material".equals(route))pickModel(f->material(f));
+        else if("recipes".equals(route))recipes();
+        else if("rules".equals(route))rules();
+        else if("placements".equals(route))placements();
+        else if("remote".equals(route))remote();
+        else if("export".equals(route)){Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/zip").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"TAKS_Project.zip");startActivityForResult(i,EXPORT);}
+
     }
     private static String read(InputStream in,int limit)throws IOException{try(InputStream x=in){return new String(bytes(x,limit),StandardCharsets.UTF_8);}}
     private static byte[] bytes(InputStream in,int limit)throws IOException{ByteArrayOutputStream b=new ByteArrayOutputStream();transfer(in,b,limit);return b.toByteArray();}
@@ -49,8 +59,8 @@ public class StudioActivity extends Activity {
     private TextView label(LinearLayout p,String s,int size,int color){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);t.setPadding(dp(8),dp(8),dp(8),dp(8));p.addView(t);return t;}
     private void info(String s){label(panel,s,14,0xffa3bed1);}
     private void msg(String s){runOnUiThread(()->{if(status!=null)status.setText(s);});}
-    private void btn(String title,Runnable r){Button b=new Button(this);b.setAllCaps(false);b.setText(title);b.setTextColor(0xffe8f2ff);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xff29485f));panel.addView(b,new LinearLayout.LayoutParams(-1,-2));b.setOnClickListener(v->r.run());}
-    private EditText field(String title,String value){info(title);EditText e=new EditText(this);e.setTextColor(0xffe8f2ff);e.setText(value);e.setSingleLine(false);panel.addView(e,new LinearLayout.LayoutParams(-1,-2));return e;}
+    private void btn(String title,Runnable r){Button b=new Button(this);b.setAllCaps(false);b.setText(title);b.setTextColor(0xffe8f2ff);android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(0xff21394b);bg.setCornerRadius(dp(12));bg.setStroke(dp(1),0xff39566d);b.setBackground(bg);LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,dp(52));lp.setMargins(0,dp(5),0,dp(5));panel.addView(b,lp);b.setOnClickListener(v->r.run());}
+    private EditText field(String title,String value){info(title);EditText e=new EditText(this);e.setTextColor(0xffe8f2ff);e.setText(value);e.setSingleLine(false);e.setPadding(dp(12),dp(10),dp(12),dp(10));android.graphics.drawable.GradientDrawable bg=new android.graphics.drawable.GradientDrawable();bg.setColor(0xff1a2834);bg.setCornerRadius(dp(10));bg.setStroke(dp(1),0xff32495c);e.setBackground(bg);panel.addView(e,new LinearLayout.LayoutParams(-1,-2));return e;}
     private Spinner choices(String title,String[] values,String current){info(title);Spinner s=new Spinner(this);ArrayAdapter<String> a=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,values);s.setAdapter(a);for(int i=0;i<values.length;i++)if(values[i].equals(current))s.setSelection(i);panel.addView(s);return s;}
     private void run(Work w){worker.execute(()->{try{w.run();}catch(Exception e){msg("Hiba: "+e.getMessage());}});}
     private void save()throws Exception{android.util.AtomicFile a=new android.util.AtomicFile(project);FileOutputStream o=a.startWrite();try{o.write(data.toString(2).getBytes(StandardCharsets.UTF_8));a.finishWrite(o);}catch(Exception e){a.failWrite(o);throw e;}}

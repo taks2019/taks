@@ -17,3 +17,6 @@ Model viewer: https://github.com/google/model-viewer (Apache-2.0).
 
 ## Kibővített műhely
 A Studio külön képernyőjén GLB anyagfaktorok tényleges módosítása (új GLB, megőrzött BIN/textúrák), modell metaadatok, receptek, numerikus szabálypróba, XYZ világterv, projekt ZIP export és HTTPS ComfyUI API kliens található. A PC kapcsolat saját futó HTTPS szervert igényel; API-formátumú workflow JSON kell. A kiválasztott képet a LoadImage node-hoz tudja feltölteni, a promptot sorba állítja, a history kimenetei közül a GLB-ket letölti. A projekt JSON saját, dokumentálatlanul még nem motorintegrált előkészítő formátum. A világterv nem 3D színtér, a szabálypróba nem fizikai motor; nincs automatikus rigging, animációgenerálás, többes modellformátum-konverzió vagy felhős könyvtárszinkron. A forrás és a helyi adatok nem kerülnek automatikusan GitHubra.
+
+## Kezelőfelület
+A kezdőlap natív kártyás dashboard, közvetlen modulnyitással és a legutóbb importált GLB élő, rögzített emelkedési szögű előnézetével. Üres könyvtár esetén importálási felhívás látható. Nem tartalmaz előre gyártott látványképet vagy jóvá nem hagyott terepmodellt. A néző perspektivikus, nem a TAKS Engine ortografikus renderelője. A készülékes megjelenés tesztelendő.
