@@ -14,6 +14,7 @@ workflows:
       changeset:
         includes:
           - 'TAKS_Color_*_Android_forras.zip'
+          - 'TAKS_Color_*_Android_forras.zip.00*'
     environment:
       java: 17
     scripts:
@@ -22,7 +23,7 @@ workflows:
         script: |
           set -eu
           cd "$CM_BUILD_DIR"
-          SOURCE=$(python3 -c 'import glob,re; a=[(tuple(map(int,re.search(r"_(\d+(?:\.\d+)*)_Android_forras\.zip$",p).group(1).split("."))),p) for p in glob.glob("TAKS_Color_*_Android_forras.zip") if re.search(r"_(\d+(?:\.\d+)*)_Android_forras\.zip$",p)]; assert a,"Upload the source ZIP first"; print(max(a)[1])')
+          SOURCE=$(python3 -c 'import glob,re,pathlib,shutil; a=[(tuple(map(int,re.search(r"_(\d+(?:\.\d+)*)_Android_forras\.zip",p).group(1).split("."))),p.removesuffix(".001")) for p in glob.glob("TAKS_Color_*_Android_forras.zip")+glob.glob("TAKS_Color_*_Android_forras.zip.001") if re.search(r"_(\d+(?:\.\d+)*)_Android_forras\.zip(?:\.001)?$",p)]; assert a,"Upload the source ZIP or both parts first"; p=pathlib.Path(max(a)[1]); parts=[pathlib.Path(str(p)+s) for s in (".001",".002")]; exec("if not p.exists():\n assert all(x.is_file() for x in parts), \"Upload both ZIP parts\"\n with p.open(\"wb\") as f:\n  for x in parts:\n   with x.open(\"rb\") as r: shutil.copyfileobj(r,f)"); print(p)')
           unzip -tq "$SOURCE"
           mkdir -p taks-color
           unzip -oq "$SOURCE" -d taks-color
