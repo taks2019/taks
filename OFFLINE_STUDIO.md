@@ -5,3 +5,6 @@ Az OfflineActivity két TripoSR ONNX-fájlt telepít/importál és az ONNX Runti
 Következő függőség: ellenőrzött tenzorformátum, alfa előfeldolgozás, encoder inference, triplane mintavétel, decoder inference, sűrűségi rács, mesh rekonstrukció, színezés/UV/PBR, GLB export, telefonon memória-, hő-, minőség- és repülő mód teszt. Egyedi eredeti PNG, GLB és GAME jóváhagyás külön.
 ## További beépítendő eszközök (nem kész)
 Modell optimalizáló LOD, geometria/UV/textúra, skeleton és súlyozás, animáció és IK, alkatrész/illesztési pont, anyag/fizika, ok-okozati folyamat, tervrajz, NPC tudás és memória, növény-állat életciklus/ökoszisztéma, világ/terep, időjárás/naptár, hang, tutorial/UI, teszt és csomagolás. Egyetlen appon belül közös projekt és verziókezelés, eredetik megőrzése.
+
+## Alkatrészek összeállítása
+A 3D jelenetben külön GLB alkatrészek pozicionálhatók, méretezhetők, Y tengelyen forgathatók, és az összeszerelt statikus jelenet új GLB-ként a helyi modellkönyvtárba menthető. A részek hierarchiája megmarad; nem hegeszti össze a mesh-eket. A GLB exporter 128 MiB-os kimeneti és 4096 pixeles textúraméret-korlátot használ. Csontozott, animált és szélmozgatású modelleket ez az export nem támogat. Készülékteszt szükséges; a helyi PNG→GLB AI továbbra sincs implementálva.

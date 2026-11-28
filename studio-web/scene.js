@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader.js';
+import {GLTFExporter} from 'three/examples/jsm/exporters/GLTFExporter.js';
 import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js';
 const $=id=>document.getElementById(id), status=t=>$('status').textContent=t;
 let renderer;try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});}catch(e){status('WebGL nem elérhető ezen a készüléken');throw e;}
@@ -46,5 +47,27 @@ $('objects').onchange=()=>{selected=Number($('objects').value);list()};
 $('apply').onclick=()=>{if(selected<0)return;const n={};for(const k of keys){n[k]=Number($(k).value);if(!Number.isFinite(n[k])||Math.abs(n[k])>100000||(k==='scale'&&n[k]<=0)){status('Érvénytelen érték');return;}}Object.assign(records[selected],n);transform(records[selected]);status('Módosítva – a Mentés gombbal rögzíthető.');};
 $('add').onclick=async()=>{if(busy||!$('library').value)return;busy=true;try{status('GLB betöltése…');await add({file:$('library').value,x:records.length*2,scale:1});fit();status('Modell hozzáadva.');}catch(e){status('GLB hiba: '+e.message);}finally{busy=false;}};
 $('delete').onclick=()=>{if(selected<0)return;const r=records.splice(selected,1)[0];r.mixer?.stopAllAction();r.mixer?.uncacheRoot(r.group.children[0]);scene.remove(r.group);r.group.traverse(o=>{o.geometry?.dispose();if(o.material){for(const m of [].concat(o.material)){for(const v of Object.values(m))if(v?.isTexture)v.dispose();m.dispose();}}});selected=records.length?Math.min(selected,records.length-1):-1;list();};
+$('exportGlb').onclick=async()=>{
+ if(busy||!records.length)return;
+ if(!window.TAKS){status('Android export nem elérhető.');return;}
+ if(records.some(r=>r.clips.length||r.wind)){status('Ez az export statikus alkatrészekhez készült. Animált vagy széllel mozgatott modellek nem exportálhatók.');return;}
+ let skinned=false;for(const r of records)r.group.traverse(o=>{if(o.isSkinnedMesh)skinned=true;});
+ if(skinned){status('Csontozott modellek exportja még nem támogatott.');return;}
+ busy=true;let started=false;const panel=$('controls');panel.inert=true;
+ try{
+  status('Összeszerelt GLB készítése…');
+  const assembly=new THREE.Scene();assembly.name='TAKS_assembly';
+  for(const r of records){const copy=r.group.clone(true);copy.name=r.file;assembly.add(copy);}
+  assembly.updateMatrixWorld(true);
+  const buf=await new GLTFExporter().parseAsync(assembly,{binary:true,onlyVisible:true,maxTextureSize:4096});
+  if(!(buf instanceof ArrayBuffer)||buf.byteLength>128*1024*1024)throw Error('Az export meghaladja a 128 MB korlátot.');
+  let answer=window.TAKS.beginAssembly(buf.byteLength);if(answer!=='OK')throw Error(answer);started=true;
+  const bytes=new Uint8Array(buf);
+  for(let i=0;i<bytes.length;i+=49152){const part=bytes.subarray(i,i+49152);let s='';for(let j=0;j<part.length;j+=8192)s+=String.fromCharCode(...part.subarray(j,j+8192));answer=window.TAKS.appendAssembly(btoa(s));if(answer!=='OK')throw Error(answer);if(i%786432===0){status('GLB mentése: '+Math.round(100*i/bytes.length)+'%');await new Promise(r=>setTimeout(r,0));}}
+  answer=window.TAKS.finishAssembly();if(!answer.startsWith('OK:'))throw Error(answer);started=false;
+  const name=answer.slice(3),option=document.createElement('option');option.value=name;option.textContent=name;$('library').append(option);
+  status('Összeszerelt GLB elmentve a modellkönyvtárba: '+name);
+ }catch(e){status('Exporthiba: '+e.message);}finally{if(started)window.TAKS.cancelAssembly();busy=false;panel.inert=false;}
+};
 $('fit').onclick=fit;$('save').onclick=()=>{if(busy)return;const data=records.map(r=>({file:r.file,x:r.x,y:r.y,z:r.z,rotationY:r.rotationY,scale:r.scale,wind:r.wind,clip:r.clip,playing:r.playing,speed:r.speed}));const answer=window.TAKS?.save(JSON.stringify({placements:data,environment:{hour,windPower}}));status(answer==='OK'?'Jelenet elmentve.':answer||'Mentési hiba.');};
 (async()=>{busy=true;try{const p=await fetch('/project').then(r=>r.json());$('library').replaceChildren(...p.library.map(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;return o}));hour=Number(p.environment?.hour??12);windPower=Number(p.environment?.windPower??.5);$('hour').value=hour;$('windPower').value=windPower;lighting();let failed=0;for(const r of (p.placements||[]).slice(0,64))try{await add(r)}catch(e){failed++;}fit();status(failed?failed+' modell nem tölthető be; a mentés felülírja a jelenetet.':p.library.length?'Húzás: forgatás • két ujj: nagyítás':'Előbb importálj GLB-t a főmenüben.');if(failed)$('save').disabled=true;}catch(e){status('Projekt hiba: '+e.message);}finally{busy=false;}})();

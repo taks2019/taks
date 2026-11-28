@@ -37,12 +37,35 @@ public class SceneActivity extends Activity {
     private WebResourceResponse response(String mime,InputStream in){return new WebResourceResponse(mime,mime.startsWith("model/")?null:"UTF-8",in);}
     private File file(String name)throws IOException{if(name==null||name.contains("/")||name.contains("\\")||!name.endsWith(".glb"))throw new IOException("Érvénytelen modell");File f=new File(models,name);if(!f.getCanonicalFile().getParentFile().equals(models.getCanonicalFile()))throw new IOException("Érvénytelen útvonal");return f;}
     private synchronized JSONObject readProject()throws Exception{if(!project.exists())return new JSONObject().put("schema","taks.asset-project/1").put("assets",new JSONArray()).put("recipes",new JSONArray()).put("rules",new JSONArray()).put("placements",new JSONArray());if(project.length()>4*1024*1024)throw new IOException("Túl nagy projekt");try(InputStream in=new FileInputStream(project);ByteArrayOutputStream out=new ByteArrayOutputStream()){byte[] b=new byte[8192];int n;while((n=in.read(b))!=-1)out.write(b,0,n);return new JSONObject(new String(out.toByteArray(),StandardCharsets.UTF_8));}}
+    private File assemblyTmp;
+    private OutputStream assemblyOut;
+    private long assemblyExpected,assemblyWritten;
+    private synchronized void abortAssembly(){
+        if(assemblyOut!=null)try{assemblyOut.close();}catch(IOException ignored){}
+        assemblyOut=null;
+        if(assemblyTmp!=null)assemblyTmp.delete();
+        assemblyTmp=null;assemblyExpected=assemblyWritten=0;
+    }
     private class Bridge{
+        @JavascriptInterface public String beginAssembly(int length){synchronized(SceneActivity.this){
+            abortAssembly();try{if(length<20||length>128*1024*1024)throw new IOException("Érvénytelen exportméret");if(!models.isDirectory()&&!models.mkdirs())throw new IOException("Nem hozható létre a könyvtár");if(models.getUsableSpace()<length+8L*1024*1024)throw new IOException("Kevés tárhely");assemblyTmp=File.createTempFile("assembly-",".tmp",models);assemblyOut=new BufferedOutputStream(new FileOutputStream(assemblyTmp));assemblyExpected=length;return "OK";}catch(Exception e){abortAssembly();return "Hiba: "+e.getMessage();}
+        }}
+        @JavascriptInterface public String appendAssembly(String chunk){synchronized(SceneActivity.this){
+            try{if(assemblyOut==null||chunk==null||chunk.length()>65536)throw new IOException("Érvénytelen adatblokk");byte[] b=android.util.Base64.decode(chunk,android.util.Base64.NO_WRAP);if(assemblyWritten+b.length>assemblyExpected)throw new IOException("Túl hosszú export");assemblyOut.write(b);assemblyWritten+=b.length;return "OK";}catch(Exception e){abortAssembly();return "Hiba: "+e.getMessage();}
+        }}
+        @JavascriptInterface public String finishAssembly(){synchronized(SceneActivity.this){
+            try{if(assemblyOut==null||assemblyWritten!=assemblyExpected)throw new IOException("Hiányos export");assemblyOut.close();assemblyOut=null;
+                try(RandomAccessFile r=new RandomAccessFile(assemblyTmp,"r")){if(Integer.reverseBytes(r.readInt())!=0x46546c67||Integer.reverseBytes(r.readInt())!=2||Integer.toUnsignedLong(Integer.reverseBytes(r.readInt()))!=r.length())throw new IOException("Érvénytelen GLB fejléc");}
+                String name="Osszeszerelt_"+UUID.randomUUID()+".glb";if(!assemblyTmp.renameTo(file(name)))throw new IOException("Mentési hiba");assemblyTmp=null;assemblyExpected=assemblyWritten=0;return "OK:"+name;
+            }catch(Exception e){abortAssembly();return "Hiba: "+e.getMessage();}
+        }}
+        @JavascriptInterface public void cancelAssembly(){abortAssembly();}
+
         @JavascriptInterface public String save(String value){try{
             if(value.length()>512*1024)throw new IOException("Túl nagy jelenet");JSONObject payload=new JSONObject(value);JSONArray a=payload.getJSONArray("placements");JSONObject env=payload.getJSONObject("environment");double hour=env.getDouble("hour"),power=env.getDouble("windPower");if(!Double.isFinite(hour)||hour<0||hour>23||!Double.isFinite(power)||power<0||power>1)throw new IOException("Érvénytelen környezet");if(a.length()>64)throw new IOException("Legfeljebb 64 objektum");
             JSONArray clean=new JSONArray();for(int i=0;i<a.length();i++){JSONObject x=a.getJSONObject(i);String n=x.getString("file");if(!file(n).isFile())throw new IOException("Hiányzó GLB");JSONObject y=new JSONObject().put("file",n);for(String k:new String[]{"x","y","z","rotationY","scale"}){double v=x.getDouble(k);if(!Double.isFinite(v)||Math.abs(v)>100000||("scale".equals(k)&&v<=0))throw new IOException("Érvénytelen koordináta");y.put(k,v);}double wind=x.optDouble("wind",0),speed=x.optDouble("speed",1);if(!Double.isFinite(wind)||wind<0||wind>1||!Double.isFinite(speed)||speed<.25||speed>2)throw new IOException("Érvénytelen animáció");String clip=x.optString("clip","");if(clip.length()>1024)throw new IOException("Túl hosszú klipnév");y.put("wind",wind).put("speed",speed).put("clip",clip).put("playing",x.optBoolean("playing",false));clean.put(y);}
             synchronized(SceneActivity.this){JSONObject j=readProject();j.put("placements",clean).put("environment",new JSONObject().put("hour",hour).put("windPower",power));android.util.AtomicFile af=new android.util.AtomicFile(project);FileOutputStream out=af.startWrite();try{out.write(j.toString(2).getBytes(StandardCharsets.UTF_8));af.finishWrite(out);}catch(Exception e){af.failWrite(out);throw e;}}return "OK";
         }catch(Exception e){return "Hiba: "+e.getMessage();}}
     }
-    @Override protected void onDestroy(){if(web!=null){web.removeJavascriptInterface("TAKS");web.destroy();}super.onDestroy();}
+    @Override protected void onDestroy(){abortAssembly();if(web!=null){web.removeJavascriptInterface("TAKS");web.destroy();}super.onDestroy();}
 }
