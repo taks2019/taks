@@ -53,3 +53,30 @@ workflows:
     artifacts:
       - artifacts/*.apk
       - taks-color/app/src/main/assets/cloud_*.takscolor
+
+  taks-color-free-gallery:
+    name: TAKS Color - free-license photo gallery and APK
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      java: 17
+      vars:
+        TAKS_FREE_COUNT: "10"
+        TAKS_FREE_SIZE: "2048"
+        TAKS_FREE_SEED: "0"
+    scripts:
+      - *prepare
+      - name: Build hidden free-license gallery
+        script: |
+          set -eu
+          cd "$CM_BUILD_DIR/taks-color"
+          python3 -m venv .free-venv
+          . .free-venv/bin/activate
+          python -m pip install -r studio/requirements.txt
+          python studio/free_gallery.py --out free-gallery --count "$TAKS_FREE_COUNT" --size "$TAKS_FREE_SIZE" --seed "$TAKS_FREE_SEED" || test "$?" = 2
+          python -c 'from pathlib import Path; import shutil; files=sorted(Path("free-gallery").glob("*.takscolor")); assert files, "No free photos retrieved"; [shutil.copy2(p,"app/src/main/assets") for p in files[:10]]'
+      - *build
+    artifacts:
+      - artifacts/*.apk
+      - taks-color/free-gallery/*.takscolor
+      - taks-color/free-gallery/free-state.json
