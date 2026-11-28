@@ -44,7 +44,9 @@ workflows:
           # Run core Java tests before packaging
           TESTDIR="$(mktemp -d)"
           SRC=app/src/main/java/hu/taks/color
-          javac -d "$TESTDIR" "$SRC/ContourEdges.java" "$SRC/GalleryPaging.java" "$SRC/MobileRegions.java" "$SRC/ReplayOrder.java" "$SRC/StoryWorld.java" "$SRC/TileGeometry.java" "$SRC/Viewport.java" tests/*Test.java
+          EXTRA_TEST_SOURCES=()
+          if [ -f "$SRC/PlayAssist.java" ]; then EXTRA_TEST_SOURCES+=("$SRC/PlayAssist.java"); fi
+          javac -d "$TESTDIR" "$SRC/ContourEdges.java" "$SRC/GalleryPaging.java" "$SRC/MobileRegions.java" "$SRC/ReplayOrder.java" "$SRC/StoryWorld.java" "$SRC/TileGeometry.java" "$SRC/Viewport.java" "${EXTRA_TEST_SOURCES[@]}" tests/*Test.java
           for T in tests/*Test.java; do
             java -Xmx1g -cp "$TESTDIR" "hu.taks.color.$(basename "$T" .java)"
           done
