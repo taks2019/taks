@@ -1,0 +1,33 @@
+workflows:
+  taks-color-android:
+    name: TAKS Color 0.12 Android APK
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      java: 17
+    scripts:
+      - name: Extract Android project and prepare SDK
+        script: |
+          set -eu
+          cd "$CM_BUILD_DIR"
+          test -f TAKS_Color_0.12_Android_forras.zip || { echo "Upload TAKS_Color_0.12_Android_forras.zip to this branch first"; exit 1; }
+          mkdir -p taks-color
+          unzip -oq TAKS_Color_0.12_Android_forras.zip -d taks-color
+          cd taks-color
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          test -n "$SDK"
+          printf 'sdk.dir=%s\n' "$SDK" > local.properties
+          if [ ! -d "$SDK/platforms/android-35" ]; then
+            sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          fi
+          curl -fL --retry 3 https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/taks-gradle.zip
+          unzip -oq /tmp/taks-gradle.zip -d /tmp/taks-gradle
+      - name: Build debug APK
+        script: |
+          set -eu
+          cd "$CM_BUILD_DIR/taks-color"
+          /tmp/taks-gradle/gradle-8.9/bin/gradle --no-daemon :app:assembleDebug
+          mkdir -p "$CM_BUILD_DIR/artifacts"
+          cp app/build/outputs/apk/debug/app-debug.apk "$CM_BUILD_DIR/artifacts/TAKS_Color_0.12.apk"
+    artifacts:
+      - artifacts/*.apk
