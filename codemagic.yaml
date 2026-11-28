@@ -107,3 +107,31 @@ workflows:
       - artifacts/*_gallery.zip
       - taks-color/free-gallery/*.takscolor
       - taks-color/free-gallery/free-state.json
+
+  taks-color-plan200:
+    name: TAKS Color - 200 editorial AI images and APK (optional paid)
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      java: 17
+      groups:
+        - taks_color_cloud
+    scripts:
+      - *prepare
+      - name: Generate complete hidden editorial collection (paid opt-in)
+        script: |
+          set -eu
+          cd "$CM_BUILD_DIR/taks-color"
+          test "${TAKS_ALLOW_PAID_GENERATION:-NO}" = YES
+          test -n "${FAL_KEY:-}"
+          python3 -m venv .plan-venv
+          . .plan-venv/bin/activate
+          python -m pip install -r studio/requirements.txt fal-client
+          command -v ffmpeg >/dev/null || brew install ffmpeg
+          python studio/plan_gallery.py --out editorial-gallery --collection "$CM_BUILD_DIR/artifacts/TAKS_Color_Pack1_200.zip" --size 2048
+      - *build
+    artifacts:
+      - artifacts/*.apk
+      - artifacts/*_200.zip
+      - taks-color/editorial-gallery/*.takscolor
+      - taks-color/editorial-gallery/plan-state.json
