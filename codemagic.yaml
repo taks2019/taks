@@ -23,7 +23,36 @@ workflows:
         script: |
           set -eu
           cd "$CM_BUILD_DIR"
-          SOURCE=$(python3 -c 'import glob,re,pathlib,shutil; a=[(tuple(map(int,re.search(r"_(\d+(?:\.\d+)*)_Android_forras\.zip",p).group(1).split("."))),p.removesuffix(".001")) for p in glob.glob("TAKS_Color_*_Android_forras.zip")+glob.glob("TAKS_Color_*_Android_forras.zip.001") if re.search(r"_(\d+(?:\.\d+)*)_Android_forras\.zip(?:\.001)?$",p)]; assert a,"Upload the source ZIP or both parts first"; p=pathlib.Path(max(a)[1]); parts=[pathlib.Path(str(p)+s) for s in (".001",".002")]; exec("if not p.exists():\n assert all(x.is_file() for x in parts), \"Upload both ZIP parts\"\n with p.open(\"wb\") as f:\n  for x in parts:\n   with x.open(\"rb\") as r: shutil.copyfileobj(r,f)"); print(p)')
+          SOURCE=$(python3 - <<'PY'
+          import glob, pathlib, re, shutil, zipfile
+          candidates = {}
+          for name in glob.glob("TAKS_Color_*_Android_forras.zip*"):
+              m = re.fullmatch(r"TAKS_Color_(\d+(?:\.\d+)*)_Android_forras\.zip(?:\.00[12])?", name)
+              if m:
+                  version = tuple(map(int, m.group(1).split(".")))
+                  candidates[version] = pathlib.Path(name.removesuffix(".001").removesuffix(".002"))
+          if not candidates:
+              raise SystemExit("Upload the complete TAKS Color source ZIP or both .001 and .002 parts to taks-color-android.")
+          p = candidates[max(candidates)]
+          if not p.is_file():
+              parts = [pathlib.Path(str(p)+s) for s in (".001", ".002")]
+              if not all(x.is_file() and x.stat().st_size > 0 for x in parts):
+                  raise SystemExit("Both parts of the newest TAKS Color source ZIP must be uploaded in one commit.")
+              tmp = pathlib.Path(str(p)+".partial")
+              try:
+                  with tmp.open("wb") as out:
+                      for part in parts:
+                          with part.open("rb") as src:
+                              shutil.copyfileobj(src, out)
+                  with zipfile.ZipFile(tmp) as z:
+                      if z.testzip() is not None:
+                          raise SystemExit("Damaged split ZIP; upload both parts again.")
+                  tmp.replace(p)
+              finally:
+                  tmp.unlink(missing_ok=True)
+          print(p)
+          PY
+          )
           unzip -tq "$SOURCE"
           mkdir -p taks-color
           unzip -oq "$SOURCE" -d taks-color
@@ -49,6 +78,7 @@ workflows:
           EXTRA_TEST_SOURCES=()
           if [ -f "$SRC/PlayAssist.java" ]; then EXTRA_TEST_SOURCES+=("$SRC/PlayAssist.java"); fi
           if [ -f "$SRC/ThemeRules.java" ]; then EXTRA_TEST_SOURCES+=("$SRC/ThemeRules.java"); fi
+          if [ -f "$SRC/PlaylistRules.java" ]; then EXTRA_TEST_SOURCES+=("$SRC/PlaylistRules.java"); fi
           javac -d "$TESTDIR" "$SRC/ContourEdges.java" "$SRC/GalleryPaging.java" "$SRC/MobileRegions.java" "$SRC/ReplayOrder.java" "$SRC/StoryWorld.java" "$SRC/TileGeometry.java" "$SRC/Viewport.java" "${EXTRA_TEST_SOURCES[@]}" tests/*Test.java
           for T in tests/*Test.java; do
             java -Xmx1g -cp "$TESTDIR" "hu.taks.color.$(basename "$T" .java)"
