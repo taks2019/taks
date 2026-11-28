@@ -3,6 +3,17 @@ workflows:
     name: TAKS Color Android APK
     instance_type: mac_mini_m2
     max_build_duration: 60
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: taks-color-android
+          include: true
+      cancel_previous_builds: true
+    when:
+      changeset:
+        includes:
+          - 'TAKS_Color_*_Android_forras.zip'
     environment:
       java: 17
     scripts:
@@ -20,7 +31,7 @@ workflows:
           SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
           test -n "$SDK"
           printf 'sdk.dir=%s\n' "$SDK" > local.properties
-          if [ ! -d "$SDK/platforms/android-35" ]; then
+          if [ ! -d "$SDK/platforms/android-35" ] || [ ! -x "$SDK/build-tools/35.0.0/apksigner" ]; then
             sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
           fi
           curl -fL --retry 3 https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/taks-gradle.zip
@@ -39,6 +50,8 @@ workflows:
           done
           /tmp/taks-gradle/gradle-8.9/bin/gradle --no-daemon :app:assembleDebug
           test -s app/build/outputs/apk/debug/app-debug.apk
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          "$SDK/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
           mkdir -p "$CM_BUILD_DIR/artifacts"
           cp app/build/outputs/apk/debug/app-debug.apk "$CM_BUILD_DIR/artifacts/TAKS_Color.apk"
     artifacts:
