@@ -28,6 +28,7 @@ workflows:
           mkdir -p taks-color
           unzip -oq "$SOURCE" -d taks-color
           test -f taks-color/app/build.gradle
+          if [ -f taks-color/studio/pack1_storycards.zip ]; then unzip -tq taks-color/studio/pack1_storycards.zip; fi
           cd taks-color
           SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
           test -n "$SDK"
@@ -130,6 +131,7 @@ workflows:
           . .plan-venv/bin/activate
           python -m pip install -r studio/requirements.txt fal-client
           command -v ffmpeg >/dev/null || brew install ffmpeg
+          python -c 'import sys; sys.path.insert(0,"studio"); import editorial_cards; print(editorial_cards.audit())'
           python studio/plan_gallery.py --out editorial-gallery --collection "$CM_BUILD_DIR/artifacts/TAKS_Color_Pack1_200.zip" --size 2048
       - *build
     artifacts:
