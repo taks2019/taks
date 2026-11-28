@@ -6,8 +6,8 @@ android {
         applicationId 'hu.taks.studio'
         minSdk 26
         targetSdk 35
-        versionCode 6
-        versionName 'Studio – alkatrészműhely'
+        versionCode 7
+        versionName 'Studio 0.7 – offline GLB kísérlet'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

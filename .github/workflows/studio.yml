@@ -33,6 +33,11 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - name: Test offline mesh reconstruction and GLB
+        run: |
+          mkdir -p /tmp/taks-mesh-test
+          javac -d /tmp/taks-mesh-test app/src/main/java/hu/taks/studio/OfflineMesh.java tests/OfflineMeshTest.java
+          java -cp /tmp/taks-mesh-test hu.taks.studio.OfflineMeshTest
       - name: Build Android APK
         run: |
           gradle --no-daemon :app:assembleDebug

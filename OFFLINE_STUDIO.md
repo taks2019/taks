@@ -8,3 +8,7 @@ Modell optimalizáló LOD, geometria/UV/textúra, skeleton és súlyozás, anim�
 
 ## Alkatrészek összeállítása
 A 3D jelenetben külön GLB alkatrészek pozicionálhatók, méretezhetők, Y tengelyen forgathatók, és az összeszerelt statikus jelenet új GLB-ként a helyi modellkönyvtárba menthető. A részek hierarchiája megmarad; nem hegeszti össze a mesh-eket. A GLB exporter 128 MiB-os kimeneti és 4096 pixeles textúraméret-korlátot használ. Csontozott, animált és szélmozgatású modelleket ez az export nem támogat. Készülékteszt szükséges; a helyi PNG→GLB AI továbbra sincs implementálva.
+
+## 0.7 – kísérleti helyi kép → GLB
+A két eredeti ONNX-fájlon tényleges helyi futás, alfa kivágás és szürke kompozit, triplane bilineáris mintavétel, MLP, 32/48/64-es rács, 25-ös sűrűségi küszöb, marching tetrahedra, csúcsonkénti színezés, normálok és GLB mentés. A kiadott HF SHA-256 értékek ellenőrzése kötelező. A konkrét ONNX export bemeneti/kimeneti neveit és aktivációit még valódi inference-teszttel kell igazolni; ismeretlen kimenet esetén hibát jelez. Nincs UV atlasz, PBR textúra, automatikus háttéreltávolítás vagy készülékes memória-/hőteszt. A GLB még nem jóváhagyott játékasset. A szintetikus gömb tesztje nem AI inference teszt.
+Források: https://github.com/VAST-AI-Research/TripoSR (MIT), https://huggingface.co/yapaymizeka/image-to-3d (ONNX export).
