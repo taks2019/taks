@@ -349,7 +349,17 @@ public final class MainActivity extends Activity {
     }
     private void say(String msg){if(notice!=null){notice.setText(msg);notice.setVisibility(View.VISIBLE);}}
     private void act(String cmd){say(nativeDo(cmd));refreshNearby();refreshScene();if(activePanel!=0)showPanel(activePanel);refreshLivingSkin();}
-    private void save(){saves.edit().putString("state",nativeSave()).apply();say("Világállapot mentve az eszközön.");}
+    private void save(){
+        if(inMainMenu){
+            modal("MENTÉS",body->{
+                body.addView(caption("A főmenü nem módosítja a mentett világot. Menteni játék közben lehet.",13,0xFFE7D6BD));
+                addVertical(body,"Vissza",this::showSettings);
+            });
+            return;
+        }
+        saves.edit().putString("state",nativeSave()).apply();
+        say("Világállapot mentve az eszközön.");
+    }
     private int bottomBarPx(){
         int h=getResources().getDisplayMetrics().heightPixels;
         return Math.min(dp(65),Math.max(62,h/5));
@@ -607,6 +617,19 @@ public final class MainActivity extends Activity {
         worldHandler.removeCallbacks(worldLoop);
         worldHandler.postDelayed(worldLoop,1800);
     }
+    // A menu visit is not a new game. Resume only a real, readable save.
+    private void continueWorldFromMenu(){
+        final String saved=saves.getString("state",null);
+        if(saved==null || !nativeLoad(saved)){
+            nativeReset();
+            modal("MENTÉSI HIBA",body->{
+                body.addView(caption("Nincs betölthető világ. A tárolt mentést nem írjuk felül.",13,0xFFE7D6BD));
+                addVertical(body,"Vissza a főmenübe",this::showMainMenu);
+            });
+            return;
+        }
+        startPlaying();
+    }
     private void newWorldFromMenu(){
         final String existing=saves.getString("state",null);
         if(existing==null){
@@ -615,7 +638,7 @@ public final class MainActivity extends Activity {
             startPlaying();return;
         }
         modal("ÚJ JÁTÉK",body->{
-            addVertical(body,"Folytatás a mentett világból",this::startPlaying);
+            addVertical(body,"Folytatás a mentett világból",this::continueWorldFromMenu);
             addVertical(body,"Új világ – előbb biztonsági mentés",()->{
                 modal("ÚJ VILÁG MEGERŐSÍTÉSE",confirm->{
                     confirm.addView(caption("A jelenlegi világ külön mentésbe kerül. "
@@ -757,12 +780,13 @@ public final class MainActivity extends Activity {
     }
     private void confirmExit(){
         modal("KILÉPÉS",body->{
-            TextView why=caption("Kilépés előtt elmentjük a világ állapotát.\n"
-                +"A játékból kilépés nem törli a korábbi mentést.",13,0xFFF1E5CF);
+            TextView why=caption(inMainMenu
+                ?"A főmenüből való kilépés nem módosítja a korábbi mentést."
+                :"Kilépés előtt elmentjük a világ állapotát.\nA játékból kilépés nem törli a korábbi mentést.",13,0xFFF1E5CF);
             why.setPadding(dp(5),dp(9),dp(5),dp(14));
             body.addView(why);
-            addVertical(body,"Mentés és kilépés",()->{
-                saves.edit().putString("state",nativeSave()).commit();
+            addVertical(body,inMainMenu?"Kilépés":"Mentés és kilépés",()->{
+                if(!inMainMenu)saves.edit().putString("state",nativeSave()).commit();
                 closeModal();finish();
             });
             if(!inMainMenu)addVertical(body,"Mentés és vissza a főmenübe",()->{
@@ -834,8 +858,9 @@ public final class MainActivity extends Activity {
         stack.setPadding(dp(12),dp(8),dp(12),dp(8));
         skin(stack,"CARD");
         final int usableHeight=getResources().getDisplayMetrics().heightPixels;
-        final int menuButtonHeight=Math.min(dp(43),Math.max(dp(33),(usableHeight-dp(90))/5));
-        final int menuLogoHeight=Math.min(dp(134),Math.max(dp(65),usableHeight-4*menuButtonHeight-dp(78)));
+        final boolean hasSave=saves.getString("state",null)!=null;
+        final int menuButtonHeight=dp(48);
+        final int menuLogoHeight=Math.min(dp(134),Math.max(dp(65),usableHeight-(hasSave?5:4)*menuButtonHeight-dp(78)));
         FrameLayout logoFrame=new FrameLayout(this);
         logoFrame.setPadding(dp(7),dp(4),dp(7),dp(4));
         skin(logoFrame,"LOGO");
@@ -857,25 +882,32 @@ public final class MainActivity extends Activity {
         causal.setPadding(dp(3),0,dp(3),dp(4));
         skin(causal,"CAUSE");
         stack.addView(causal,new LinearLayout.LayoutParams(-1,dp(33)));
-        String[] labels={"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐK","KILÉPÉS"};
-        Runnable[] actions={this::newWorldFromMenu,this::showSettings,this::showCredits,
-                this::confirmExit};
+        String[] labels=hasSave
+                ?new String[]{"ÚJ JÁTÉK","FOLYTATÁS","BEÁLLÍTÁSOK","KÉSZÍTŐK","KILÉPÉS"}
+                :new String[]{"ÚJ JÁTÉK","BEÁLLÍTÁSOK","KÉSZÍTŐK","KILÉPÉS"};
+        Runnable[] actions=hasSave
+                ?new Runnable[]{this::newWorldFromMenu,this::continueWorldFromMenu,this::showSettings,this::showCredits,this::confirmExit}
+                :new Runnable[]{this::newWorldFromMenu,this::showSettings,this::showCredits,this::confirmExit};
         for(int i=0;i<labels.length;++i){
             Button menuButton=button(labels[i],actions[i],i==0);
             menuButton.setTextSize(16);
             menuButton.setLetterSpacing(.035f);
-            // All four physical-looking buttons share the SAME live skin as
+            // All physical-looking buttons share the SAME live skin as
             // gameplay menus, settings, HUD and their "X" close controls.
             skin(menuButton,"BUTTON");
             LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,menuButtonHeight);
             bp.bottomMargin=dp(5);
             stack.addView(menuButton,bp);
         }
+        // Center the complete menu; short landscape displays can scroll rather
+        // than cropping buttons or shrinking their touch targets.
+        ScrollView menuScroll=new ScrollView(this);
+        menuScroll.setVerticalScrollBarEnabled(false);
+        menuScroll.addView(stack,new ScrollView.LayoutParams(-1,-2));
         FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(
-            Math.min(dp(340),getResources().getDisplayMetrics().widthPixels-dp(32)),
-            -2,Gravity.START|Gravity.CENTER_VERTICAL);
-        p.leftMargin=dp(18);
-        menuCover.addView(stack,p);
+            Math.min(dp(340),Math.max(dp(120),getResources().getDisplayMetrics().widthPixels-dp(32))),
+            -2,Gravity.CENTER);
+        menuCover.addView(menuScroll,p);
         root.addView(menuCover,new FrameLayout.LayoutParams(-1,-1));
         refreshLivingSkin();
     }
@@ -1048,7 +1080,7 @@ public final class MainActivity extends Activity {
         worldHandler.removeCallbacks(worldLoop);
         renderHandler.removeCallbacks(renderLoop);
         skinHandler.removeCallbacks(skinLoop);
-        saves.edit().putString("state",nativeSave()).apply();
+        if(!inMainMenu)saves.edit().putString("state",nativeSave()).apply();
         if(surface!=null)surface.onPause();
         super.onPause();
     }
