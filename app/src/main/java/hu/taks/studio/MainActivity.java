@@ -102,6 +102,8 @@ public class MainActivity extends Activity {
         }
         LinearLayout refs=section(body,"00  /  JÓVÁHAGYOTT REFERENCIÁK");
         tiles(refs,new String[][]{{"＋","Kép importálása","Eredeti PNG, JPG, WebP"},{"▤","Referenciakönyvtár","Előnézet • jóváhagyás"}},new Runnable[]{()->pick(REF_IMPORT,"image/*"),()->referenceList()});
+        LinearLayout local=section(body,"OFFLINE  /  SAJÁT AI MOTOR");
+        tiles(local,new String[][]{{"◈","Offline 3D motor","Modelltelepítés • ellenőrzés"}},new Runnable[]{()->startActivity(new Intent(this,OfflineActivity.class))});
         LinearLayout gen=section(body,"01  /  MODELLEK ÉS ANYAGOK");
         tiles(gen,new String[][]{{"✦","3D generálás","PNG → GLB • felhő"},{"＋","Importálás","GLB fájl megnyitása"},{"▤","Modellkönyvtár","Helyi modellek"},{"◈","PBR anyagok","Szín • fémesség • érdesség"}},new Runnable[]{()->askCloud(),()->pick(IMPORT,"*/*"),()->list(),()->studio("material")});
         LinearLayout world=section(body,"02  /  VILÁG ÉS SZIMULÁCIÓ");

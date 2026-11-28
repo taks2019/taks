@@ -1,0 +1,7 @@
+# TAKS Studio Android – eszközök az első helyen (2026-11-28)
+Tulajdonosi irány: egyetlen magyar Android-műhely, saját PC nélkül is használható, helyi feldolgozás lehetőség szerint, napi szolgáltatói kvóta nélkül. Külső felhő opcionális. Az eszközök készülnek előbb; a játék teljes gyártása csak ellenőrzött eszközlánc után.
+## Első offline lépés
+Az OfflineActivity két TripoSR ONNX-fájlt telepít/importál és az ONNX Runtime Android CPU motorjával külön-külön megnyitja őket, megmutatja a bemeneteket és kimeneteket. Nincs kép feltöltés. A forrás: https://huggingface.co/yapaymizeka/image-to-3d ; eredeti MIT TripoSR: https://github.com/VAST-AI-Research/TripoSR . A letöltés a main ágról történik; helyi hash számolódik, de még nincs függetlenül hitelesített verziómanifest, aláírás, teljes letöltési folytatás vagy készülékes teszt. Ez nem kész generátor. 
+Következő függőség: ellenőrzött tenzorformátum, alfa előfeldolgozás, encoder inference, triplane mintavétel, decoder inference, sűrűségi rács, mesh rekonstrukció, színezés/UV/PBR, GLB export, telefonon memória-, hő-, minőség- és repülő mód teszt. Egyedi eredeti PNG, GLB és GAME jóváhagyás külön.
+## További beépítendő eszközök (nem kész)
+Modell optimalizáló LOD, geometria/UV/textúra, skeleton és súlyozás, animáció és IK, alkatrész/illesztési pont, anyag/fizika, ok-okozati folyamat, tervrajz, NPC tudás és memória, növény-állat életciklus/ökoszisztéma, világ/terep, időjárás/naptár, hang, tutorial/UI, teszt és csomagolás. Egyetlen appon belül közös projekt és verziókezelés, eredetik megőrzése.
