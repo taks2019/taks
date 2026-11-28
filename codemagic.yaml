@@ -86,7 +86,7 @@ workflows:
     environment:
       java: 17
       vars:
-        TAKS_FREE_COUNT: "10"
+        TAKS_FREE_COUNT: "200"
         TAKS_FREE_SIZE: "2048"
         TAKS_FREE_SEED: "0"
     scripts:
@@ -98,10 +98,12 @@ workflows:
           python3 -m venv .free-venv
           . .free-venv/bin/activate
           python -m pip install -r studio/requirements.txt
-          python studio/free_gallery.py --out free-gallery --count "$TAKS_FREE_COUNT" --size "$TAKS_FREE_SIZE" --seed "$TAKS_FREE_SEED" || test "$?" = 2
+          python studio/free_gallery.py --out free-gallery --count "$TAKS_FREE_COUNT" --size "$TAKS_FREE_SIZE" --seed "$TAKS_FREE_SEED" --curated
+          python studio/collection.py free-gallery "$CM_BUILD_DIR/artifacts/TAKS_Color_200_gallery.zip" --count "$TAKS_FREE_COUNT" --size "$TAKS_FREE_SIZE"
           python -c 'from pathlib import Path; import shutil; files=sorted(Path("free-gallery").glob("*.takscolor")); assert files, "No free photos retrieved"; [shutil.copy2(p,"app/src/main/assets") for p in files[:10]]'
       - *build
     artifacts:
       - artifacts/*.apk
+      - artifacts/*_gallery.zip
       - taks-color/free-gallery/*.takscolor
       - taks-color/free-gallery/free-state.json
