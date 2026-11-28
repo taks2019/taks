@@ -20,7 +20,9 @@ public class MainActivity extends Activity {
     private static final String EMBED = "https://microsoft-trellis-2.hf.space/";
     private static final String LOCAL = "https://studio.invalid";
     private static final long LIMIT = 256L * 1024 * 1024;
-    private static final int IMPORT=10, EXPORT=11, UPLOAD=12;
+    private static final int IMPORT=10, EXPORT=11, UPLOAD=12, REF_IMPORT=13, REF_EXPORT=14;
+    private static final long REF_LIMIT=48L*1024*1024;
+    private File references, referenceExport;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private LinearLayout root;
     private TextView status;
@@ -32,6 +34,8 @@ public class MainActivity extends Activity {
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
         library=new File(getFilesDir(),"models"); library.mkdirs();
+        references=new File(getFilesDir(),"references"); references.mkdirs();
+        if(state!=null){String ref=state.getString("referenceExport");if(ref!=null&&ref.matches("[0-9a-f]{64}\\.(png|jpg|webp)"))referenceExport=new File(references,ref); }
         getWindow().setStatusBarColor(0xff101820); getWindow().setNavigationBarColor(0xff101820);
         home();
     }
@@ -80,7 +84,7 @@ public class MainActivity extends Activity {
     private void askCloud(){new AlertDialog.Builder(this).setTitle("Felhős generálás").setMessage("A képet a Hugging Face szolgáltatása dolgozza fel. Internet, esetleg bejelentkezés és GPU-kvóta szükséges.").setNegativeButton("Mégse",null).setPositiveButton("Megnyitás",(d,w)->cloud()).show();}
     private File latest(){File[] entries=library.listFiles((d,n)->n.endsWith(".glb"));if(entries==null||entries.length==0)return null;Arrays.sort(entries,Comparator.comparingLong(File::lastModified).reversed());return entries[0];}
     private void home(){
-        start("home","TAKS 3D Studio");msg("MODELLGYÁRTÓ MŰHELY  /  ANDROID + PC");
+        start("home","TAKS 3D Studio");msg("MODELLGYÁRTÓ MŰHELY  /  ANDROID");
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
         LinearLayout body=new LinearLayout(this);body.setOrientation(1);body.setPadding(dp(12),0,dp(12),dp(24));scroll.addView(body);
         LinearLayout hero=new LinearLayout(this);hero.setOrientation(1);hero.setPadding(dp(12),dp(12),dp(12),dp(8));hero.setBackground(surface(0xff162530,0xff39576a,18));body.addView(hero);
@@ -96,6 +100,8 @@ public class MainActivity extends Activity {
             attachViewer(hero,new LinearLayout.LayoutParams(-1,dp(215)),model);
             button(hero,"Teljes képernyős 3D nézet",()->view(model));
         }
+        LinearLayout refs=section(body,"00  /  JÓVÁHAGYOTT REFERENCIÁK");
+        tiles(refs,new String[][]{{"＋","Kép importálása","Eredeti PNG, JPG, WebP"},{"▤","Referenciakönyvtár","Előnézet • jóváhagyás"}},new Runnable[]{()->pick(REF_IMPORT,"image/*"),()->referenceList()});
         LinearLayout gen=section(body,"01  /  MODELLEK ÉS ANYAGOK");
         tiles(gen,new String[][]{{"✦","3D generálás","PNG → GLB • felhő"},{"＋","Importálás","GLB fájl megnyitása"},{"▤","Modellkönyvtár","Helyi modellek"},{"◈","PBR anyagok","Szín • fémesség • érdesség"}},new Runnable[]{()->askCloud(),()->pick(IMPORT,"*/*"),()->list(),()->studio("material")});
         LinearLayout world=section(body,"02  /  VILÁG ÉS SZIMULÁCIÓ");
@@ -135,6 +141,84 @@ public class MainActivity extends Activity {
         try(Cursor c=getContentResolver().query(u,new String[]{OpenableColumns.DISPLAY_NAME},null,null,null)){if(c!=null&&c.moveToFirst())return c.getString(0);}catch(Exception ignored){}
         return "modell.glb";
     }
+    private SharedPreferences refPrefs(){return getSharedPreferences("reference_metadata_v1",MODE_PRIVATE);}
+    private String refHash(File f)throws Exception{
+        java.security.MessageDigest digest=java.security.MessageDigest.getInstance("SHA-256");
+        try(InputStream in=new FileInputStream(f)){byte[] buf=new byte[65536];int n;while((n=in.read(buf))!=-1)digest.update(buf,0,n);}
+        StringBuilder hex=new StringBuilder(64);for(byte b:digest.digest())hex.append(String.format(Locale.ROOT,"%02x",b&255));return hex.toString();
+    }
+    private void importReference(Uri u){
+        msg("Eredeti kép ellenőrzése…");
+        io.execute(()->{
+            File tmp=null;
+            try{
+                tmp=File.createTempFile("reference-",".tmp",references);
+                try(InputStream in=getContentResolver().openInputStream(u);OutputStream out=new FileOutputStream(tmp)){
+                    if(in==null)throw new IOException("Nem olvasható kép");copy(in,out,REF_LIMIT);
+                }
+                android.graphics.BitmapFactory.Options opt=new android.graphics.BitmapFactory.Options();opt.inJustDecodeBounds=true;
+                android.graphics.BitmapFactory.decodeFile(tmp.getPath(),opt);
+                String ext="image/png".equals(opt.outMimeType)?"png":"image/jpeg".equals(opt.outMimeType)?"jpg":"image/webp".equals(opt.outMimeType)?"webp":null;
+                if(ext==null||opt.outWidth<1||opt.outHeight<1)throw new IOException("Csak érvényes PNG, JPG vagy WebP kép importálható.");
+                String hash=refHash(tmp);File dst=new File(references,hash+"."+ext);
+                if(dst.exists()){
+                    if(!hash.equals(refHash(dst)))throw new IOException("Az eredeti fájl ellenőrzőösszege eltér.");
+                }else if(!tmp.renameTo(dst))throw new IOException("Mentési hiba");
+                if(!refPrefs().contains(dst.getName()+".name")){
+                    if(!refPrefs().edit().putString(dst.getName()+".name",name(u)).putString(dst.getName()+".status","JELÖLT").commit())throw new IOException("Metaadat mentési hiba");
+                }
+                runOnUiThread(()->referenceView(dst));
+            }catch(Exception e){runOnUiThread(()->msg("Képimportálási hiba: "+e.getMessage()));}
+            finally{if(tmp!=null&&tmp.exists())tmp.delete();}
+        });
+    }
+    private String refStatus(File f){return refPrefs().getString(f.getName()+".status","JELÖLT");}
+    private String refName(File f){return refPrefs().getString(f.getName()+".name",f.getName());}
+    private void referenceList(){
+        start("refs","Referenciakönyvtár");
+        button(root,"Vissza",this::home);button(root,"Új kép importálása",()->pick(REF_IMPORT,"image/*"));
+        File[] entries=references.listFiles((d,n)->n.matches("[0-9a-f]{64}\\.(png|jpg|webp)"));
+        msg((entries==null?0:entries.length)+" eredeti kép • helyi, offline könyvtár");
+        ScrollView sv=new ScrollView(this);root.addView(sv,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout body=new LinearLayout(this);body.setOrientation(1);sv.addView(body);
+        if(entries!=null){Arrays.sort(entries,Comparator.comparingLong(File::lastModified).reversed());for(File f:entries)button(body,refStatus(f)+" · "+refName(f),()->referenceView(f));}
+    }
+    private void referenceView(File f){
+        start("refview","Eredeti referencia");msg(refStatus(f)+" • "+refName(f));
+        button(root,"Vissza a könyvtárba",this::referenceList);
+        ScrollView sv=new ScrollView(this);root.addView(sv,new LinearLayout.LayoutParams(-1,0,1));
+        LinearLayout body=new LinearLayout(this);body.setOrientation(1);body.setPadding(dp(12),0,dp(12),dp(16));sv.addView(body);
+        TextView fingerprint=text(body,"SHA-256: "+f.getName().substring(0,64),12,0xffa9bdce,false);fingerprint.setTextIsSelectable(true);
+        ImageView iv=new ImageView(this);iv.setAdjustViewBounds(true);iv.setScaleType(ImageView.ScaleType.FIT_CENTER);iv.setContentDescription(refName(f));body.addView(iv,new LinearLayout.LayoutParams(-1,dp(260)));
+        io.execute(()->{
+            try{
+                if(!f.getName().startsWith(refHash(f)+"."))throw new IOException("Az eredeti megváltozott!");
+                android.graphics.BitmapFactory.Options o=new android.graphics.BitmapFactory.Options();o.inJustDecodeBounds=true;android.graphics.BitmapFactory.decodeFile(f.getPath(),o);
+                o.inSampleSize=1;while(Math.max(o.outWidth,o.outHeight)/o.inSampleSize>2048)o.inSampleSize*=2;o.inJustDecodeBounds=false;
+                android.graphics.Bitmap bitmap=android.graphics.BitmapFactory.decodeFile(f.getPath(),o);
+                if(bitmap==null)throw new IOException("Nem nyitható meg a kép");
+                runOnUiThread(()->{if(!"refview".equals(page)||iv.getParent()==null){bitmap.recycle();return;}iv.setImageBitmap(bitmap);});
+            }catch(Exception e){runOnUiThread(()->msg("Ellenőrzési hiba: "+e.getMessage()));}
+        });
+        button(body,"Kép elfogadása",()->referenceDecision(f,"KÉP_ELFOGADVA"));
+        button(body,"Kép elutasítása",()->referenceDecision(f,"ELUTASÍTOTT"));
+        button(body,"Eredeti fájl exportálása",()->{
+            referenceExport=f;
+            Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType(f.getName().endsWith(".png")?"image/png":f.getName().endsWith(".jpg")?"image/jpeg":"image/webp").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,f.getName());
+            startActivityForResult(i,REF_EXPORT);
+        });
+        text(body,"Az eredeti nem írható felül. A jóváhagyás csak erre a képre vonatkozik, nem a későbbi GLB-re.",13,0xffa9bdce,false);
+    }
+    private void referenceDecision(File f,String decision){
+        new AlertDialog.Builder(this).setTitle("Vizuális döntés").setMessage(refName(f)+"\n"+decision).setNegativeButton("Mégse",null).setPositiveButton("Megerősítés",(d,w)->io.execute(()->{
+            try{
+                if(!f.getName().startsWith(refHash(f)+"."))throw new IOException("Az eredeti ellenőrzőösszege eltér.");
+                if(!refPrefs().edit().putString(f.getName()+".status",decision).putLong(f.getName()+".decisionAt",System.currentTimeMillis()).commit())throw new IOException("Mentési hiba");
+                runOnUiThread(()->referenceView(f));
+            }catch(Exception e){runOnUiThread(()->msg("Jóváhagyási hiba: "+e.getMessage()));}
+        })).show();
+    }
+    @Override protected void onSaveInstanceState(Bundle state){super.onSaveInstanceState(state);if(referenceExport!=null)state.putString("referenceExport",referenceExport.getName());}
     private void importModel(Uri u){
         msg("GLB ellenőrzése és másolása…");
         io.execute(()->{
@@ -194,9 +278,21 @@ public class MainActivity extends Activity {
         Uri u=result==RESULT_OK&&data!=null?data.getData():null;
         if(code==UPLOAD){if(fileCallback!=null){fileCallback.onReceiveValue(u==null?null:new Uri[]{u});fileCallback=null;}return;}
         if(u==null)return;
+        if(code==REF_IMPORT){importReference(u);return;}
+        if(code==REF_EXPORT&&referenceExport!=null){
+            File src=referenceExport;io.execute(()->{
+                try{
+                    if(!src.getName().startsWith(refHash(src)+"."))throw new IOException("Az eredeti ellenőrzőösszege eltér.");
+                    try(InputStream in=new FileInputStream(src);OutputStream out=getContentResolver().openOutputStream(u,"wt")){
+                        if(out==null)throw new IOException("Nem írható");copy(in,out,REF_LIMIT);
+                    }
+                    runOnUiThread(()->msg("Változatlan eredeti kép exportálva."));
+                }catch(Exception e){runOnUiThread(()->msg("Exportálási hiba: "+e.getMessage()));}
+            });return;
+        }
         if(code==IMPORT)importModel(u);
         if(code==EXPORT&&current!=null){File src=current;io.execute(()->{try(InputStream in=new FileInputStream(src);OutputStream out=getContentResolver().openOutputStream(u)){if(out==null)throw new IOException("Nem írható");copy(in,out,LIMIT);runOnUiThread(()->msg("GLB exportálva."));}catch(Exception e){runOnUiThread(()->msg("Exportálási hiba: "+e.getMessage()));}});}
     }
-    @Override public void onBackPressed(){if("home".equals(page))super.onBackPressed();else if("viewer".equals(page))list();else home();}
+    @Override public void onBackPressed(){if("home".equals(page))super.onBackPressed();else if("viewer".equals(page))list();else if("refview".equals(page))referenceList();else home();}
     @Override protected void onDestroy(){clearWeb();if(fileCallback!=null)fileCallback.onReceiveValue(null);io.shutdown();super.onDestroy();}
 }
