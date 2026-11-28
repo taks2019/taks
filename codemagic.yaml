@@ -6,7 +6,8 @@ workflows:
     environment:
       java: 17
     scripts:
-      - name: Extract latest uploaded Android source
+      - &prepare
+        name: Extract latest uploaded Android source
         script: |
           set -eu
           cd "$CM_BUILD_DIR"
@@ -22,7 +23,8 @@ workflows:
           fi
           curl -fL --retry 3 https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/taks-gradle.zip
           unzip -oq /tmp/taks-gradle.zip -d /tmp/taks-gradle
-      - name: Build debug APK
+      - &build
+        name: Build debug APK
         script: |
           set -eu
           cd "$CM_BUILD_DIR/taks-color"
@@ -31,3 +33,23 @@ workflows:
           cp app/build/outputs/apk/debug/app-debug.apk "$CM_BUILD_DIR/artifacts/TAKS_Color.apk"
     artifacts:
       - artifacts/*.apk
+
+  taks-color-cloud:
+    name: TAKS Color AI gallery and APK (optional paid generation)
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+    environment:
+      java: 17
+      groups:
+        - taks_color_cloud
+    scripts:
+      - *prepare
+      - name: Generate hidden AI artwork
+        script: |
+          set -eu
+          cd "$CM_BUILD_DIR/taks-color"
+          bash studio/cloud_build.sh
+      - *build
+    artifacts:
+      - artifacts/*.apk
+      - taks-color/app/src/main/assets/cloud_*.takscolor
